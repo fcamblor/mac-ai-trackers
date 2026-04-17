@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "f892456c8ce2",
+  "session_id": "5d79735c-295c-43bd-bfc5-d11d6b5097d6",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T23:16:24.783812Z",
+  "branch": "chore/resolve-all-tech-debts",
+  "checkpoints_count": 1,
+  "files_touched": [],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "f2f43696266d",
+  "token_usage": {
+    "input_tokens": 133,
+    "cache_creation_tokens": 143621,
+    "cache_read_tokens": 6376092,
+    "output_tokens": 27959,
+    "api_call_count": 93
+  },
+  "session_metrics": {
+    "turn_count": 7
+  }
+}
