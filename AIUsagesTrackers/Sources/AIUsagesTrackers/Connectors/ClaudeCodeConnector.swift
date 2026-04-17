@@ -8,6 +8,7 @@ public actor ClaudeCodeConnector: UsageConnector {
     private let session: URLSession
     private let keychainServiceName: String
     private let tokenProvider: (@Sendable () async throws -> String)?
+    private let accountProvider: (@Sendable () -> String?)?
 
     private var lastKnownMetrics: [UsageMetric] = []
 
@@ -18,7 +19,8 @@ public actor ClaudeCodeConnector: UsageConnector {
         logger: FileLogger = Loggers.claude,
         session: URLSession = .shared,
         keychainServiceName: String = "Claude Code-credentials",
-        tokenProvider: (@Sendable () async throws -> String)? = nil
+        tokenProvider: (@Sendable () async throws -> String)? = nil,
+        accountProvider: (@Sendable () -> String?)? = nil
     ) {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         self.claudeConfigPath = claudeConfigPath ?? "\(home)/.claude.json"
@@ -26,11 +28,15 @@ public actor ClaudeCodeConnector: UsageConnector {
         self.session = session
         self.keychainServiceName = keychainServiceName
         self.tokenProvider = tokenProvider
+        self.accountProvider = accountProvider
     }
 
     // MARK: - UsageConnector
 
     nonisolated public func resolveActiveAccount() -> String? {
+        if let provider = accountProvider {
+            return provider()
+        }
         guard let data = FileManager.default.contents(atPath: claudeConfigPath) else {
             logger.log(.warning, "Cannot read \(claudeConfigPath)")
             return nil
@@ -46,11 +52,11 @@ public actor ClaudeCodeConnector: UsageConnector {
     }
 
     public func fetchUsages() async throws -> [VendorUsageEntry] {
-        guard let account = resolveActiveAccount() else {
+        guard let earlyAccount = resolveActiveAccount() else {
             logger.log(.warning, "Cannot resolve active account — skipping fetch")
             return [errorEntry(account: "unknown", type: "account_unknown")]
         }
-        logger.log(.info, "Fetching usages for account=\(account)")
+        logger.log(.info, "Fetching usages for account=\(earlyAccount)")
 
         let token: String
         do {
@@ -61,8 +67,12 @@ public actor ClaudeCodeConnector: UsageConnector {
             }
         } catch {
             logger.log(.error, "Token retrieval failed: \(error)")
-            return [errorEntry(account: account, type: "token_error")]
+            return [errorEntry(account: earlyAccount, type: "token_error")]
         }
+
+        // Re-read at HTTP dispatch time: if the user switched accounts while the token was being
+        // fetched, the response must be attributed to whoever was active when the request went out.
+        let account = resolveActiveAccount() ?? earlyAccount
 
         guard let url = URL(string: "https://api.anthropic.com/api/oauth/usage") else {
             return [errorEntry(account: account, type: "api_error")]
