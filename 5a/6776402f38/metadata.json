@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "5a6776402f38",
+  "strategy": "manual-commit",
+  "branch": "archon/task-feat-usage-details-popover",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Helpers/UsageComputations.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/UsageModels.swift",
+    "AIUsagesTrackers/Sources/App/Views/AccountCardView.swift",
+    "AIUsagesTrackers/Sources/App/Views/GaugeBar.swift",
+    "AIUsagesTrackers/Sources/App/Views/TimeWindowMetricRow.swift",
+    "AIUsagesTrackers/Sources/App/Views/UsageDetailsView.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageComputationsTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/5a/6776402f38/0/metadata.json",
+      "transcript": "/5a/6776402f38/0/full.jsonl",
+      "content_hash": "/5a/6776402f38/0/content_hash.txt",
+      "prompt": "/5a/6776402f38/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 33,
+    "cache_creation_tokens": 107964,
+    "cache_read_tokens": 1810188,
+    "output_tokens": 21906,
+    "api_call_count": 29
+  }
+}
