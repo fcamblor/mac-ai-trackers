@@ -1,0 +1,60 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "ac1cadc77e2a",
+  "session_id": "c8854f18-b54c-408e-89cf-5fcaf4f4ce54",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T13:22:00.274702Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "tech-debt/20260417_high_M_concurrency-blocking-swift/debt.md",
+    "tech-debt/20260417_medium_S_connector-test-coverage/debt.md",
+    "tech-debt/20260417_low_XS_code-quality-naming/debt.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "b9ca2580a7b8",
+  "checkpoint_transcript_start": 160,
+  "transcript_lines_at_start": 160,
+  "token_usage": {
+    "input_tokens": 25,
+    "cache_creation_tokens": 10798,
+    "cache_read_tokens": 1053765,
+    "output_tokens": 6659,
+    "api_call_count": 15
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T13:21:59.999816Z",
+    "agent_lines": 152,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 152,
+    "total_lines_changed": 152,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 61,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10,
+        ".idea/codeStyles/codeStyleConfig.xml": 5,
+        ".idea/copilot.data.migration.agent.xml": 6,
+        ".idea/go.imports.xml": 11,
+        ".idea/mac-ai-trackers.iml": 9,
+        ".idea/misc.xml": 6,
+        ".idea/modules.xml": 8,
+        ".idea/vcs.xml": 6
+      }
+    }
+  ]
+}

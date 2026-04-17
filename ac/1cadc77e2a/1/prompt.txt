@@ -1,0 +1,11 @@
+est-ce que le lsp swift est actif sur le projet ?
+
+---
+
+j'aimerais que tu lances un process archon qui se repose sur le skill improve-ai-harness via le model opus, en lui disant de regarder les logs du workflow fcr-dev qu'on vient d'exécuter pour en tirer l'outillage nécessaire qui nous aurait permis d'éviter tout ou partie de tous ces problèmes de review
+
+l'objectif du workflow: améliorer grandement la qualité du code swift produit (en se basant sur les reviews qui viennent d'être faites) pour éviter que les prochaines générations de code swift remontent autant de problèmes
+
+---
+
+pour revenir à ta question plus haut: fix uniquement les problèmes high, et note toi dans une entrée tech-debts les autres fixes
