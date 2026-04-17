@@ -50,20 +50,26 @@ public final class FileLogger: Sendable {
         append(level: level, message: message)
     }
 
+    /// Blocks until all previously submitted log entries have been written to disk.
+    /// Intended for tests that inspect log file contents after calling `log()`.
+    func waitForPendingWrites() {
+        queue.sync {}
+    }
+
     // MARK: - Private
 
     private func append(level: LogLevel, message: String) {
-        queue.sync {
+        queue.async { [self] in
             let timestamp = Self.isoFormatter.string(from: Date())
             let entry = "[\(timestamp)] [\(level.label)] \(message)\n"
             guard let data = entry.data(using: .utf8) else { return }
-            if !FileManager.default.fileExists(atPath: filePath) {
-                FileManager.default.createFile(atPath: filePath, contents: nil)
+            if !FileManager.default.fileExists(atPath: self.filePath) {
+                FileManager.default.createFile(atPath: self.filePath, contents: nil)
             }
 
-            rotateIfNeeded()
+            self.rotateIfNeeded()
 
-            guard let handle = FileHandle(forWritingAtPath: filePath) else { return }
+            guard let handle = FileHandle(forWritingAtPath: self.filePath) else { return }
             defer { handle.closeFile() }
             handle.seekToEndOfFile()
             handle.write(data)

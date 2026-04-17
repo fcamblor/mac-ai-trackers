@@ -13,6 +13,7 @@ struct FileLoggerTests {
         let path = makeTempPath()
         let logger = FileLogger(filePath: path, minLevel: .debug)
         logger.log(.info, "hello")
+        logger.waitForPendingWrites()
         #expect(FileManager.default.fileExists(atPath: path))
     }
 
@@ -23,6 +24,7 @@ struct FileLoggerTests {
         logger.log(.debug, "should not appear")
         logger.log(.info, "should not appear")
         logger.log(.warning, "should appear")
+        logger.waitForPendingWrites()
         let content = try! String(contentsOfFile: path, encoding: .utf8)
         #expect(!content.contains("should not appear"))
         #expect(content.contains("should appear"))
@@ -33,6 +35,7 @@ struct FileLoggerTests {
         let path = makeTempPath()
         let logger = FileLogger(filePath: path, minLevel: .debug)
         logger.log(.error, "test message")
+        logger.waitForPendingWrites()
         let content = try! String(contentsOfFile: path, encoding: .utf8)
         #expect(content.contains("[ERROR]"))
         #expect(content.contains("test message"))
@@ -57,6 +60,24 @@ struct FileLoggerTests {
         #expect(LogLevel.warning < LogLevel.error)
     }
 
+    @Test("log() is safe under 20 concurrent calls from a TaskGroup")
+    func concurrentLogging() async {
+        let path = makeTempPath()
+        let logger = FileLogger(filePath: path, minLevel: .debug)
+        await withTaskGroup(of: Void.self) { group in
+            for i in 0..<20 {
+                group.addTask {
+                    logger.log(.info, "message \(i)")
+                }
+            }
+        }
+        // Drain the serial queue: all async dispatches submitted before this point are done.
+        logger.waitForPendingWrites()
+        #expect(FileManager.default.fileExists(atPath: path))
+        let content = try! String(contentsOfFile: path, encoding: .utf8)
+        #expect(!content.isEmpty)
+    }
+
     @Test("rotates log file when exceeding max size")
     func rotatesFile() {
         let path = makeTempPath()
@@ -66,6 +87,7 @@ struct FileLoggerTests {
         for _ in 0..<600 {
             logger.log(.info, bigMessage)
         }
+        logger.waitForPendingWrites()
         let backup = path + ".1"
         #expect(FileManager.default.fileExists(atPath: backup))
         // Main file should be smaller than backup after rotation

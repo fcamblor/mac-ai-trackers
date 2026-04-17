@@ -15,13 +15,6 @@ public actor ClaudeCodeConnector: UsageConnector {
     // Long enough for a cached keychain lookup; short enough to avoid stalling the poller
     private static let keychainTimeoutSeconds: Int = 10
 
-    nonisolated(unsafe) private static let isoFormatter = ISO8601DateFormatter()
-    // API responses may include sub-second precision; this formatter handles them for normalization
-    nonisolated(unsafe) private static let isoFormatterFractional: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
 
     public init(
         claudeConfigPath: String? = nil,
@@ -286,8 +279,14 @@ public actor ClaudeCodeConnector: UsageConnector {
     /// consumers can rely on the standard formatter (no fractional-seconds option needed).
     /// Returns the original string unchanged if it cannot be parsed.
     private static func normalizeISO8601(_ raw: String) -> ISODate {
-        if let date = isoFormatterFractional.date(from: raw) ?? isoFormatter.date(from: raw) {
-            return ISODate(rawValue: isoFormatter.string(from: date))
+        let fractional: ISO8601DateFormatter = {
+            let f = ISO8601DateFormatter()
+            f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            return f
+        }()
+        let standard = ISO8601DateFormatter()
+        if let date = fractional.date(from: raw) ?? standard.date(from: raw) {
+            return ISODate(rawValue: standard.string(from: date))
         }
         return ISODate(rawValue: raw)
     }
