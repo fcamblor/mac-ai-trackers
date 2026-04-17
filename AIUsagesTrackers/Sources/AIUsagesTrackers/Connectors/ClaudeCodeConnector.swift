@@ -80,11 +80,15 @@ public actor ClaudeCodeConnector: UsageConnector {
             return [errorEntry(account: account, type: "api_error")]
         }
 
+        let httpCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+        logger.log(.info, "API response: HTTP \(httpCode)")
+
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
-            logger.log(.error, "API returned HTTP \(code)")
-            return [errorEntry(account: account, type: "http_\(code)")]
+            logger.log(.error, "API returned HTTP \(httpCode)")
+            return [errorEntry(account: account, type: "http_\(httpCode)")]
         }
+
+        logger.log(.debug, "API payload: \(Self.maskedPayload(data))")
 
         do {
             let usage = try parseAPIResponse(data)
@@ -181,6 +185,37 @@ public actor ClaudeCodeConnector: UsageConnector {
     }
 
     // MARK: - Response parsing
+
+    private static let sensitiveKeyPatterns = ["token", "key", "secret", "password", "email", "credential"]
+
+    private static func maskedPayload(_ data: Data) -> String {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return "<non-JSON, \(data.count) bytes>"
+        }
+        let masked = maskSensitiveFields(json)
+        guard let out = try? JSONSerialization.data(withJSONObject: masked, options: [.sortedKeys]),
+              let str = String(data: out, encoding: .utf8) else {
+            return "<serialization failed>"
+        }
+        return str
+    }
+
+    private static func maskSensitiveFields(_ dict: [String: Any]) -> [String: Any] {
+        var result: [String: Any] = [:]
+        for (key, value) in dict {
+            let lower = key.lowercased()
+            if sensitiveKeyPatterns.contains(where: { lower.contains($0) }) {
+                result[key] = "***"
+            } else if let nested = value as? [String: Any] {
+                result[key] = maskSensitiveFields(nested)
+            } else if let array = value as? [[String: Any]] {
+                result[key] = array.map { maskSensitiveFields($0) }
+            } else {
+                result[key] = value
+            }
+        }
+        return result
+    }
 
     private struct ParsedUsage {
         let sessionPercent: Int
