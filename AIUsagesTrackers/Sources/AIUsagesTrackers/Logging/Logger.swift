@@ -50,6 +50,12 @@ public final class FileLogger: Sendable {
         append(level: level, message: message)
     }
 
+    /// Blocks until all previously submitted log entries have been written to disk.
+    /// Intended for tests that inspect log file contents after calling `log()`.
+    func waitForPendingWrites() {
+        queue.sync {}
+    }
+
     // MARK: - Private
 
     private func append(level: LogLevel, message: String) {
