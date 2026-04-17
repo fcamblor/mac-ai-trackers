@@ -57,6 +57,22 @@ struct FileLoggerTests {
         #expect(LogLevel.warning < LogLevel.error)
     }
 
+    @Test("log() is safe under 20 concurrent calls from a TaskGroup")
+    func concurrentLogging() async {
+        let path = makeTempPath()
+        let logger = FileLogger(filePath: path, minLevel: .debug)
+        await withTaskGroup(of: Void.self) { group in
+            for i in 0..<20 {
+                group.addTask {
+                    logger.log(.info, "message \(i)")
+                }
+            }
+        }
+        #expect(FileManager.default.fileExists(atPath: path))
+        let content = try! String(contentsOfFile: path, encoding: .utf8)
+        #expect(!content.isEmpty)
+    }
+
     @Test("rotates log file when exceeding max size")
     func rotatesFile() {
         let path = makeTempPath()
