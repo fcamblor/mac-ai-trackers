@@ -12,7 +12,7 @@ public actor ClaudeActiveAccountMonitor {
 
     private var monitorTask: Task<Void, Never>?
 
-    private static let monitoredVendor = "claude"
+    private static let monitoredVendor: Vendor = .claude
 
     public init(
         claudeConfigPath: String? = nil,
@@ -51,10 +51,10 @@ public actor ClaudeActiveAccountMonitor {
     public func checkOnce() async {
         let active = readActiveAccount()
         await fileManager.updateIsActive(vendor: Self.monitoredVendor, activeAccount: active)
-        logger.log(.debug, "isActive updated: activeAccount=\(active ?? "<none>")")
+        logger.log(.debug, "isActive updated: activeAccount=\(active?.rawValue ?? "<none>")")
     }
 
-    private func readActiveAccount() -> String? {
+    private func readActiveAccount() -> AccountEmail? {
         guard let data = FileManager.default.contents(atPath: claudeConfigPath) else {
             logger.log(.warning, "Cannot read \(claudeConfigPath)")
             return nil
@@ -62,7 +62,7 @@ public actor ClaudeActiveAccountMonitor {
         do {
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             let oauth = json?["oauthAccount"] as? [String: Any]
-            return oauth?["emailAddress"] as? String
+            return (oauth?["emailAddress"] as? String).map(AccountEmail.init(rawValue:))
         } catch {
             logger.log(.error, "Failed to parse \(claudeConfigPath): \(error)")
             return nil

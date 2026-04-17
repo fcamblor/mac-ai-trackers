@@ -5,18 +5,18 @@ import Testing
 // MARK: - Mock connector
 
 actor MockConnector: UsageConnector {
-    nonisolated let vendor: String
+    nonisolated let vendor: Vendor
     private let entries: [VendorUsageEntry]
     private let shouldThrow: Bool
     private(set) var fetchCount = 0
 
-    init(vendor: String, entries: [VendorUsageEntry], shouldThrow: Bool = false) {
+    init(vendor: Vendor, entries: [VendorUsageEntry], shouldThrow: Bool = false) {
         self.vendor = vendor
         self.entries = entries
         self.shouldThrow = shouldThrow
     }
 
-    nonisolated func resolveActiveAccount() -> String? {
+    nonisolated func resolveActiveAccount() -> AccountEmail? {
         entries.first?.account
     }
 
@@ -44,7 +44,7 @@ struct UsagePollerTests {
         let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
         let entry = VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true, metrics: [
             .timeWindow(name: "session", resetAt: "2026-04-17T15:00:00+00:00",
-                        windowDurationMinutes: 300, usagePercent: 42),
+                        windowDuration: 300, usagePercent: 42),
         ])
         let connector = MockConnector(vendor: "claude", entries: [entry])
         let poller = UsagePoller(connectors: [connector], fileManager: fm, logger: logger)

@@ -38,7 +38,7 @@ public actor UsagesFileManager {
 
     // MARK: - Active-account update
 
-    public func updateIsActive(vendor: String, activeAccount: String?) {
+    public func updateIsActive(vendor: Vendor, activeAccount: AccountEmail?) {
         var file = readUnsafe()
         var changed = false
         for i in file.usages.indices {
@@ -60,10 +60,10 @@ public actor UsagesFileManager {
         var usages = existing.usages
         var indexByKey: [String: Int] = [:]
         for (i, entry) in usages.enumerated() {
-            indexByKey["\(entry.vendor)|\(entry.account)"] = i
+            indexByKey["\(entry.vendor.rawValue)|\(entry.account.rawValue)"] = i
         }
         for entry in incoming {
-            let key = "\(entry.vendor)|\(entry.account)"
+            let key = "\(entry.vendor.rawValue)|\(entry.account.rawValue)"
             if let idx = indexByKey[key] {
                 usages[idx] = entry
             } else {

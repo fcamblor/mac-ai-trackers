@@ -18,7 +18,7 @@ struct UsageMetricCodableTests {
         let metric = UsageMetric.timeWindow(
             name: "session",
             resetAt: "2026-04-17T15:00:00+00:00",
-            windowDurationMinutes: 300,
+            windowDuration: 300,
             usagePercent: 42
         )
         let data = try encoder.encode(metric)
@@ -37,8 +37,10 @@ struct UsageMetricCodableTests {
     @Test("time-window JSON contains type discriminator")
     func timeWindowDiscriminator() throws {
         let metric = UsageMetric.timeWindow(
-            name: "weekly", resetAt: "2026-04-23T21:00:00+00:00",
-            windowDurationMinutes: 10080, usagePercent: 8
+            name: "weekly",
+            resetAt: "2026-04-23T21:00:00+00:00",
+            windowDuration: 10080,
+            usagePercent: 8
         )
         let data = try encoder.encode(metric)
         let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
@@ -85,9 +87,9 @@ struct VendorUsageEntryTests {
             lastError: nil,
             metrics: [
                 .timeWindow(name: "session", resetAt: "2026-04-17T15:00:00+00:00",
-                            windowDurationMinutes: 300, usagePercent: 42),
+                            windowDuration: 300, usagePercent: 42),
                 .timeWindow(name: "weekly", resetAt: "2026-04-23T21:00:00+00:00",
-                            windowDurationMinutes: 10080, usagePercent: 8),
+                            windowDuration: 10080, usagePercent: 8),
             ]
         )
         let data = try JSONEncoder().encode(entry)
@@ -128,7 +130,7 @@ struct UsagesFileTests {
         let file = UsagesFile(usages: [
             VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
                 .timeWindow(name: "session", resetAt: "2026-04-17T15:00:00+00:00",
-                            windowDurationMinutes: 300, usagePercent: 42),
+                            windowDuration: 300, usagePercent: 42),
             ]),
             VendorUsageEntry(vendor: "codex", account: "c@d.com", metrics: [
                 .payAsYouGo(name: "monthly", currentAmount: 5.0, currency: "USD"),

@@ -229,14 +229,14 @@ struct ClaudeCodeConnectorFetchTests {
         #expect(entries.count == 1)
         if case .timeWindow(_, let sessionResetAt, _, _) = entries[0].metrics[0] {
             // Fractional seconds must be stripped; standard ISO8601DateFormatter must parse the result
-            #expect(ISO8601DateFormatter().date(from: sessionResetAt) != nil)
-            #expect(!sessionResetAt.contains("."))
+            #expect(sessionResetAt.date != nil)
+            #expect(!sessionResetAt.rawValue.contains("."))
         } else {
             Issue.record("Expected timeWindow metric for session")
         }
         if case .timeWindow(_, let weeklyResetAt, _, _) = entries[0].metrics[1] {
-            #expect(ISO8601DateFormatter().date(from: weeklyResetAt) != nil)
-            #expect(!weeklyResetAt.contains("."))
+            #expect(weeklyResetAt.date != nil)
+            #expect(!weeklyResetAt.rawValue.contains("."))
         } else {
             Issue.record("Expected timeWindow metric for weekly")
         }

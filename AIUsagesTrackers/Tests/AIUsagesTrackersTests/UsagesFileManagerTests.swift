@@ -30,7 +30,7 @@ struct UsagesFileManagerTests {
         let mgr = makeManager(dir: dir)
         let entry = VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true, metrics: [
             .timeWindow(name: "session", resetAt: "2026-04-17T15:00:00+00:00",
-                        windowDurationMinutes: 300, usagePercent: 50),
+                        windowDuration: 300, usagePercent: 50),
         ])
         await mgr.update(with: [entry])
 
@@ -47,13 +47,13 @@ struct UsagesFileManagerTests {
 
         let v1 = VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true, metrics: [
             .timeWindow(name: "session", resetAt: "2026-04-17T15:00:00+00:00",
-                        windowDurationMinutes: 300, usagePercent: 30),
+                        windowDuration: 300, usagePercent: 30),
         ])
         await mgr.update(with: [v1])
 
         let v2 = VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true, metrics: [
             .timeWindow(name: "session", resetAt: "2026-04-17T20:00:00+00:00",
-                        windowDurationMinutes: 300, usagePercent: 70),
+                        windowDuration: 300, usagePercent: 70),
         ])
         await mgr.update(with: [v2])
 

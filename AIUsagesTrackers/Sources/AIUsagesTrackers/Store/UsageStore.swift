@@ -34,9 +34,7 @@ public final class UsageStore {
 
     public static let defaultCountdownRefreshSeconds: UInt64 = 60
     private static let fallbackText = "--"
-    private static let targetVendor = "claude"
-    // @MainActor guarantees single-threaded access; safe despite NSFormatter not being thread-safe
-    private static let isoFormatter = ISO8601DateFormatter()
+    private static let targetVendor: Vendor = .claude
 
     // Latest decoded file kept for countdown refresh without re-reading disk
     private var lastFile: UsagesFile?
@@ -137,12 +135,12 @@ public final class UsageStore {
 
         let abbreviation = name.prefix(1).uppercased()
         let remaining = formatRemainingTime(resetAt: resetAt)
-        return "\(abbreviation) \(usagePercent)% \(remaining)"
+        return "\(abbreviation) \(usagePercent.rawValue)% \(remaining)"
     }
 
-    private func formatRemainingTime(resetAt isoString: String) -> String {
-        guard let resetDate = Self.isoFormatter.date(from: isoString) else {
-            logger.log(.warning, "UsageStore: invalid ISO8601 resetAt value: \(isoString)")
+    private func formatRemainingTime(resetAt: ISODate) -> String {
+        guard let resetDate = resetAt.date else {
+            logger.log(.warning, "UsageStore: invalid ISO8601 resetAt value: \(resetAt.rawValue)")
             return "0m"
         }
 
