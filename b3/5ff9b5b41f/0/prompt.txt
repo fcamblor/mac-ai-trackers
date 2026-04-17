@@ -1,0 +1,55 @@
+j'aimerais que tu lances un workflow archon dont l'objectif est de tacler tous les items de tech-debts via le skill resolve-tech-debt
+
+---
+
+<task-notification>
+<task-id>bwxylp0i7</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/a5f27627-1618-4ab5-94f5-e7c0458c1488/tasks/bwxylp0i7.output</output-file>
+<status>completed</status>
+<summary>Background command "Resolve tech-debt: usage-display-minor-nits" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bhg9wxvqa</task-id>
+<tool-use-id>toolu_01GohRGNNksynT27NnexuUY2</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/a5f27627-1618-4ab5-94f5-e7c0458c1488/tasks/bhg9wxvqa.output</output-file>
+<status>completed</status>
+<summary>Background command "Resolve tech-debt: code-quality-naming" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>blkkmh1qc</task-id>
+<tool-use-id>toolu_01R8cb9vHdHqYAab5t7LbHKu</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/a5f27627-1618-4ab5-94f5-e7c0458c1488/tasks/blkkmh1qc.output</output-file>
+<status>completed</status>
+<summary>Background command "Resolve tech-debt: usage-display-code-and-doc-polish" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bly9y1esy</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/a5f27627-1618-4ab5-94f5-e7c0458c1488/tasks/bly9y1esy.output</output-file>
+<status>completed</status>
+<summary>Background command "Resolve tech-debt: concurrency-blocking-swift" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b7u2m6mu7</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/a5f27627-1618-4ab5-94f5-e7c0458c1488/tasks/b7u2m6mu7.output</output-file>
+<status>completed</status>
+<summary>Background command "Resolve tech-debt: usage-display-test-coverage" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+oui, en reutilisant les worktrees deja existant si possible
