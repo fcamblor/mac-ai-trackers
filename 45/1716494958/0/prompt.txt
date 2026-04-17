@@ -1,0 +1,26 @@
+j'aimerais bien faire en sorte de setup archon sur le projet courant, en permettant notamment de copier le .entire, le .serena et le .claude dans chaque worktree
+
+---
+
+avec archon, est-il possible de faire un lien symbolique plutot qu'une recopie de repertoires ?
+
+---
+
+en fait il faut faire attention car certains fichiers .entire et .serena sont force-commit (.entire/settings.json et .serena/project.yml)
+il faudrait ln -s sur tous les sous-repertoires plutot
+
+---
+
+est-il possible, sinon, de faire un simlink du repertoire racine "sauf" certains fichiers ?
+
+---
+
+que penserais-tu de creer une issue sur le repository archon, pour suggerer d'automatiser la creation de symlinks à la creation de worktrees, en plus du copyFiles ?
+
+---
+
+follow le template de creation de feature parce que j'ai l'impression que ca ne match pas tout a fait
+
+---
+
+yes
