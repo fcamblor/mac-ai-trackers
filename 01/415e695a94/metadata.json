@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "01415e695a94",
+  "strategy": "manual-commit",
+  "branch": "archon/task-td-connector-test-coverage",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "tech-debt/20260417_medium_S_connector-test-coverage/plan.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/01/415e695a94/0/metadata.json",
+      "transcript": "/01/415e695a94/0/full.jsonl",
+      "content_hash": "/01/415e695a94/0/content_hash.txt",
+      "prompt": "/01/415e695a94/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 13,
+    "cache_creation_tokens": 42403,
+    "cache_read_tokens": 286992,
+    "output_tokens": 5935,
+    "api_call_count": 11
+  }
+}

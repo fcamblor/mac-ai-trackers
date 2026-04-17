@@ -1,0 +1,46 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "01415e695a94",
+  "session_id": "9f0cb8fd-afd8-4258-84c8-ecb13b76184c",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T22:12:38.941527Z",
+  "branch": "archon/task-td-connector-test-coverage",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "tech-debt/20260417_medium_S_connector-test-coverage/plan.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "67c00be9fe9b",
+  "token_usage": {
+    "input_tokens": 13,
+    "cache_creation_tokens": 42403,
+    "cache_read_tokens": 286992,
+    "output_tokens": 5935,
+    "api_call_count": 11
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T22:12:38.791871Z",
+    "agent_lines": 115,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 115,
+    "total_lines_changed": 115,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 2,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".serena/.gitignore": 2
+      }
+    }
+  ]
+}
