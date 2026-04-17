@@ -88,9 +88,34 @@ extension Vendor: CustomStringConvertible {
 // MARK: - MetricKind
 
 /// The discriminator for a usage metric; determines which fields are present.
-public enum MetricKind: String, Codable, Equatable, Hashable, Sendable {
-    case timeWindow = "time-window"
-    case payAsYouGo = "pay-as-you-go"
+/// Forward-compatible: unknown discriminators decode as `.unknown(String)` instead of
+/// throwing, so a future API type doesn't silently drop all other metrics in the entry.
+public enum MetricKind: Equatable, Hashable, Sendable {
+    case timeWindow
+    case payAsYouGo
+    case unknown(String)
+}
+
+extension MetricKind: Codable {
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        switch raw {
+        case "time-window":   self = .timeWindow
+        case "pay-as-you-go": self = .payAsYouGo
+        default:              self = .unknown(raw)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        let raw: String
+        switch self {
+        case .timeWindow:        raw = "time-window"
+        case .payAsYouGo:        raw = "pay-as-you-go"
+        case .unknown(let s):    raw = s
+        }
+        var container = encoder.singleValueContainer()
+        try container.encode(raw)
+    }
 }
 
 // MARK: - UsagePercent

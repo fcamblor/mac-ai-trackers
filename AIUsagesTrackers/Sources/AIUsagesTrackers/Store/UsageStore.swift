@@ -22,6 +22,9 @@ public struct SystemClock: ClockProvider {
 @MainActor
 public final class UsageStore {
     public private(set) var menuBarText: String = "--"
+    /// Incremented each time handleNewData is called, whether the data is valid or malformed.
+    /// Tests use this as a reliable signal that the store has consumed the latest yielded item.
+    public private(set) var dataProcessedCount: Int = 0
 
     private let fileWatcher: FileWatching
     private let clock: ClockProvider
@@ -91,6 +94,7 @@ public final class UsageStore {
     // MARK: - Processing
 
     private func handleNewData(_ data: Data) {
+        dataProcessedCount += 1
         do {
             let file = try JSONDecoder().decode(UsagesFile.self, from: data)
             lastFile = file
@@ -127,6 +131,8 @@ public final class UsageStore {
         }
 
         let abbreviation = name.prefix(1).uppercased()
+        // A metric with an empty name cannot be abbreviated — skip to avoid a leading space in output
+        guard !abbreviation.isEmpty else { return nil }
         let remaining = formatRemainingTime(resetAt: resetAt)
         return "\(abbreviation) \(usagePercent.rawValue)% \(remaining)"
     }
