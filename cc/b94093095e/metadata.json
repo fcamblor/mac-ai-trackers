@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "ccb94093095e",
+  "strategy": "manual-commit",
+  "branch": "archon/task-td-usage-display-code-and-doc-polish",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "docs/ARCHITECTURE.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/cc/b94093095e/0/metadata.json",
+      "transcript": "/cc/b94093095e/0/full.jsonl",
+      "content_hash": "/cc/b94093095e/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 2,
+    "cache_creation_tokens": 1270,
+    "cache_read_tokens": 106393,
+    "output_tokens": 1061,
+    "api_call_count": 2
+  }
+}
