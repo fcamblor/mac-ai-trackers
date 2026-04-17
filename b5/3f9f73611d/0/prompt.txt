@@ -1,0 +1,1 @@
+j'aimerais que tu log à chaque fois que tu appelles l'API d'usage de claude code, sans logger le token (evidemment) mais en loggant le retour de ce qui est retourne (http status code + payload quand c'est une 200, en masquant les choses qui pourraient etre confidentielles dans cette payload)
