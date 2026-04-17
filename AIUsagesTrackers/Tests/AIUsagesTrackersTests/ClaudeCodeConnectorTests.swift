@@ -251,6 +251,27 @@ struct ClaudeCodeConnectorFetchTests {
         }
     }
 
+    @Test("success path sends correct Authorization and anthropic-beta headers")
+    func successPathHeaders() async throws {
+        let dir = makeTempDir()
+        MockURLProtocol.capturedRequest = nil
+        MockURLProtocol.errorToThrow = nil
+        let apiJSON = """
+        {"five_hour":{"utilization":42,"resets_at":"2026-04-17T15:00:00+00:00"},
+         "seven_day":{"utilization":8,"resets_at":"2026-04-23T21:00:00+00:00"}}
+        """
+        MockURLProtocol.handler = { _ in
+            let data = apiJSON.data(using: .utf8)!
+            let resp = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (data, resp)
+        }
+        let connector = makeConnector(dir: dir) { "fake-token" }
+        _ = try await connector.fetchUsages()
+
+        #expect(MockURLProtocol.capturedRequest?.value(forHTTPHeaderField: "Authorization") == "Bearer fake-token")
+        #expect(MockURLProtocol.capturedRequest?.value(forHTTPHeaderField: "anthropic-beta") == "oauth-2025-04-20")
+    }
+
     @Test("nil account returns account_unknown error entry")
     func unknownAccount() async throws {
         let dir = makeTempDir()
