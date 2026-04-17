@@ -406,4 +406,5 @@ struct UsageStoreRemainingTimeTests {
         #expect(store.menuBarText == "S 50% 0m")
         store.stop()
     }
+
 }

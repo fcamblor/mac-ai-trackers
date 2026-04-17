@@ -13,6 +13,12 @@ public actor ClaudeCodeConnector: UsageConnector {
     private var lastKnownMetrics: [UsageMetric] = []
 
     nonisolated(unsafe) private static let isoFormatter = ISO8601DateFormatter()
+    // API responses may include sub-second precision; this formatter handles them for normalization
+    nonisolated(unsafe) private static let isoFormatterFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
 
     public init(
         claudeConfigPath: String? = nil,
@@ -268,10 +274,20 @@ public actor ClaudeCodeConnector: UsageConnector {
         }
         return ParsedUsage(
             sessionPercent: Int(sessionUtil.rounded()),
-            sessionResetAt: sessionReset,
+            sessionResetAt: Self.normalizeISO8601(sessionReset),
             weeklyPercent: Int(weeklyUtil.rounded()),
-            weeklyResetAt: weeklyReset
+            weeklyResetAt: Self.normalizeISO8601(weeklyReset)
         )
+    }
+
+    /// Strips sub-second precision from API-provided ISO8601 strings so downstream
+    /// consumers can rely on the standard formatter (no fractional-seconds option needed).
+    /// Returns the original string unchanged if it cannot be parsed.
+    private static func normalizeISO8601(_ raw: String) -> String {
+        if let date = isoFormatterFractional.date(from: raw) ?? isoFormatter.date(from: raw) {
+            return isoFormatter.string(from: date)
+        }
+        return raw
     }
 
     // MARK: - Helpers
