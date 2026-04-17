@@ -1,0 +1,18 @@
+j'aimerais créer une feature dans la roadmap
+
+---
+
+# Nom: Affichage des métriques dans la toolbar
+
+# objectif
+faire en sorte que les métriques du compte actif dans ~/.cache/ai-usages-tracker/usages.json soient affichées dans la toolbar
+
+# perimetre
+on se focalise uniquement sur un MVP qui prend le compte claude actif et affiche juste le pourcentage + délai au prochain reset des time-window weely et session
+
+Quelque chose comme: S 48% 2h13m | W 7% 6d 6h 13m
+
+# acceptance criteria
+
+- ce qui se trouve dans le fichier ~/.cache/ai-usages-tracker/usages.json se reflète dans ma toolbar
+- si je modifie manuellement le fichier ~/.cache/ai-usages-tracker/usages.json, ma modification devrait se refléter dans la toolbar dans les 30s max (auto-refresh)
