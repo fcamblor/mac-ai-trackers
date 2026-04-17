@@ -5,20 +5,45 @@ import Testing
 // MARK: - Test doubles
 
 /// A mock FileWatching that lets tests push arbitrary Data payloads.
-struct MockFileWatcher: FileWatching {
-    let stream: AsyncStream<Data>
-    let continuation: AsyncStream<Data>.Continuation
+/// Implemented as a class so `changes()` can hand out a fresh AsyncStream on each
+/// call — required for start/stop/start lifecycle tests where the previous iteration
+/// is cancelled before a new watchTask begins consuming again.
+final class MockFileWatcher: FileWatching, @unchecked Sendable {
+    // Protected by @MainActor in tests; @unchecked Sendable because AsyncStream.Continuation
+    // is Sendable and all test access is single-threaded on the main actor.
+    private var continuation: AsyncStream<Data>.Continuation?
+    /// Buffers sends that arrive before the watch task calls changes(), or after a
+    /// cancelled previous cycle. Flushed immediately when changes() is called.
+    private var pendingData: [Data] = []
 
-    init() {
+    func changes() -> AsyncStream<Data> {
+        // Finish the previous stream (if any) before creating a new one.
+        // This prevents a stale task from consuming the new continuation's yields.
+        continuation?.finish()
         var cont: AsyncStream<Data>.Continuation!
-        stream = AsyncStream { cont = $0 }
+        let stream = AsyncStream<Data> { cont = $0 }
         continuation = cont
+        // Flush sends that arrived before this call (e.g. test called send() before
+        // the watch task had a chance to call changes()).
+        for data in pendingData { cont.yield(data) }
+        pendingData.removeAll()
+        return stream
     }
 
-    func changes() -> AsyncStream<Data> { stream }
+    func send(_ data: Data) {
+        guard let cont = continuation else {
+            pendingData.append(data)
+            return
+        }
+        // .terminated means the previous cycle's consuming task was cancelled;
+        // buffer the data so the next changes() call can deliver it.
+        if case .terminated = cont.yield(data) {
+            continuation = nil
+            pendingData.append(data)
+        }
+    }
 
-    func send(_ data: Data) { continuation.yield(data) }
-    func finish() { continuation.finish() }
+    func finish() { continuation?.finish() }
 }
 
 /// A clock fixed at a given date, for deterministic remaining-time formatting.
@@ -26,6 +51,15 @@ struct FixedClock: ClockProvider {
     let date: Date
     init(_ date: Date) { self.date = date }
     func now() -> Date { date }
+}
+
+/// A clock whose date can be advanced between test steps to simulate time passing.
+/// nonisolated(unsafe) — tests drive date changes from @MainActor, single-threaded; no concurrent writes.
+@MainActor
+final class MutableClock: ClockProvider {
+    nonisolated(unsafe) var date: Date
+    init(_ date: Date) { self.date = date }
+    nonisolated func now() -> Date { date }
 }
 
 // MARK: - Async helpers
@@ -445,6 +479,167 @@ struct UsageStoreRemainingTimeTests {
         watcher.send(data)
         try await eventually { store.menuBarText != "--" }
         #expect(store.menuBarText == "S 50% 0m")
+        store.stop()
+    }
+
+    @MainActor
+    @Test("exactly N hours remaining shows no trailing minutes")
+    func exactlyNHours() async throws {
+        let watcher = MockFileWatcher()
+        let f = ISO8601DateFormatter()
+        let clock = FixedClock(f.date(from: "2026-04-17T12:00:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
+        store.start()
+
+        let data = makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "session", resetAt: "2026-04-17T14:00:00Z", usagePercent: 42),
+        ])
+        watcher.send(data)
+        try await eventually { store.menuBarText != "--" }
+        // 2h 0m: minutes part omitted because parts is non-empty (hours already present)
+        #expect(store.menuBarText == "S 42% 2h")
+        store.stop()
+    }
+
+    @MainActor
+    @Test("sub-minute remaining shows 0m")
+    func subMinuteRemaining() async throws {
+        let watcher = MockFileWatcher()
+        let f = ISO8601DateFormatter()
+        let clock = FixedClock(f.date(from: "2026-04-17T12:00:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
+        store.start()
+
+        // 30 seconds in the future: totalSeconds=30, minutes=0, parts empty → "0m"
+        let data = makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "session", resetAt: "2026-04-17T12:00:30Z", usagePercent: 99),
+        ])
+        watcher.send(data)
+        try await eventually { store.menuBarText != "--" }
+        #expect(store.menuBarText == "S 99% 0m")
+        store.stop()
+    }
+
+}
+
+@Suite("UsageStore countdown behavior")
+struct UsageStoreCountdownTests {
+
+    @MainActor
+    @Test("countdown refresh updates menuBarText without new file data")
+    func countdown() async throws {
+        let watcher = MockFileWatcher()
+        let f = ISO8601DateFormatter()
+        let clock = MutableClock(f.date(from: "2026-04-17T12:00:00Z")!)
+        // 1-second countdown so the test completes quickly
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 1)
+        store.start()
+
+        // 3h remaining at initial clock
+        let data = makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", usagePercent: 42),
+        ])
+        watcher.send(data)
+        try await eventually { store.menuBarText == "S 42% 3h" }
+        #expect(store.menuBarText == "S 42% 3h")
+
+        // Advance clock by 1 hour: 2h remaining after next countdown tick
+        clock.date = f.date(from: "2026-04-17T13:00:00Z")!
+        try await eventually(timeout: 3.0) { store.menuBarText == "S 42% 2h" }
+        #expect(store.menuBarText == "S 42% 2h")
+        store.stop()
+    }
+
+    @MainActor
+    @Test("countdown tick after error keeps menuBarText at fallback")
+    func errorThenCountdown() async throws {
+        let watcher = MockFileWatcher()
+        // 1-second countdown to exercise the timer path
+        let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 1)
+        store.start()
+
+        watcher.send("bad".data(using: .utf8)!)
+        try await eventually { store.dataProcessedCount == 1 }
+        #expect(store.menuBarText == "--")
+
+        // Wait for at least one countdown tick.
+        // Fixed sleep is appropriate here — absence of a change has no reactive signal.
+        let oneCountdownCycle: UInt64 = 1_200_000_000 // 1.2s — one tick plus margin
+        try await Task.sleep(nanoseconds: oneCountdownCycle)
+        // refreshMenuBarText is a no-op when lastFile is nil (error cleared it)
+        #expect(store.menuBarText == "--")
+        store.stop()
+    }
+
+}
+
+@Suite("UsageStore entry selection and metric edge cases")
+struct UsageStoreEntryTests {
+
+    @MainActor
+    @Test("first matching active vendor entry wins")
+    func multipleVendorEntries() async throws {
+        let watcher = MockFileWatcher()
+        let f = ISO8601DateFormatter()
+        let clock = FixedClock(f.date(from: "2026-04-17T12:00:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
+        store.start()
+
+        // Two active Claude entries — only the first is rendered per first(where:) semantics
+        let root: [String: Any] = ["usages": [
+            ["vendor": "claude", "account": "first@example.com", "isActive": true, "metrics": [
+                timeWindowMetric(name: "session", resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
+            ]],
+            ["vendor": "claude", "account": "second@example.com", "isActive": true, "metrics": [
+                timeWindowMetric(name: "weekly", resetAt: "2026-04-17T14:00:00Z", usagePercent: 50),
+            ]],
+        ]]
+        let data = try! JSONSerialization.data(withJSONObject: root)
+        watcher.send(data)
+        try await eventually { store.menuBarText != "--" }
+        #expect(store.menuBarText == "S 10% 1h")
+        store.stop()
+    }
+
+    @MainActor
+    @Test("empty metric name is skipped, producing fallback")
+    func emptyMetricName() async throws {
+        let watcher = MockFileWatcher()
+        let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
+        store.start()
+
+        let data = makeUsagesJSON(metrics: [
+            timeWindowMetric(name: ""),
+        ])
+        watcher.send(data)
+        try await eventually { store.dataProcessedCount == 1 }
+        // Empty name produces no abbreviation; segment is skipped → fallback
+        #expect(store.menuBarText == "--")
+        store.stop()
+    }
+
+    @MainActor
+    @Test("unknown metric type alongside known metric renders only the known metric")
+    func unknownMetricType() async throws {
+        let watcher = MockFileWatcher()
+        let f = ISO8601DateFormatter()
+        let clock = FixedClock(f.date(from: "2026-04-17T12:00:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
+        store.start()
+
+        // Mix a known time-window metric with an unrecognised future type.
+        // After the MetricKind.unknown fix, the unknown entry decodes as .unknown(...)
+        // and is silently skipped by formatTimeWindowSegment, so only the known metric renders.
+        let root: [String: Any] = ["usages": [
+            ["vendor": "claude", "account": "user@example.com", "isActive": true, "metrics": [
+                timeWindowMetric(name: "session", resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
+                ["type": "unknown-future-type", "name": "x"],
+            ]],
+        ]]
+        let data = try! JSONSerialization.data(withJSONObject: root)
+        watcher.send(data)
+        try await eventually { store.menuBarText == "S 10% 1h" }
+        #expect(store.menuBarText == "S 10% 1h")
         store.stop()
     }
 

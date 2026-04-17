@@ -138,6 +138,8 @@ public final class UsageStore {
         }
 
         let abbreviation = name.prefix(1).uppercased()
+        // A metric with an empty name cannot be abbreviated — skip to avoid a leading space in output
+        guard !abbreviation.isEmpty else { return nil }
         let remaining = formatRemainingTime(resetAt: resetAt)
         return "\(abbreviation) \(usagePercent.rawValue)% \(remaining)"
     }
