@@ -93,6 +93,9 @@ public final class UsageStore {
         countdownTask = nil
     }
 
+    // Defensive: cancels tasks when the store is released without an explicit stop() call.
+    @MainActor deinit { stop() }
+
     // MARK: - Processing
 
     private func handleNewData(_ data: Data) {
@@ -121,9 +124,7 @@ public final class UsageStore {
             return Self.fallbackText
         }
 
-        let segments = entry.metrics.compactMap { metric -> String? in
-            formatTimeWindowSegment(metric)
-        }
+        let segments = entry.metrics.compactMap(formatTimeWindowSegment)
 
         return segments.isEmpty ? Self.fallbackText : segments.joined(separator: " | ")
     }
