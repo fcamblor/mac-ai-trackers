@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "53a4b0409b7f",
+  "strategy": "manual-commit",
+  "branch": "archon/task-td-connector-test-coverage",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/ClaudeCodeConnectorTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/53/a4b0409b7f/0/metadata.json",
+      "transcript": "/53/a4b0409b7f/0/full.jsonl",
+      "content_hash": "/53/a4b0409b7f/0/content_hash.txt",
+      "prompt": "/53/a4b0409b7f/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 12,
+    "cache_creation_tokens": 28902,
+    "cache_read_tokens": 287444,
+    "output_tokens": 3465,
+    "api_call_count": 10
+  }
+}

@@ -1,0 +1,101 @@
+---
+description: General assistance - questions, debugging, one-off tasks, exploration
+argument-hint: <any request>
+---
+
+# Assist Mode
+
+**Request**: ## Prior Context
+
+Branch: archon/task-td-connector-test-coverage | Last workflow: archon-assist (run a66b129ce900306109292353ef37ddfa, completed)
+
+### Recent Commits
+
+```
+[33mcd25d30[m feat(tech-debt): add resolution plan for connector-test-coverage
+[33me9fad7c[m chore(archon): add configuration with worktree setup and copyFiles
+[33m49f4273[m chore(config): allowlist swift test and Serena tools to reduce interruptions
+[33m7a1797f[m Merge pull request #3 from fcamblor/archon/task-feat-menubar-usage-metrics
+[33m4745182[m fix(file-manager): clean up stale error entries when vendor fetch succeeds
+[33meabfbbc[m feat(poller): skip polling when usage data is fresh
+[33m7f3654f[m feat: introduce value objects for domain primitives
+[33ma3556c7[m fix(connector): normalize ISO8601 dates with fractional seconds
+[33me2ec4ec[m chore: remove plan-menubar-usage-metrics.md after implementation complete
+[33m77b0ad2[m feat(tech-debt): record usage display code quality and doc polish
+[33mc7dffc0[m feat(tech-debt): record usage display test coverage and minor nits
+[33m46596c7[m test: add comprehensive UsageStore tests with mock FileWatcher
+[33mbb1168a[m feat: add UsagesFileWatcher, UsageStore, and menubar metrics display
+[33md7b97ab[m plan(l2): detailed impacts for models, file watcher, store, and app integration
+[33md90dc0b[m plan(l1): structural overview for menubar usage metrics
+```
+
+### Changes from Base
+
+```
+.../plan.md                                        | 115 [32m+++++++++++++++++++++[m
+ 1 file changed, 115 insertions(+)
+```
+---
+
+## Your Instruction
+
+Use the resolve-tech-debt skill to implement the plan that was already created at tech-debt/20260417_medium_S_connector-test-coverage/plan.md
+
+---
+
+You are helping with a request that didn't match a specific workflow.
+
+## Instructions
+
+1. **Understand the request** - What is the user actually asking for?
+2. **Take action** - Use your full Claude Code capabilities to help
+3. **Be helpful** - Answer questions, debug issues, explore code, make changes
+4. **Note the gap** - If this should have been a specific workflow, mention it:
+   "Note: Using assist mode. Consider creating a workflow for this use case."
+
+## Capabilities
+
+You have full Claude Code capabilities:
+- Read and write files
+- Run commands
+- Search the codebase
+- Make code changes
+- Answer questions
+
+## Request
+
+## Prior Context
+
+Branch: archon/task-td-connector-test-coverage | Last workflow: archon-assist (run a66b129ce900306109292353ef37ddfa, completed)
+
+### Recent Commits
+
+```
+[33mcd25d30[m feat(tech-debt): add resolution plan for connector-test-coverage
+[33me9fad7c[m chore(archon): add configuration with worktree setup and copyFiles
+[33m49f4273[m chore(config): allowlist swift test and Serena tools to reduce interruptions
+[33m7a1797f[m Merge pull request #3 from fcamblor/archon/task-feat-menubar-usage-metrics
+[33m4745182[m fix(file-manager): clean up stale error entries when vendor fetch succeeds
+[33meabfbbc[m feat(poller): skip polling when usage data is fresh
+[33m7f3654f[m feat: introduce value objects for domain primitives
+[33ma3556c7[m fix(connector): normalize ISO8601 dates with fractional seconds
+[33me2ec4ec[m chore: remove plan-menubar-usage-metrics.md after implementation complete
+[33m77b0ad2[m feat(tech-debt): record usage display code quality and doc polish
+[33mc7dffc0[m feat(tech-debt): record usage display test coverage and minor nits
+[33m46596c7[m test: add comprehensive UsageStore tests with mock FileWatcher
+[33mbb1168a[m feat: add UsagesFileWatcher, UsageStore, and menubar metrics display
+[33md7b97ab[m plan(l2): detailed impacts for models, file watcher, store, and app integration
+[33md90dc0b[m plan(l1): structural overview for menubar usage metrics
+```
+
+### Changes from Base
+
+```
+.../plan.md                                        | 115 [32m+++++++++++++++++++++[m
+ 1 file changed, 115 insertions(+)
+```
+---
+
+## Your Instruction
+
+Use the resolve-tech-debt skill to implement the plan that was already created at tech-debt/20260417_medium_S_connector-test-coverage/plan.md

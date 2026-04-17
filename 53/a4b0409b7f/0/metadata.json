@@ -1,0 +1,46 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "53a4b0409b7f",
+  "session_id": "7db23b04-79fb-4261-9c87-d4745b2aec56",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T22:25:53.999505Z",
+  "branch": "archon/task-td-connector-test-coverage",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/ClaudeCodeConnectorTests.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "6fddfa5d21bd",
+  "token_usage": {
+    "input_tokens": 12,
+    "cache_creation_tokens": 28902,
+    "cache_read_tokens": 287444,
+    "output_tokens": 3465,
+    "api_call_count": 10
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T22:25:53.874708Z",
+    "agent_lines": 9,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 9,
+    "total_lines_changed": 9,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 2,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".serena/.gitignore": 2
+      }
+    }
+  ]
+}
