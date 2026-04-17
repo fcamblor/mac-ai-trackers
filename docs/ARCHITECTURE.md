@@ -25,9 +25,9 @@ Note: external processes reading the file (widgets, scripts) must tolerate a bri
 
 ## Display pipeline
 
-A file watcher observes `usages.json` using a hybrid strategy: a kernel `DispatchSource` fires on `.write`/`.delete`/`.rename` events, backed by a polling timer that re-checks every 30 seconds to handle atomic replaces and network-mount edge cases. Events are debounced to coalesce rapid successive writes into a single read.
+A file watcher observes `usages.json` using a hybrid strategy: a kernel `DispatchSource` fires on `.write`/`.delete`/`.rename` events, backed by a polling timer that re-checks on a configurable polling interval to handle atomic replaces and network-mount edge cases. Events are debounced to coalesce rapid successive writes into a single read.
 
-An `@Observable` store (running on `@MainActor`) receives each new file snapshot, decodes it, locates the active Claude account, and formats the session and weekly time-window metrics into the menubar label (`S 48% 2h 13m | W 7% 6d 6h 13m`). A secondary timer refreshes the countdown display every 60 seconds so remaining-time values stay current between file changes. When data is unavailable or malformed the label falls back to `"--"`.
+An `@Observable` store (running on `@MainActor`) receives each new file snapshot, decodes it, locates the active Claude account, and formats the session and weekly time-window metrics into the menubar label. A secondary countdown timer periodically refreshes the remaining-time values in the display so they stay current between file changes. When data is unavailable or malformed the label falls back to `"--"`.
 
 ## Account monitoring
 

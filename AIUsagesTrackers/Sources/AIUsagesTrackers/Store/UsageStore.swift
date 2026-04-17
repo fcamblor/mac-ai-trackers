@@ -21,11 +21,7 @@ public struct SystemClock: ClockProvider {
 @Observable
 @MainActor
 public final class UsageStore {
-    // MARK: Published state
-
     public private(set) var menuBarText: String = "--"
-
-    // MARK: Dependencies
 
     private let fileWatcher: FileWatching
     private let clock: ClockProvider
@@ -39,12 +35,8 @@ public final class UsageStore {
     // Latest decoded file kept for countdown refresh without re-reading disk
     private var lastFile: UsagesFile?
 
-    // MARK: Tasks
-
     private var watchTask: Task<Void, Never>?
     private var countdownTask: Task<Void, Never>?
-
-    // MARK: Init
 
     public init(
         fileWatcher: FileWatching,
@@ -93,6 +85,9 @@ public final class UsageStore {
         countdownTask = nil
     }
 
+    // Defensive: cancels tasks when the store is released without an explicit stop() call.
+    @MainActor deinit { stop() }
+
     // MARK: - Processing
 
     private func handleNewData(_ data: Data) {
@@ -121,9 +116,7 @@ public final class UsageStore {
             return Self.fallbackText
         }
 
-        let segments = entry.metrics.compactMap { metric -> String? in
-            formatTimeWindowSegment(metric)
-        }
+        let segments = entry.metrics.compactMap(formatTimeWindowSegment)
 
         return segments.isEmpty ? Self.fallbackText : segments.joined(separator: " | ")
     }

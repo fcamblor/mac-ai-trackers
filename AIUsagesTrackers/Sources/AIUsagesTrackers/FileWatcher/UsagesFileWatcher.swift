@@ -14,7 +14,7 @@ public protocol FileWatching: Sendable {
 /// `.write` events. A fallback timer re-checks every `pollInterval` seconds in
 /// case FS events are missed (network mounts, fd invalidation after atomic
 /// replace). Duplicate reads are suppressed by comparing modification dates.
-public final class UsagesFileWatcher: FileWatching, @unchecked Sendable {
+public final class UsagesFileWatcher: FileWatching, Sendable {
     private let path: String
     private let pollInterval: TimeInterval
     private let logger: FileLogger
@@ -111,7 +111,10 @@ public final class UsagesFileWatcher: FileWatching, @unchecked Sendable {
 
                 while !Task.isCancelled {
                     // CancellationError swallowed intentionally; checked on next loop iteration
-                    try? await Task.sleep(nanoseconds: UInt64(pollInterval * 1_000_000_000))
+                    // Cap at ~292 years to prevent UInt64 overflow for large pollInterval values
+                    let maxNanos: Double = Double(UInt64.max)
+                    let refreshNanos = UInt64(min(pollInterval * 1_000_000_000, maxNanos))
+                    try? await Task.sleep(nanoseconds: refreshNanos)
                     guard !Task.isCancelled else { break }
 
                     emitIfChanged()

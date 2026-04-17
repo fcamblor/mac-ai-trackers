@@ -79,10 +79,7 @@ private func payAsYouGoMetric(
 @Suite("UsageStore formatting")
 struct UsageStoreFormattingTests {
 
-    private var referenceDate: Date {
-        let f = ISO8601DateFormatter()
-        return f.date(from: "2026-04-17T12:47:00Z")!
-    }
+    private static let referenceDate: Date = ISO8601DateFormatter().date(from: "2026-04-17T12:47:00Z")!
 
     @MainActor
     @Test("default menuBarText is fallback")
@@ -96,17 +93,16 @@ struct UsageStoreFormattingTests {
     @Test("single time-window metric formats correctly")
     func singleTimeWindow() async throws {
         let watcher = MockFileWatcher()
-        let clock = FixedClock(referenceDate)
+        let clock = FixedClock(Self.referenceDate)
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
-        // resetAt is 2h13m in the future from referenceDate
+        // resetAt is 2h13m in the future from Self.referenceDate
         let data = try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", usagePercent: 48),
         ])
         watcher.send(data)
 
-        // Let the async stream deliver
         try await Task.sleep(nanoseconds: 50_000_000)
 
         #expect(store.menuBarText == "S 48% 2h 13m")
@@ -117,7 +113,7 @@ struct UsageStoreFormattingTests {
     @Test("multiple time-window metrics joined by pipe")
     func multipleTimeWindows() async throws {
         let watcher = MockFileWatcher()
-        let clock = FixedClock(referenceDate)
+        let clock = FixedClock(Self.referenceDate)
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
@@ -136,7 +132,7 @@ struct UsageStoreFormattingTests {
     @Test("pay-as-you-go metrics are ignored")
     func payAsYouGoIgnored() async throws {
         let watcher = MockFileWatcher()
-        let clock = FixedClock(referenceDate)
+        let clock = FixedClock(Self.referenceDate)
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
@@ -146,7 +142,6 @@ struct UsageStoreFormattingTests {
         watcher.send(data)
         try await Task.sleep(nanoseconds: 50_000_000)
 
-        // No time-window metrics → fallback
         #expect(store.menuBarText == "--")
         store.stop()
     }
@@ -155,7 +150,7 @@ struct UsageStoreFormattingTests {
     @Test("mixed metrics: only time-window rendered")
     func mixedMetrics() async throws {
         let watcher = MockFileWatcher()
-        let clock = FixedClock(referenceDate)
+        let clock = FixedClock(Self.referenceDate)
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
@@ -174,7 +169,7 @@ struct UsageStoreFormattingTests {
     @Test("resetAt in the past shows 0m")
     func resetAtInPast() async throws {
         let watcher = MockFileWatcher()
-        let clock = FixedClock(referenceDate)
+        let clock = FixedClock(Self.referenceDate)
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
@@ -192,7 +187,7 @@ struct UsageStoreFormattingTests {
     @Test("resetAt exactly now shows 0m")
     func resetAtExactlyNow() async throws {
         let watcher = MockFileWatcher()
-        let clock = FixedClock(referenceDate)
+        let clock = FixedClock(Self.referenceDate)
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
@@ -306,7 +301,7 @@ struct UsageStoreLifecycleTests {
         let watcher = MockFileWatcher()
         let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
         store.start()
-        store.start() // second call should be no-op
+        store.start()
         store.stop()
     }
 
@@ -317,7 +312,7 @@ struct UsageStoreLifecycleTests {
         let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
         store.start()
         store.stop()
-        store.stop() // second call should be no-op
+        store.stop()
     }
 
     @MainActor
