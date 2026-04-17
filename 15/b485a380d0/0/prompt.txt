@@ -43,3 +43,7 @@ importe (en les traduisant) les skills suivants présents dans /Users/fcamblor/D
 - improve-ai-harness
 - resolve-tech-debt
 - tech-debt
+
+---
+
+/commit
