@@ -1,0 +1,11 @@
+je m'apercois de plusieurs problèmes:
+- j'ai des erreurs dans app.log: [2026-04-17T20:06:57Z] [WARN] UsageStore: invalid ISO8601 resetAt value: 2026-04-23T19:00:00.107277+00:00
+- dans la menubar, j'ai d'affiche : S 5% 0m | W 17% 0m => je pense que le calcul des remaining n'est pas bon
+
+---
+
+oui
+
+---
+
+/commit
