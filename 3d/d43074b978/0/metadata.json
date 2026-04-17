@@ -1,0 +1,20 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "3dd43074b978",
+  "session_id": "46d6a514-6dac-4abd-b803-c3957238943a",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T12:23:55.698464Z",
+  "branch": "archon/task-feat-claude-usages-connector",
+  "checkpoints_count": 1,
+  "files_touched": [],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "34e15b880b9c",
+  "token_usage": {
+    "input_tokens": 47,
+    "cache_creation_tokens": 42877,
+    "cache_read_tokens": 1610345,
+    "output_tokens": 12834,
+    "api_call_count": 44
+  }
+}
