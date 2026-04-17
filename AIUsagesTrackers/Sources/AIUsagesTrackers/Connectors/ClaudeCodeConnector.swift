@@ -98,7 +98,7 @@ public actor ClaudeCodeConnector: UsageConnector {
         if httpCode == 429 {
             let body = String(data: data, encoding: .utf8) ?? "<non-UTF8 body, \(data.count) bytes>"
             logger.log(.warning, "API rate-limited (HTTP 429): \(body)")
-            return [errorEntry(account: account, type: "http_429", preservedMetrics: lastKnownMetrics)]
+            return [errorEntry(account: account, type: "http_429", isActive: true, preservedMetrics: lastKnownMetrics)]
         }
 
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
@@ -177,25 +177,34 @@ public actor ClaudeCodeConnector: UsageConnector {
                 // Check the flag rather than terminationReason, which may not
                 // reflect SIGTERM reliably if the process handles the signal
                 if timedOut.wait(timeout: .now()) == .success {
-                    continuation.resume(throwing: ConnectorError.keychainTimeout)
+                    continuation.resume(throwing: ConnectorError.keychainTimeout(serviceName: serviceName, timeoutSeconds: 10))
                     return
                 }
                 guard process.terminationStatus == 0 else {
-                    continuation.resume(throwing: ConnectorError.keychainAccessDenied)
+                    continuation.resume(throwing: ConnectorError.keychainAccessDenied(serviceName: serviceName, exitCode: process.terminationStatus))
                     return
                 }
                 guard let jsonString = String(data: raw, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
                       !jsonString.isEmpty else {
-                    continuation.resume(throwing: ConnectorError.keychainEmpty)
+                    continuation.resume(throwing: ConnectorError.keychainEmpty(serviceName: serviceName))
                     return
                 }
 
-                guard let jsonData = jsonString.data(using: .utf8),
-                      let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
-                      let oauthDict = json["claudeAiOauth"] as? [String: Any],
+                guard let jsonData = jsonString.data(using: .utf8) else {
+                    continuation.resume(throwing: ConnectorError.tokenParseError(rawValue: jsonString))
+                    return
+                }
+                let parsedJSON: [String: Any]
+                do {
+                    parsedJSON = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] ?? [:]
+                } catch {
+                    continuation.resume(throwing: ConnectorError.tokenParseError(rawValue: jsonString))
+                    return
+                }
+                guard let oauthDict = parsedJSON["claudeAiOauth"] as? [String: Any],
                       let token = oauthDict["accessToken"] as? String,
                       !token.isEmpty else {
-                    continuation.resume(throwing: ConnectorError.tokenParseError)
+                    continuation.resume(throwing: ConnectorError.tokenParseError(rawValue: jsonString))
                     return
                 }
 
@@ -245,14 +254,17 @@ public actor ClaudeCodeConnector: UsageConnector {
     }
 
     private func parseAPIResponse(_ data: Data) throws -> ParsedUsage {
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let fiveHour = json["five_hour"] as? [String: Any],
+        let jsonObject = try JSONSerialization.jsonObject(with: data)
+        guard let json = jsonObject as? [String: Any] else {
+            throw ConnectorError.unexpectedAPIFormat(receivedKeys: [])
+        }
+        guard let fiveHour = json["five_hour"] as? [String: Any],
               let sevenDay = json["seven_day"] as? [String: Any],
               let sessionUtil = fiveHour["utilization"] as? Double,
               let sessionReset = fiveHour["resets_at"] as? String,
               let weeklyUtil = sevenDay["utilization"] as? Double,
               let weeklyReset = sevenDay["resets_at"] as? String else {
-            throw ConnectorError.unexpectedAPIFormat
+            throw ConnectorError.unexpectedAPIFormat(receivedKeys: Array(json.keys))
         }
         return ParsedUsage(
             sessionPercent: Int(sessionUtil.rounded()),
@@ -264,12 +276,12 @@ public actor ClaudeCodeConnector: UsageConnector {
 
     // MARK: - Helpers
 
-    private func errorEntry(account: String, type: String, preservedMetrics: [UsageMetric] = []) -> VendorUsageEntry {
+    private func errorEntry(account: String, type: String, isActive: Bool = false, preservedMetrics: [UsageMetric] = []) -> VendorUsageEntry {
         let now = Self.isoFormatter.string(from: Date())
         return VendorUsageEntry(
             vendor: vendor,
             account: account,
-            isActive: true,
+            isActive: isActive,
             lastAcquiredOn: nil,
             lastError: UsageError(timestamp: now, type: type),
             metrics: preservedMetrics
@@ -278,19 +290,24 @@ public actor ClaudeCodeConnector: UsageConnector {
 }
 
 public enum ConnectorError: Error, CustomStringConvertible {
-    case keychainAccessDenied
-    case keychainEmpty
-    case keychainTimeout
-    case tokenParseError
-    case unexpectedAPIFormat
+    case keychainAccessDenied(serviceName: String, exitCode: Int32)
+    case keychainEmpty(serviceName: String)
+    case keychainTimeout(serviceName: String, timeoutSeconds: Int)
+    case tokenParseError(rawValue: String)
+    case unexpectedAPIFormat(receivedKeys: [String])
 
     public var description: String {
         switch self {
-        case .keychainAccessDenied: "Keychain access denied or item not found"
-        case .keychainEmpty: "Keychain item is empty"
-        case .keychainTimeout: "Keychain access timed out"
-        case .tokenParseError: "Failed to parse OAuth token from keychain data"
-        case .unexpectedAPIFormat: "API response does not match expected format"
+        case let .keychainAccessDenied(svc, code):
+            "Keychain access denied for service '\(svc)' (exit \(code))"
+        case let .keychainEmpty(svc):
+            "Keychain item is empty for service '\(svc)'"
+        case let .keychainTimeout(svc, secs):
+            "Keychain access timed out after \(secs)s for service '\(svc)'"
+        case let .tokenParseError(raw):
+            "Failed to parse OAuth token — raw value preview: '\(raw.prefix(80))'"
+        case let .unexpectedAPIFormat(keys):
+            "API response does not match expected format — top-level keys: \(keys)"
         }
     }
 }

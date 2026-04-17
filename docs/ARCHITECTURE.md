@@ -15,11 +15,17 @@ The Swift package is split into a library target and an executable target, plus 
 
 A `UsageConnector` protocol abstracts vendor-specific API access. Each connector resolves an active account and fetches usage data asynchronously. The first concrete implementation targets the Claude API via OAuth tokens stored in the macOS Keychain.
 
-A polling actor periodically invokes all registered connectors in parallel and merges results into a shared JSON file. Concurrency between the poller and external readers is managed with POSIX `flock` (always released in a `defer`) layered on top of Swift actor isolation.
+A polling actor periodically invokes all registered connectors in parallel and merges results into a shared JSON file.
 
 ## Persistence
 
-Usage data is persisted as a JSON file at `~/.cache/ai-usages-tracker/usages.json`. The schema is a top-level `usages` array where each entry is keyed by `(vendor, account)`. A dedicated file manager handles reads and writes under an exclusive or shared POSIX file lock. Writes use the system's atomic write facility to prevent partial-file corruption.
+Usage data is persisted as a JSON file at `~/.cache/ai-usages-tracker/usages.json`. The schema is a top-level `usages` array where each entry is keyed by `(vendor, account)`. A dedicated actor (`UsagesFileManager`) serializes all reads and writes for internal callers, so no POSIX file lock is needed internally. Writes use the system's atomic write facility to prevent partial-file corruption.
+
+Note: external processes reading the file (widgets, scripts) must tolerate a brief window where the file contains partial JSON between the OS atomic rename and their `read` call. A future addition of `flock` (see `docs/SWIFT-IO-ROBUSTNESS.md`) would remove this window.
+
+## Account monitoring
+
+A separate monitoring actor polls the vendor's local config file at a short fixed interval to detect account switches in real time. When a switch is detected, it updates the `isActive` flag on the corresponding persistence entry without waiting for the next usage fetch. This separation keeps account-status latency low without coupling it to the (slower) API polling cadence.
 
 ## Logging
 

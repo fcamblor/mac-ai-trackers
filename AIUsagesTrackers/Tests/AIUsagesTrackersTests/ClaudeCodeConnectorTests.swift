@@ -124,19 +124,26 @@ struct ClaudeCodeConnectorFetchTests {
         #expect(entries[0].account == "user@example.com")
         #expect(entries[0].lastError == nil)
         #expect(entries[0].metrics.count == 2)
-        // Verify utilization: API returns integer percentage directly (42 → 42%)
+        // utilization is a Double from the API; connector rounds to nearest Int percent (42.0 → 42)
         if case .timeWindow(let name, _, _, let pct) = entries[0].metrics[0] {
             #expect(name == "session")
             #expect(pct == 42)
         } else {
-            Issue.record("Expected timeWindow metric")
+            Issue.record("Expected timeWindow metric for session")
+        }
+        if case .timeWindow(let name, _, let duration, let pct) = entries[0].metrics[1] {
+            #expect(name == "weekly")
+            #expect(pct == 8)
+            #expect(duration == 10080)
+        } else {
+            Issue.record("Expected timeWindow metric for weekly")
         }
     }
 
     @Test("token error returns error entry")
     func tokenError() async throws {
         let dir = makeTempDir()
-        let connector = makeConnector(dir: dir) { throw ConnectorError.keychainAccessDenied }
+        let connector = makeConnector(dir: dir) { throw ConnectorError.keychainAccessDenied(serviceName: "test", exitCode: 1) }
         let entries = try await connector.fetchUsages()
 
         #expect(entries.count == 1)

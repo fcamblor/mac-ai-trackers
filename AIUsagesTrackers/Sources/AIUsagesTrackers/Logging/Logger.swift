@@ -38,7 +38,11 @@ public final class FileLogger: Sendable {
         self.filePath = filePath
         self.minLevel = minLevel
         let dir = (filePath as NSString).deletingLastPathComponent
-        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true, attributes: nil)
+        do {
+            try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true, attributes: nil)
+        } catch {
+            fputs("FileLogger: cannot create log directory \(dir): \(error)\n", stderr)
+        }
     }
 
     public func log(_ level: LogLevel, _ message: String) {

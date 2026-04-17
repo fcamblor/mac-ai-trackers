@@ -22,7 +22,7 @@ actor MockConnector: UsageConnector {
 
     func fetchUsages() async throws -> [VendorUsageEntry] {
         fetchCount += 1
-        if shouldThrow { throw ConnectorError.unexpectedAPIFormat }
+        if shouldThrow { throw ConnectorError.unexpectedAPIFormat(receivedKeys: []) }
         return entries
     }
 }
