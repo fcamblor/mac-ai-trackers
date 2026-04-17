@@ -25,6 +25,9 @@ public final class UsageStore {
     /// Incremented each time handleNewData is called, whether the data is valid or malformed.
     /// Tests use this as a reliable signal that the store has consumed the latest yielded item.
     public private(set) var dataProcessedCount: Int = 0
+    public private(set) var entries: [VendorUsageEntry] = []
+
+    // MARK: Dependencies
 
     private let fileWatcher: FileWatching
     private let clock: ClockProvider
@@ -98,10 +101,12 @@ public final class UsageStore {
         do {
             let file = try JSONDecoder().decode(UsagesFile.self, from: data)
             lastFile = file
+            entries = file.usages
             menuBarText = format(file: file)
         } catch {
             logger.log(.error, "UsageStore: JSON decode failed: \(error)")
             lastFile = nil
+            entries = []
             menuBarText = Self.fallbackText
         }
     }
@@ -129,7 +134,7 @@ public final class UsageStore {
         if case let .unknown(t) = metric {
             logger.log(.debug, "UsageStore: skipping unknown metric type '\(t)'")
         }
-        guard case let .timeWindow(name, resetAt, _windowDuration, usagePercent) = metric else {
+        guard case let .timeWindow(name, resetAt, _, usagePercent) = metric else {
             return nil
         }
 
@@ -141,30 +146,10 @@ public final class UsageStore {
     }
 
     private func formatRemainingTime(resetAt: ISODate) -> String {
-        guard let resetDate = resetAt.date else {
+        guard resetAt.date != nil else {
             logger.log(.warning, "UsageStore: invalid ISO8601 resetAt value: \(resetAt.rawValue)")
-            return "0m"
+            return "--"
         }
-
-        let now = clock.now()
-        let totalSeconds = Int(resetDate.timeIntervalSince(now))
-
-        guard totalSeconds > 0 else { return "0m" }
-
-        let secondsPerMinute = 60
-        let secondsPerHour = 3600
-        let secondsPerDay = 86400
-
-        let days = totalSeconds / secondsPerDay
-        let hours = (totalSeconds % secondsPerDay) / secondsPerHour
-        let minutes = (totalSeconds % secondsPerHour) / secondsPerMinute
-
-        var parts: [String] = []
-        if days > 0 { parts.append("\(days)d") }
-        if hours > 0 { parts.append("\(hours)h") }
-        // Always show minutes unless we have days+hours already
-        if minutes > 0 || parts.isEmpty { parts.append("\(minutes)m") }
-
-        return parts.joined(separator: " ")
+        return AIUsagesTrackersLib.formatRemainingTime(resetAt: resetAt, now: clock.now())
     }
 }

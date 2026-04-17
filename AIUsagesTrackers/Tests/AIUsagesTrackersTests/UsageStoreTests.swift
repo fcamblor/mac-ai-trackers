@@ -641,3 +641,111 @@ struct UsageStoreEntryTests {
     }
 
 }
+
+// MARK: - Entries property tests
+
+@Suite("UsageStore entries property")
+struct UsageStoreEntriesTests {
+
+    @MainActor
+    @Test("entries is empty by default")
+    func defaultIsEmpty() {
+        let watcher = MockFileWatcher()
+        let store = UsageStore(fileWatcher: watcher)
+        #expect(store.entries.isEmpty)
+    }
+
+    @MainActor
+    @Test("entries populated on valid data")
+    func populatedOnValidData() async throws {
+        let watcher = MockFileWatcher()
+        let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
+        store.start()
+
+        let data = makeUsagesJSON(
+            vendor: "claude",
+            account: "a@b.com",
+            isActive: true,
+            metrics: [timeWindowMetric(name: "session", usagePercent: 42)]
+        )
+        watcher.send(data)
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        #expect(store.entries.count == 1)
+        #expect(store.entries[0].vendor == .claude)
+        #expect(store.entries[0].account == AccountEmail(rawValue: "a@b.com"))
+        store.stop()
+    }
+
+    @MainActor
+    @Test("entries cleared on malformed JSON")
+    func clearedOnMalformedJSON() async throws {
+        let watcher = MockFileWatcher()
+        let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
+        store.start()
+
+        // First send valid data
+        let validData = makeUsagesJSON(metrics: [timeWindowMetric()])
+        watcher.send(validData)
+        try await Task.sleep(nanoseconds: 50_000_000)
+        #expect(!store.entries.isEmpty)
+
+        // Then send malformed data
+        watcher.send("bad".data(using: .utf8)!)
+        try await Task.sleep(nanoseconds: 50_000_000)
+        #expect(store.entries.isEmpty)
+
+        store.stop()
+    }
+
+    @MainActor
+    @Test("entries contain multiple vendor entries")
+    func multipleEntries() async throws {
+        let watcher = MockFileWatcher()
+        let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
+        store.start()
+
+        // Build JSON with two entries manually
+        let entry1: [String: Any] = [
+            "vendor": "claude",
+            "account": "a@b.com",
+            "isActive": true,
+            "metrics": [timeWindowMetric(name: "session", usagePercent: 48)],
+        ]
+        let entry2: [String: Any] = [
+            "vendor": "claude",
+            "account": "c@d.com",
+            "isActive": false,
+            "metrics": [payAsYouGoMetric()],
+        ]
+        let root: [String: Any] = ["usages": [entry1, entry2]]
+        let data = try! JSONSerialization.data(withJSONObject: root)
+
+        watcher.send(data)
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        #expect(store.entries.count == 2)
+        #expect(store.entries.contains { $0.isActive && $0.account == AccountEmail(rawValue: "a@b.com") })
+        #expect(store.entries.contains { !$0.isActive && $0.account == AccountEmail(rawValue: "c@d.com") })
+        store.stop()
+    }
+
+    @MainActor
+    @Test("entries recovered after error")
+    func recoveredAfterError() async throws {
+        let watcher = MockFileWatcher()
+        let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
+        store.start()
+
+        watcher.send("bad".data(using: .utf8)!)
+        try await Task.sleep(nanoseconds: 50_000_000)
+        #expect(store.entries.isEmpty)
+
+        let data = makeUsagesJSON(metrics: [timeWindowMetric()])
+        watcher.send(data)
+        try await Task.sleep(nanoseconds: 50_000_000)
+        #expect(store.entries.count == 1)
+
+        store.stop()
+    }
+}
