@@ -34,11 +34,11 @@ struct TimeWindowMetricRow: View {
             HStack {
                 Text(formatRemainingTime(resetAt: resetAt, now: now))
                     .font(.system(size: 10).monospacedDigit())
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
                 Spacer()
                 Text("resets \(formatResetDate(resetAt))")
                     .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
             }
         }
     }

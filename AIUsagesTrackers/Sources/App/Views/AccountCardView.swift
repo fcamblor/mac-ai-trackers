@@ -35,7 +35,16 @@ struct AccountCardView: View {
             }
         }
         .padding(10)
-        .background(.background.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
+        .background(
+            (showActiveBadge && entry.isActive)
+                ? Color.green.opacity(0.20)
+                : Color(NSColor.controlBackgroundColor),
+            in: RoundedRectangle(cornerRadius: 8)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(Color.primary.opacity(0.20), lineWidth: 1)
+        )
     }
 
     @ViewBuilder

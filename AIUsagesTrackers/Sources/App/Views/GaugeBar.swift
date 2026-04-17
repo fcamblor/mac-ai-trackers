@@ -7,7 +7,7 @@ struct GaugeBar: View {
     let theoretical: Double
 
     private static let barHeight: CGFloat = 6
-    private static let markerWidth: CGFloat = 1.5
+    private static let markerWidth: CGFloat = 2.5
     private static let cornerRadius: CGFloat = 3
 
     var body: some View {
@@ -25,7 +25,7 @@ struct GaugeBar: View {
                 // Skip marker when no window data — avoids a tick pinned to the left edge at 0.
                 if theoretical > 0 {
                     RoundedRectangle(cornerRadius: Self.markerWidth / 2)
-                        .fill(.secondary)
+                        .fill(.primary)
                         .frame(width: Self.markerWidth, height: Self.barHeight + 4)
                         .offset(x: width * clamp(theoretical) - Self.markerWidth / 2)
                 }

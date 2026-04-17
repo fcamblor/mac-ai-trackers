@@ -30,6 +30,7 @@ struct UsageDetailsView: View {
                     .padding(12)
                 }
                 .frame(maxHeight: Self.maxPopoverHeight)
+                .background(Color(NSColor.windowBackgroundColor).opacity(0.4))
             }
 
             Divider()
