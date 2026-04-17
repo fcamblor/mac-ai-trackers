@@ -1,0 +1,1 @@
+quand un fetch de data s'est bien passé, on devrait supprimer le noeud lastError du fichier usages

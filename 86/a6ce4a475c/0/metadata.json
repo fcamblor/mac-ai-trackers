@@ -1,0 +1,78 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "86a6ce4a475c",
+  "session_id": "023232bf-9a7d-4898-96d2-4f3f3128a2ed",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T21:47:50.432659Z",
+  "branch": "archon/task-feat-menubar-usage-metrics",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/UsagesFileManager.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsagesFileManagerTests.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "3b34e59afba8",
+  "token_usage": {
+    "input_tokens": 30,
+    "cache_creation_tokens": 123084,
+    "cache_read_tokens": 689300,
+    "output_tokens": 33623,
+    "api_call_count": 14
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T21:47:50.242007Z",
+    "agent_lines": 114,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 114,
+    "total_lines_changed": 114,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 217,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10,
+        ".idea/codeStyles/codeStyleConfig.xml": 5,
+        ".idea/copilot.data.migration.agent.xml": 6,
+        ".idea/go.imports.xml": 11,
+        ".idea/misc.xml": 6,
+        ".idea/modules.xml": 8,
+        ".idea/task-feat-menubar-usage-metrics.iml": 9,
+        ".idea/vcs.xml": 6,
+        ".serena/.gitignore": 2,
+        ".serena/project.yml": 154
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 217,
+      "user_lines_removed": 0,
+      "agent_lines_added": 114,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10,
+        ".idea/codeStyles/codeStyleConfig.xml": 5,
+        ".idea/copilot.data.migration.agent.xml": 6,
+        ".idea/go.imports.xml": 11,
+        ".idea/misc.xml": 6,
+        ".idea/modules.xml": 8,
+        ".idea/task-feat-menubar-usage-metrics.iml": 9,
+        ".idea/vcs.xml": 6,
+        ".serena/.gitignore": 2,
+        ".serena/project.yml": 154
+      }
+    }
+  ]
+}
