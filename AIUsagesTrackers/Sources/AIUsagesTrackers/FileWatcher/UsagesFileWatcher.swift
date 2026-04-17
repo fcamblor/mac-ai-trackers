@@ -14,7 +14,7 @@ public protocol FileWatching: Sendable {
 /// `.write` events. A fallback timer re-checks every `pollInterval` seconds in
 /// case FS events are missed (network mounts, fd invalidation after atomic
 /// replace). Duplicate reads are suppressed by comparing modification dates.
-public final class UsagesFileWatcher: FileWatching, @unchecked Sendable {
+public final class UsagesFileWatcher: FileWatching, Sendable {
     private let path: String
     private let pollInterval: TimeInterval
     private let logger: FileLogger
