@@ -83,6 +83,12 @@
           },
           {
             "type": "command",
+            "command": "npx @fcamblor/gitdiff-watcher@0.2.0 --on 'AIUsagesTrackers/Sources/**/*.swift' --on 'AIUsagesTrackers/Tests/**/*.swift' --on 'AIUsagesTrackers/Package.swift' --exec 'cd AIUsagesTrackers && swift test'",
+            "timeout": 180,
+            "statusMessage": "Running Swift tests..."
+          },
+          {
+            "type": "command",
             "command": "npx @fcamblor/gitdiff-watcher@0.2.0 --on 'AIUsagesTrackers/Package.swift' --exec 'cd AIUsagesTrackers && swift package describe > /dev/null'",
             "timeout": 30,
             "statusMessage": "Validating Package.swift..."
