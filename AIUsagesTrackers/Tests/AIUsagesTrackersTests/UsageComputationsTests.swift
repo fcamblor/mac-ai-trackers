@@ -125,18 +125,39 @@ struct TheoreticalFractionTests {
 @Suite("formatResetDate")
 struct FormatResetDateTests {
 
+    // Fixed UTC reference: 2026-04-18T10:00:00Z
+    private static let now = Date(timeIntervalSince1970: 1_776_513_600)
+
     @Test("returns '--' for unparseable ISODate")
     func invalidDate() {
-        let result = formatResetDate(ISODate(rawValue: "bad"))
+        let result = formatResetDate(ISODate(rawValue: "bad"), now: Self.now)
         #expect(result == "--")
     }
 
-    @Test("formats a valid date")
-    func validDate() {
-        let result = formatResetDate(ISODate(rawValue: "2026-04-17T15:00:00Z"))
-        // Exact format depends on locale/timezone, just verify it's not "--"
+    @Test("shows '@ HH:mm' when reset is today")
+    func today() {
+        // Same UTC day as now: 2026-04-18T15:00:00Z
+        let result = formatResetDate(ISODate(rawValue: "2026-04-18T15:00:00Z"), now: Self.now)
+        #expect(result.hasPrefix("@ "))
+        #expect(!result.contains("Apr"))
+        #expect(!result.contains("Tomorrow"))
+    }
+
+    @Test("shows 'Tomorrow @ HH:mm' when reset is the next calendar day")
+    func tomorrow() {
+        // Next UTC day: 2026-04-19T08:00:00Z
+        let result = formatResetDate(ISODate(rawValue: "2026-04-19T08:00:00Z"), now: Self.now)
+        #expect(result.hasPrefix("Tomorrow @ "))
+        #expect(!result.contains("Apr"))
+    }
+
+    @Test("shows full date when reset is two or more days away")
+    func laterDate() {
+        // Two days later: 2026-04-20T08:00:00Z
+        let result = formatResetDate(ISODate(rawValue: "2026-04-20T08:00:00Z"), now: Self.now)
         #expect(result != "--")
-        #expect(!result.isEmpty)
+        #expect(!result.hasPrefix("tomorrow"))
+        #expect(!result.contains("today"))
     }
 }
 

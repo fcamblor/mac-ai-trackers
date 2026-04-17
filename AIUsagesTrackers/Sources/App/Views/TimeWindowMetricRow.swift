@@ -36,7 +36,7 @@ struct TimeWindowMetricRow: View {
                     .font(.system(size: 10).monospacedDigit())
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("resets \(formatResetDate(resetAt))")
+                Text("resets \(formatResetDate(resetAt, now: now))")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
             }

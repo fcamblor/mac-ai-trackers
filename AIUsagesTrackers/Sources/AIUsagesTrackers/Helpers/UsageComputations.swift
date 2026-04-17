@@ -39,17 +39,38 @@ public func theoreticalFraction(resetAt: ISODate, windowDuration: DurationMinute
 
 // MARK: - Reset date formatting
 
-/// Formats the reset date as "MMM d, HH:mm". Returns "--" when `resetAt` cannot be parsed.
-public func formatResetDate(_ resetAt: ISODate) -> String {
+/// Formats the reset date relative to `now`:
+/// - same calendar day → time only ("HH:mm")
+/// - next calendar day → "tomorrow HH:mm"
+/// - otherwise → "MMM d, HH:mm"
+/// Returns "--" when `resetAt` cannot be parsed.
+public func formatResetDate(_ resetAt: ISODate, now: Date) -> String {
     guard let resetDate = resetAt.date else { return "--" }
-    return ResetDateFormatting.formatter.string(from: resetDate)
+    let calendar = Calendar.current
+    let today = calendar.startOfDay(for: now)
+    let resetDay = calendar.startOfDay(for: resetDate)
+    let timeString = ResetDateFormatting.timeFormatter.string(from: resetDate)
+    if resetDay == today {
+        return "@ \(timeString)"
+    }
+    let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+    if resetDay == tomorrow {
+        return "Tomorrow @ \(timeString)"
+    }
+    return ResetDateFormatting.dateTimeFormatter.string(from: resetDate)
 }
 
-// Singleton is safe: only called from @MainActor SwiftUI views
+// Singletons are safe: only called from @MainActor SwiftUI views
 private enum ResetDateFormatting {
-    static let formatter: DateFormatter = {
+    static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "MMM d, HH:mm"
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+
+    static let dateTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d '@' HH:mm"
         return f
     }()
 }
