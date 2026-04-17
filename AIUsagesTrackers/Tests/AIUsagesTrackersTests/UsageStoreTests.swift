@@ -28,6 +28,25 @@ struct FixedClock: ClockProvider {
     func now() -> Date { date }
 }
 
+// MARK: - Async helpers
+
+private struct EventuallyTimeoutError: Error {}
+
+/// Polls `condition` on the main actor at `interval` until it returns true or `timeout` expires.
+@MainActor
+private func eventually(
+    timeout: TimeInterval = 2.0,
+    interval: TimeInterval = 0.01,
+    _ condition: @MainActor () -> Bool
+) async throws {
+    let deadline = Date(timeIntervalSinceNow: timeout)
+    while true {
+        if condition() { return }
+        guard Date() < deadline else { throw EventuallyTimeoutError() }
+        try await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+    }
+}
+
 // MARK: - Helpers
 
 private func makeUsagesJSON(
@@ -105,10 +124,7 @@ struct UsageStoreFormattingTests {
             timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", usagePercent: 48),
         ])
         watcher.send(data)
-
-        // Let the async stream deliver
-        try await Task.sleep(nanoseconds: 50_000_000)
-
+        try await eventually { store.menuBarText == "S 48% 2h 13m" }
         #expect(store.menuBarText == "S 48% 2h 13m")
         store.stop()
     }
@@ -126,8 +142,7 @@ struct UsageStoreFormattingTests {
             timeWindowMetric(name: "weekly", resetAt: "2026-04-23T21:00:00Z", usagePercent: 7),
         ])
         watcher.send(data)
-        try await Task.sleep(nanoseconds: 50_000_000)
-
+        try await eventually { store.menuBarText == "S 48% 2h 13m | W 7% 6d 8h 13m" }
         #expect(store.menuBarText == "S 48% 2h 13m | W 7% 6d 8h 13m")
         store.stop()
     }
@@ -144,8 +159,7 @@ struct UsageStoreFormattingTests {
             payAsYouGoMetric(),
         ])
         watcher.send(data)
-        try await Task.sleep(nanoseconds: 50_000_000)
-
+        try await eventually { store.dataProcessedCount == 1 }
         // No time-window metrics → fallback
         #expect(store.menuBarText == "--")
         store.stop()
@@ -164,8 +178,7 @@ struct UsageStoreFormattingTests {
             payAsYouGoMetric(),
         ])
         watcher.send(data)
-        try await Task.sleep(nanoseconds: 50_000_000)
-
+        try await eventually { store.menuBarText == "S 48% 2h 13m" }
         #expect(store.menuBarText == "S 48% 2h 13m")
         store.stop()
     }
@@ -182,8 +195,7 @@ struct UsageStoreFormattingTests {
             timeWindowMetric(name: "session", resetAt: "2026-04-17T10:00:00Z", usagePercent: 100),
         ])
         watcher.send(data)
-        try await Task.sleep(nanoseconds: 50_000_000)
-
+        try await eventually { store.menuBarText != "--" }
         #expect(store.menuBarText == "S 100% 0m")
         store.stop()
     }
@@ -200,8 +212,7 @@ struct UsageStoreFormattingTests {
             timeWindowMetric(name: "session", resetAt: "2026-04-17T12:47:00Z", usagePercent: 50),
         ])
         watcher.send(data)
-        try await Task.sleep(nanoseconds: 50_000_000)
-
+        try await eventually { store.menuBarText != "--" }
         #expect(store.menuBarText == "S 50% 0m")
         store.stop()
     }
@@ -218,8 +229,7 @@ struct UsageStoreDegradationTests {
         store.start()
 
         watcher.send("not json".data(using: .utf8)!)
-        try await Task.sleep(nanoseconds: 50_000_000)
-
+        try await eventually { store.dataProcessedCount == 1 }
         #expect(store.menuBarText == "--")
         store.stop()
     }
@@ -235,8 +245,7 @@ struct UsageStoreDegradationTests {
             timeWindowMetric(),
         ])
         watcher.send(data)
-        try await Task.sleep(nanoseconds: 50_000_000)
-
+        try await eventually { store.dataProcessedCount == 1 }
         #expect(store.menuBarText == "--")
         store.stop()
     }
@@ -252,8 +261,7 @@ struct UsageStoreDegradationTests {
             timeWindowMetric(),
         ])
         watcher.send(data)
-        try await Task.sleep(nanoseconds: 50_000_000)
-
+        try await eventually { store.dataProcessedCount == 1 }
         #expect(store.menuBarText == "--")
         store.stop()
     }
@@ -267,8 +275,7 @@ struct UsageStoreDegradationTests {
 
         let data = makeUsagesJSON(metrics: [])
         watcher.send(data)
-        try await Task.sleep(nanoseconds: 50_000_000)
-
+        try await eventually { store.dataProcessedCount == 1 }
         #expect(store.menuBarText == "--")
         store.stop()
     }
@@ -283,14 +290,14 @@ struct UsageStoreDegradationTests {
         store.start()
 
         watcher.send("bad".data(using: .utf8)!)
-        try await Task.sleep(nanoseconds: 50_000_000)
+        try await eventually { store.dataProcessedCount == 1 }
         #expect(store.menuBarText == "--")
 
         let data = makeUsagesJSON(metrics: [
             timeWindowMetric(name: "session", resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
         ])
         watcher.send(data)
-        try await Task.sleep(nanoseconds: 50_000_000)
+        try await eventually { store.dataProcessedCount == 2 }
         #expect(store.menuBarText == "S 10% 1h")
 
         store.stop()
@@ -345,8 +352,7 @@ struct UsageStoreRemainingTimeTests {
             timeWindowMetric(name: "daily", resetAt: "2026-04-18T00:00:00Z", usagePercent: 0),
         ])
         watcher.send(data)
-        try await Task.sleep(nanoseconds: 50_000_000)
-
+        try await eventually { store.menuBarText != "--" }
         #expect(store.menuBarText == "D 0% 1d")
         store.stop()
     }
@@ -365,8 +371,7 @@ struct UsageStoreRemainingTimeTests {
             timeWindowMetric(name: "weekly", resetAt: "2026-04-20T05:30:00Z", usagePercent: 15),
         ])
         watcher.send(data)
-        try await Task.sleep(nanoseconds: 50_000_000)
-
+        try await eventually { store.menuBarText != "--" }
         #expect(store.menuBarText == "W 15% 3d 5h 30m")
         store.stop()
     }
@@ -384,8 +389,7 @@ struct UsageStoreRemainingTimeTests {
             timeWindowMetric(name: "session", resetAt: "2026-04-17T14:50:00Z", usagePercent: 95),
         ])
         watcher.send(data)
-        try await Task.sleep(nanoseconds: 50_000_000)
-
+        try await eventually { store.menuBarText != "--" }
         #expect(store.menuBarText == "S 95% 5m")
         store.stop()
     }
@@ -401,8 +405,7 @@ struct UsageStoreRemainingTimeTests {
             timeWindowMetric(name: "session", resetAt: "not-a-date", usagePercent: 50),
         ])
         watcher.send(data)
-        try await Task.sleep(nanoseconds: 50_000_000)
-
+        try await eventually { store.menuBarText != "--" }
         #expect(store.menuBarText == "S 50% 0m")
         store.stop()
     }
