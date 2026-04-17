@@ -1,0 +1,23 @@
+<task-notification>
+<task-id>blivp8zko</task-id>
+<tool-use-id>toolu_01EtpuTsMFCSCYSKL3qc5tZZ</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/3ae9611f-3bdb-4ba6-b692-ca0f8ebf9831/tasks/blivp8zko.output</output-file>
+<status>completed</status>
+<summary>Background command "Run improve-ai-harness on fcr-dev review logs" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+il faudrait communiquer au workflow fcr-dev:
+- le fait de prendre en compte ce que skill improve-ai-harness a généré (et oui, je te donne la permission de modifier ce qui se trouve dans .claude dans ce cadre)
+- le fait de cherry-pick le commit 29fdb03bb788200ad4d4acf4372944cba56aec70 qui est venu rajouter les items de tech debt, car ces items doivent faire parti du worktree task-feat-claude-usages-connector
+
+---
+
+<task-notification>
+<task-id>balgfw3zm</task-id>
+<tool-use-id>toolu_014PGQdQ9STbD2eoJLSLisiW</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/3ae9611f-3bdb-4ba6-b692-ca0f8ebf9831/tasks/balgfw3zm.output</output-file>
+<status>completed</status>
+<summary>Background command "Send harness + cherry-pick instructions to fcr-dev" completed (exit code 0)</summary>
+</task-notification>

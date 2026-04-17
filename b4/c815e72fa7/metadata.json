@@ -3,7 +3,7 @@
   "checkpoint_id": "b4c815e72fa7",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 2,
+  "checkpoints_count": 4,
   "files_touched": [
     "roadmap/buy-me-a-coffee.md",
     "roadmap/consumption-color-indicators.md",
@@ -18,13 +18,19 @@
       "transcript": "/b4/c815e72fa7/0/full.jsonl",
       "content_hash": "/b4/c815e72fa7/0/content_hash.txt",
       "prompt": "/b4/c815e72fa7/0/prompt.txt"
+    },
+    {
+      "metadata": "/b4/c815e72fa7/1/metadata.json",
+      "transcript": "/b4/c815e72fa7/1/full.jsonl",
+      "content_hash": "/b4/c815e72fa7/1/content_hash.txt",
+      "prompt": "/b4/c815e72fa7/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 40,
-    "cache_creation_tokens": 114521,
-    "cache_read_tokens": 492500,
-    "output_tokens": 7593,
-    "api_call_count": 19
+    "input_tokens": 60,
+    "cache_creation_tokens": 129417,
+    "cache_read_tokens": 1734256,
+    "output_tokens": 12239,
+    "api_call_count": 34
   }
 }
