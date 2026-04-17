@@ -312,7 +312,7 @@ struct UsageStoreLifecycleTests {
         let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
         store.start()
         store.stop()
-        store.stop() // second call should be no-op
+        store.stop()
     }
 
     @MainActor
