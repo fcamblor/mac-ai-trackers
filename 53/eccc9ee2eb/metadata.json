@@ -1,0 +1,37 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "53eccc9ee2eb",
+  "strategy": "manual-commit",
+  "branch": "archon/task-feat-claude-usages-connector",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Package.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/ClaudeCodeConnector.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/UsageConnector.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Logging/Logger.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/UsageModels.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/UsagesFileManager.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Scheduler/UsagePoller.swift",
+    "AIUsagesTrackers/Sources/App/AIUsagesTrackersApp.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/ClaudeCodeConnectorTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/LoggerTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageModelsTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsagePollerTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsagesFileManagerTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/53/eccc9ee2eb/0/metadata.json",
+      "transcript": "/53/eccc9ee2eb/0/full.jsonl",
+      "content_hash": "/53/eccc9ee2eb/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 49,
+    "cache_creation_tokens": 31909,
+    "cache_read_tokens": 3327865,
+    "output_tokens": 15945,
+    "api_call_count": 49
+  }
+}
