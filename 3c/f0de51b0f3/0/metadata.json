@@ -1,0 +1,46 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "3cf0de51b0f3",
+  "session_id": "58c14676-5317-4003-b84b-78b7c212b238",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T22:25:28.086162Z",
+  "branch": "archon/task-td-concurrency-blocking-swift",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Logging/Logger.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "edf5da5ad76a",
+  "token_usage": {
+    "input_tokens": 14,
+    "cache_creation_tokens": 29180,
+    "cache_read_tokens": 301050,
+    "output_tokens": 1939,
+    "api_call_count": 10
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T22:25:27.973557Z",
+    "agent_lines": 1,
+    "agent_removed": 1,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1,
+    "total_lines_changed": 2,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 2,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".serena/.gitignore": 2
+      }
+    }
+  ]
+}
