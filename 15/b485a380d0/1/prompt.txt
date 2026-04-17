@@ -1,0 +1,5 @@
+sur le projet swift, identifies-tu des éléments déterministes qui gagneraient a etre mis sous forme de stop hook se reposant sur gitdiff-watcher ? (linting, compilation, etc..)
+
+---
+
+ok pour 1 et 4
