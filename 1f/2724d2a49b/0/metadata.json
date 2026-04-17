@@ -1,0 +1,46 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "1f2724d2a49b",
+  "session_id": "43f8934e-bed9-48ff-98b3-ad49ceff64c1",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T22:11:53.172576Z",
+  "branch": "archon/task-td-usage-display-minor-nits",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "tech-debt/20260417_low_XS_usage-display-minor-nits/plan.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "6fa00063d124",
+  "token_usage": {
+    "input_tokens": 15,
+    "cache_creation_tokens": 18433,
+    "cache_read_tokens": 298363,
+    "output_tokens": 3277,
+    "api_call_count": 13
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T22:11:53.110639Z",
+    "agent_lines": 46,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 46,
+    "total_lines_changed": 46,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 2,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".serena/.gitignore": 2
+      }
+    }
+  ]
+}
