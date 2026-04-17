@@ -1,0 +1,86 @@
+lance le workflow archon idea to pr pour implémenter la future logique applicative du projet swift:
+
+# objectif
+
+créer le contenu du fichier ~/.cache/ai-usages-tracker/usages.json, sur le modele de ~/.cache/ccstatusline/usages.json, avec quelques différences:
+- chaque entrée doit avoir un champ "vendor", qui vaudra "claude", "codex", "gh-copilot" etc...
+- email devrait etre renommé en "account"
+- il faudrait décliner le noeud "usage" en un tableau de metriques. Chaque métrique à un nom (weekly, session, sonnet, pay-as-you-go pour claude par exemple). 2 types de métriques
+  - time-window: à quelle date est prévue le prochain reset, quelle durée fait la time-window (en minutes), utilisation en pourcentage
+  - pay-as-you-go: montant consommé actuellement
+
+créer des connecteurs qui permettent:
+- de récupérer les métriques ci-dessus (cf manière d'appeler l'API dans ~/bashscripts/ccstatusline-usage.sh)
+- lorsque du multi-account est possible, déterminer quel account est actif actuellement (ex: avec claude, regarder l'email de ~/.claude.json pour déterminer l'account actif)
+
+N'implémenter que le connecteur claude code pour le moment (à partir de la logique du ~/bashscripts/ccstatusline-usage.sh
+Prévoir que le connecteur puisse tourner en tache de fond à une fréquence paramétrable (toutes les 3 minutes par défaut)
+
+---
+
+oui, tente fcr-dev
+
+---
+
+<task-notification>
+<task-id>bg3qt7dws</task-id>
+<tool-use-id>toolu_01GJPZzqZ1NErQo77572jRnw</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/3ae9611f-3bdb-4ba6-b692-ca0f8ebf9831/tasks/bg3qt7dws.output</output-file>
+<status>completed</status>
+<summary>Background command "Run fcr-dev workflow" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+il y a 2 locks différents:
+- lock file pour qu'il n'y ait qu'un seul process qui pose le lock + lise le fichier usage + le mette a jour + supprime le lock dans un finally
+- lock mémoire pour s'assurer qu'un seul fetchUsages ne se fasse par connecteur à un instant T (des fois que l'API mettrait longtemps à répondre, pour éviter les http 429)
+
+utiliser des logs pour bien pouvoir debugger tout ce qui se passe:
+- dans l'app (app.log)
+- dans chaque connecteurs (claude-usages-connector.log)
+Stocker ces logs dans ~/.cache/ai-usages-tracker/
+
+Passer a la couche 2 en prenant en compte ces remarques
+
+---
+
+<task-notification>
+<task-id>b3kvk8heo</task-id>
+<tool-use-id>toolu_01B59euxL9P6rsMyf9SShwxa</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/3ae9611f-3bdb-4ba6-b692-ca0f8ebf9831/tasks/b3kvk8heo.output</output-file>
+<status>completed</status>
+<summary>Background command "Approve layer 1 with feedback" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+aller impl
+
+---
+
+<task-notification>
+<task-id>buq654pvd</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/3ae9611f-3bdb-4ba6-b692-ca0f8ebf9831/tasks/buq654pvd.output</output-file>
+<status>completed</status>
+<summary>Background command "Approve and move to impl" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+all
+
+---
+
+<task-notification>
+<task-id>bh72wu76r</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/3ae9611f-3bdb-4ba6-b692-ca0f8ebf9831/tasks/bh72wu76r.output</output-file>
+<status>completed</status>
+<summary>Background command "Apply all recommendations" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+re-run reviews
