@@ -1,0 +1,194 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "15b485a380d0",
+  "session_id": "3ae9611f-3bdb-4ba6-b692-ca0f8ebf9831",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T11:42:18.89197Z",
+  "branch": "main",
+  "checkpoints_count": 9,
+  "files_touched": [
+    ".claude/rules/markdown-authoring.md",
+    ".claude/scripts/check-claude-md-lines.sh",
+    ".claude/settings.json",
+    ".claude/skills/improve-ai-harness/SKILL.md",
+    ".claude/skills/resolve-tech-debt/SKILL.md",
+    ".claude/skills/tech-debt/SKILL.md",
+    ".gitignore",
+    "CLAUDE.md",
+    "docs/ARCHITECTURE.md",
+    "docs/DEVELOPMENT.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "265c92ddcc60",
+  "token_usage": {
+    "input_tokens": 541,
+    "cache_creation_tokens": 211468,
+    "cache_read_tokens": 1872301,
+    "output_tokens": 23329,
+    "api_call_count": 39
+  },
+  "session_metrics": {
+    "turn_count": 9
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T11:42:18.678695Z",
+    "agent_lines": 543,
+    "agent_removed": 0,
+    "human_added": 1,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 544,
+    "total_lines_changed": 544,
+    "agent_percentage": 99.81617647058823,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 16,
+      "user_lines_removed": 0,
+      "agent_lines_added": 26,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.local.json": 6,
+        ".idea/.gitignore": 10
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 16,
+      "user_lines_removed": 0,
+      "agent_lines_added": 31,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.local.json": 6,
+        ".idea/.gitignore": 10
+      }
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 16,
+      "user_lines_removed": 0,
+      "agent_lines_added": 35,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.local.json": 6,
+        ".idea/.gitignore": 10
+      }
+    },
+    {
+      "checkpoint_number": 5,
+      "user_lines_added": 67,
+      "user_lines_removed": 0,
+      "agent_lines_added": 67,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.local.json": 6,
+        ".idea/.gitignore": 10,
+        ".idea/codeStyles/codeStyleConfig.xml": 5,
+        ".idea/copilot.data.migration.agent.xml": 6,
+        ".idea/go.imports.xml": 11,
+        ".idea/mac-ai-trackers.iml": 9,
+        ".idea/misc.xml": 6,
+        ".idea/modules.xml": 8,
+        ".idea/vcs.xml": 6
+      }
+    },
+    {
+      "checkpoint_number": 6,
+      "user_lines_added": 67,
+      "user_lines_removed": 0,
+      "agent_lines_added": 53,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.local.json": 6,
+        ".idea/.gitignore": 10,
+        ".idea/codeStyles/codeStyleConfig.xml": 5,
+        ".idea/copilot.data.migration.agent.xml": 6,
+        ".idea/go.imports.xml": 11,
+        ".idea/mac-ai-trackers.iml": 9,
+        ".idea/misc.xml": 6,
+        ".idea/modules.xml": 8,
+        ".idea/vcs.xml": 6
+      }
+    },
+    {
+      "checkpoint_number": 7,
+      "user_lines_added": 67,
+      "user_lines_removed": 0,
+      "agent_lines_added": 52,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.local.json": 6,
+        ".idea/.gitignore": 10,
+        ".idea/codeStyles/codeStyleConfig.xml": 5,
+        ".idea/copilot.data.migration.agent.xml": 6,
+        ".idea/go.imports.xml": 11,
+        ".idea/mac-ai-trackers.iml": 9,
+        ".idea/misc.xml": 6,
+        ".idea/modules.xml": 8,
+        ".idea/vcs.xml": 6
+      }
+    },
+    {
+      "checkpoint_number": 8,
+      "user_lines_added": 62,
+      "user_lines_removed": 0,
+      "agent_lines_added": 90,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".gitignore": 1,
+        ".idea/.gitignore": 10,
+        ".idea/codeStyles/codeStyleConfig.xml": 5,
+        ".idea/copilot.data.migration.agent.xml": 6,
+        ".idea/go.imports.xml": 11,
+        ".idea/mac-ai-trackers.iml": 9,
+        ".idea/misc.xml": 6,
+        ".idea/modules.xml": 8,
+        ".idea/vcs.xml": 6
+      }
+    },
+    {
+      "checkpoint_number": 9,
+      "user_lines_added": 61,
+      "user_lines_removed": 0,
+      "agent_lines_added": 91,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10,
+        ".idea/codeStyles/codeStyleConfig.xml": 5,
+        ".idea/copilot.data.migration.agent.xml": 6,
+        ".idea/go.imports.xml": 11,
+        ".idea/mac-ai-trackers.iml": 9,
+        ".idea/misc.xml": 6,
+        ".idea/modules.xml": 8,
+        ".idea/vcs.xml": 6
+      }
+    },
+    {
+      "checkpoint_number": 10,
+      "user_lines_added": 61,
+      "user_lines_removed": 0,
+      "agent_lines_added": 544,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10,
+        ".idea/codeStyles/codeStyleConfig.xml": 5,
+        ".idea/copilot.data.migration.agent.xml": 6,
+        ".idea/go.imports.xml": 11,
+        ".idea/mac-ai-trackers.iml": 9,
+        ".idea/misc.xml": 6,
+        ".idea/modules.xml": 8,
+        ".idea/vcs.xml": 6
+      }
+    }
+  ]
+}

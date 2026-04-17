@@ -1,0 +1,45 @@
+je pense qu'il faut que tu externalises la plupart des guidelines du CLAUDE.md dans des fichiers md dans docs/ de manière à faire du lazy loading de contexte CLAUDE (je pense qu'on a un ARCHITECTURE.md et un DEVELOPMENT.md dans les guidelines actuelles)
+
+---
+
+tout ce qui est dans le contexte claude doit etre rédigé en anglais, fais en une rule claude sur tous les fichiers md du projet
+
+---
+
+crées une .claude/rules/ pour enforcer ca
+
+---
+
+- ce que tu dis est faux, lis ce qu'il y a dans https://code.claude.com/docs/en/memory
+- utilise frontmatter pour enforcer la rules sur *.md
+- garde tous les fichiers md très génériques et future proof pour éviter les problèmes de maintenance de ces derniers (tu pourrais d'ailleurs parler de ce point dans la rule).
+par exemple:
+  - ne référence pas la rule dans le CLAUDE.md car c'est un mécanisme de harness de claude standard
+  - dans le ARCHITECTURE.md: la phrase "The app is currently in a "Hello World" state (see commit `ab23e60`). No AI tracking logic exists yet; the project name states the intent (tracker for AI tool usage on macOS)." n'est pas du tout future proof
+
+---
+
+- le nom du fichier de rule devrait etre mis à jour pour refléter son contenu
+- dans les frontmatter, évite les paths multilines avec des wildcards: avoid using yaml lists in cc rules' paths frontmatter as it seemed bugged
+
+seems like using inlined paths, comma-separated, non-quoted, and without bracket expansion is OK
+
+see:
+https://github.com/anthropics/claude-code/issues/17204
+https://github.com/anthropics/claude-code/issues/16853
+https://github.com/anthropics/claude-code/issues/23478
+
+---
+
+regarde le fichier /Users/fcamblor/Documents/projects/ecomicro/ecomicro-jarvis/.claude/settings.json et fais en sorte de récupérer le hook gitdiff-watcher sur la vérification de la taille des CLAUDE.md (embarque tout script lié pour que cela soit fonctionnel ici)
+
+---
+
+je vois du francais qui traine dans ce que tu as importé, traduis
+
+---
+
+importe (en les traduisant) les skills suivants présents dans /Users/fcamblor/Documents/projects/ecomicro/ecomicro-jarvis/.claude/skills :
+- improve-ai-harness
+- resolve-tech-debt
+- tech-debt

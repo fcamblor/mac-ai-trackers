@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "15b485a380d0",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 9,
+  "files_touched": [
+    ".claude/rules/markdown-authoring.md",
+    ".claude/scripts/check-claude-md-lines.sh",
+    ".claude/settings.json",
+    ".claude/skills/improve-ai-harness/SKILL.md",
+    ".claude/skills/resolve-tech-debt/SKILL.md",
+    ".claude/skills/tech-debt/SKILL.md",
+    ".gitignore",
+    "CLAUDE.md",
+    "docs/ARCHITECTURE.md",
+    "docs/DEVELOPMENT.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/15/b485a380d0/0/metadata.json",
+      "transcript": "/15/b485a380d0/0/full.jsonl",
+      "content_hash": "/15/b485a380d0/0/content_hash.txt",
+      "prompt": "/15/b485a380d0/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 541,
+    "cache_creation_tokens": 211468,
+    "cache_read_tokens": 1872301,
+    "output_tokens": 23329,
+    "api_call_count": 39
+  }
+}
