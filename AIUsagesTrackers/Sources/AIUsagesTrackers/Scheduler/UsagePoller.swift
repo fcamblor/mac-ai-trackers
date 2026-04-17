@@ -1,14 +1,14 @@
 import Foundation
 
-actor UsagePoller {
-    let connectors: [any UsageConnector]
-    let interval: Duration
-    let fileManager: UsagesFileManager
+public actor UsagePoller {
+    public let connectors: [any UsageConnector]
+    public let interval: Duration
+    public let fileManager: UsagesFileManager
     private let logger: FileLogger
 
     private var pollingTask: Task<Void, Never>?
 
-    init(
+    public init(
         connectors: [any UsageConnector],
         interval: Duration = .seconds(180),
         fileManager: UsagesFileManager = UsagesFileManager(),
@@ -20,7 +20,7 @@ actor UsagePoller {
         self.logger = logger
     }
 
-    func start() {
+    public func start() {
         guard pollingTask == nil else {
             logger.log(.warning, "Poller already running")
             return
@@ -35,13 +35,13 @@ actor UsagePoller {
         }
     }
 
-    func stop() {
+    public func stop() {
         pollingTask?.cancel()
         pollingTask = nil
         logger.log(.info, "Poller stopped")
     }
 
-    func pollOnce() async {
+    public func pollOnce() async {
         logger.log(.debug, "Poll tick — fetching from \(connectors.count) connector(s)")
 
         let log = self.logger

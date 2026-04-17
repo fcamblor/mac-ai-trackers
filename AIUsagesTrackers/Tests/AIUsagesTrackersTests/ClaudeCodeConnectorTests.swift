@@ -1,0 +1,192 @@
+import Foundation
+import Testing
+@testable import AIUsagesTrackersLib
+
+// MARK: - URL mocking
+
+final class MockURLProtocol: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var handler: ((URLRequest) -> (Data, HTTPURLResponse))?
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        guard let handler = Self.handler else {
+            client?.urlProtocolDidFinishLoading(self)
+            return
+        }
+        let (data, response) = handler(request)
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+
+private func mockSession() -> URLSession {
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [MockURLProtocol.self]
+    return URLSession(configuration: config)
+}
+
+// MARK: - Account resolution tests
+
+@Suite("ClaudeCodeConnector — account resolution")
+struct ClaudeCodeConnectorAccountTests {
+    private func makeTempDir() -> String {
+        let dir = NSTemporaryDirectory() + "ai-tracker-claude-\(UUID().uuidString)"
+        try! FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    @Test("resolves email from valid claude.json")
+    func resolveValid() {
+        let dir = makeTempDir()
+        let configPath = "\(dir)/claude.json"
+        let json = #"{"oauthAccount":{"emailAddress":"user@example.com","accountUuid":"abc"}}"#
+        try! json.write(toFile: configPath, atomically: true, encoding: .utf8)
+
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let connector = ClaudeCodeConnector(claudeConfigPath: configPath, logger: logger)
+        #expect(connector.resolveActiveAccount() == "user@example.com")
+    }
+
+    @Test("returns nil when file is missing")
+    func resolveMissing() {
+        let logger = FileLogger(filePath: "/tmp/ai-tracker-test-\(UUID()).log", minLevel: .debug)
+        let connector = ClaudeCodeConnector(claudeConfigPath: "/nonexistent/path", logger: logger)
+        #expect(connector.resolveActiveAccount() == nil)
+    }
+
+    @Test("returns nil when JSON lacks oauthAccount")
+    func resolveNoOauth() {
+        let dir = makeTempDir()
+        let configPath = "\(dir)/claude.json"
+        try! "{}".write(toFile: configPath, atomically: true, encoding: .utf8)
+
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let connector = ClaudeCodeConnector(claudeConfigPath: configPath, logger: logger)
+        #expect(connector.resolveActiveAccount() == nil)
+    }
+
+    @Test("returns nil when JSON is malformed")
+    func resolveMalformed() {
+        let dir = makeTempDir()
+        let configPath = "\(dir)/claude.json"
+        try! "not json".write(toFile: configPath, atomically: true, encoding: .utf8)
+
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let connector = ClaudeCodeConnector(claudeConfigPath: configPath, logger: logger)
+        #expect(connector.resolveActiveAccount() == nil)
+    }
+}
+
+// MARK: - fetchUsages tests
+
+@Suite("ClaudeCodeConnector — fetchUsages", .serialized)
+struct ClaudeCodeConnectorFetchTests {
+    private func makeTempDir() -> String {
+        let dir = NSTemporaryDirectory() + "ai-tracker-claude-fetch-\(UUID().uuidString)"
+        try! FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    private func makeConnector(dir: String, tokenProvider: @escaping @Sendable () async throws -> String) -> ClaudeCodeConnector {
+        let configPath = "\(dir)/claude.json"
+        let json = #"{"oauthAccount":{"emailAddress":"user@example.com"}}"#
+        try! json.write(toFile: configPath, atomically: true, encoding: .utf8)
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        return ClaudeCodeConnector(
+            claudeConfigPath: configPath,
+            logger: logger,
+            session: mockSession(),
+            tokenProvider: tokenProvider
+        )
+    }
+
+    @Test("success path returns entry with two metrics")
+    func successPath() async throws {
+        let dir = makeTempDir()
+        let apiJSON = """
+        {"five_hour":{"utilization":0.42,"resets_at":"2026-04-17T15:00:00+00:00"},
+         "seven_day":{"utilization":0.08,"resets_at":"2026-04-23T21:00:00+00:00"}}
+        """
+        MockURLProtocol.handler = { _ in
+            let data = apiJSON.data(using: .utf8)!
+            let resp = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (data, resp)
+        }
+        let connector = makeConnector(dir: dir) { "fake-token" }
+        let entries = try await connector.fetchUsages()
+
+        #expect(entries.count == 1)
+        #expect(entries[0].account == "user@example.com")
+        #expect(entries[0].lastError == nil)
+        #expect(entries[0].metrics.count == 2)
+        // Verify utilization conversion: 0.42 → 42%
+        if case .timeWindow(let name, _, _, let pct) = entries[0].metrics[0] {
+            #expect(name == "session")
+            #expect(pct == 42)
+        } else {
+            Issue.record("Expected timeWindow metric")
+        }
+    }
+
+    @Test("token error returns error entry")
+    func tokenError() async throws {
+        let dir = makeTempDir()
+        let connector = makeConnector(dir: dir) { throw ConnectorError.keychainAccessDenied }
+        let entries = try await connector.fetchUsages()
+
+        #expect(entries.count == 1)
+        #expect(entries[0].lastError?.type == "token_error")
+        #expect(entries[0].metrics.isEmpty)
+    }
+
+    @Test("HTTP 401 returns error entry")
+    func httpError() async throws {
+        let dir = makeTempDir()
+        MockURLProtocol.handler = { _ in
+            let resp = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!, statusCode: 401, httpVersion: nil, headerFields: nil)!
+            return (Data(), resp)
+        }
+        let connector = makeConnector(dir: dir) { "fake-token" }
+        let entries = try await connector.fetchUsages()
+
+        #expect(entries.count == 1)
+        #expect(entries[0].lastError?.type == "http_401")
+    }
+
+    @Test("malformed API response returns parse error entry")
+    func parseError() async throws {
+        let dir = makeTempDir()
+        MockURLProtocol.handler = { _ in
+            let data = "{}".data(using: .utf8)!
+            let resp = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (data, resp)
+        }
+        let connector = makeConnector(dir: dir) { "fake-token" }
+        let entries = try await connector.fetchUsages()
+
+        #expect(entries.count == 1)
+        #expect(entries[0].lastError?.type == "parse_error")
+    }
+
+    @Test("nil account returns account_unknown error entry")
+    func unknownAccount() async throws {
+        let dir = makeTempDir()
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        // No claude.json → resolveActiveAccount returns nil
+        let connector = ClaudeCodeConnector(
+            claudeConfigPath: "\(dir)/missing.json",
+            logger: logger,
+            session: mockSession(),
+            tokenProvider: { "fake-token" }
+        )
+        let entries = try await connector.fetchUsages()
+
+        #expect(entries.count == 1)
+        #expect(entries[0].lastError?.type == "account_unknown")
+    }
+}

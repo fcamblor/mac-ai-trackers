@@ -1,9 +1,9 @@
 import Foundation
 
-enum LogLevel: Int, Comparable, Sendable {
+public enum LogLevel: Int, Comparable, Sendable {
     case debug = 0, info, warning, error
 
-    static func < (lhs: LogLevel, rhs: LogLevel) -> Bool { lhs.rawValue < rhs.rawValue }
+    public static func < (lhs: LogLevel, rhs: LogLevel) -> Bool { lhs.rawValue < rhs.rawValue }
 
     var label: String {
         switch self {
@@ -14,7 +14,7 @@ enum LogLevel: Int, Comparable, Sendable {
         }
     }
 
-    static func from(string: String) -> LogLevel {
+    public static func from(string: String) -> LogLevel {
         switch string.lowercased() {
         case "debug": .debug
         case "warning", "warn": .warning
@@ -24,9 +24,9 @@ enum LogLevel: Int, Comparable, Sendable {
     }
 }
 
-final class FileLogger: Sendable {
-    let filePath: String
-    let minLevel: LogLevel
+public final class FileLogger: Sendable {
+    public let filePath: String
+    public let minLevel: LogLevel
     private let maxBytes: UInt64 = 5 * 1024 * 1024
     private nonisolated(unsafe) static let isoFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
@@ -34,14 +34,14 @@ final class FileLogger: Sendable {
     }()
     private let queue = DispatchQueue(label: "FileLogger.serialQueue")
 
-    init(filePath: String, minLevel: LogLevel = .info) {
+    public init(filePath: String, minLevel: LogLevel = .info) {
         self.filePath = filePath
         self.minLevel = minLevel
         let dir = (filePath as NSString).deletingLastPathComponent
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true, attributes: nil)
     }
 
-    func log(_ level: LogLevel, _ message: String) {
+    public func log(_ level: LogLevel, _ message: String) {
         guard level >= minLevel else { return }
         append(level: level, message: message)
     }
@@ -83,7 +83,7 @@ final class FileLogger: Sendable {
 
 // MARK: - Shared loggers
 
-enum Loggers {
+public enum Loggers {
     private static let cacheDir: String = {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return "\(home)/.cache/ai-usages-tracker"
@@ -93,6 +93,6 @@ enum Loggers {
         LogLevel.from(string: ProcessInfo.processInfo.environment["AI_TRACKER_LOG_LEVEL"] ?? "info")
     }()
 
-    static let app = FileLogger(filePath: "\(cacheDir)/app.log", minLevel: level)
-    static let claude = FileLogger(filePath: "\(cacheDir)/claude-usages-connector.log", minLevel: level)
+    public static let app = FileLogger(filePath: "\(cacheDir)/app.log", minLevel: level)
+    public static let claude = FileLogger(filePath: "\(cacheDir)/claude-usages-connector.log", minLevel: level)
 }

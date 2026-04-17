@@ -1,11 +1,11 @@
 import Foundation
 
-final class UsagesFileManager: Sendable {
-    let filePath: String
-    let lockPath: String
+public final class UsagesFileManager: Sendable {
+    public let filePath: String
+    public let lockPath: String
     private let logger: FileLogger
 
-    init(
+    public init(
         filePath: String? = nil,
         logger: FileLogger = Loggers.app
     ) {
@@ -24,13 +24,13 @@ final class UsagesFileManager: Sendable {
 
     // MARK: - Public
 
-    func read() -> UsagesFile {
+    public func read() -> UsagesFile {
         withFlockShared {
             readUnsafe()
         } ?? UsagesFile()
     }
 
-    func update(with entries: [VendorUsageEntry]) {
+    public func update(with entries: [VendorUsageEntry]) {
         let success = withFlockExclusive {
             var file = readUnsafe()
             file = merge(existing: file, incoming: entries)
@@ -43,7 +43,7 @@ final class UsagesFileManager: Sendable {
 
     // MARK: - Merge logic
 
-    func merge(existing: UsagesFile, incoming: [VendorUsageEntry]) -> UsagesFile {
+    public func merge(existing: UsagesFile, incoming: [VendorUsageEntry]) -> UsagesFile {
         var usages = existing.usages
         var indexByKey: [String: Int] = [:]
         for (i, entry) in usages.enumerated() {

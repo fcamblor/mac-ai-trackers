@@ -1,7 +1,7 @@
 import Foundation
 
-actor ClaudeCodeConnector: UsageConnector {
-    nonisolated let vendor = "claude"
+public actor ClaudeCodeConnector: UsageConnector {
+    nonisolated public let vendor = "claude"
 
     private let claudeConfigPath: String
     private let logger: FileLogger
@@ -11,7 +11,7 @@ actor ClaudeCodeConnector: UsageConnector {
 
     nonisolated(unsafe) private static let isoFormatter = ISO8601DateFormatter()
 
-    init(
+    public init(
         claudeConfigPath: String? = nil,
         logger: FileLogger = Loggers.claude,
         session: URLSession = .shared,
@@ -28,7 +28,7 @@ actor ClaudeCodeConnector: UsageConnector {
 
     // MARK: - UsageConnector
 
-    nonisolated func resolveActiveAccount() -> String? {
+    nonisolated public func resolveActiveAccount() -> String? {
         guard let data = FileManager.default.contents(atPath: claudeConfigPath) else {
             logger.log(.warning, "Cannot read \(claudeConfigPath)")
             return nil
@@ -43,7 +43,7 @@ actor ClaudeCodeConnector: UsageConnector {
         }
     }
 
-    func fetchUsages() async throws -> [VendorUsageEntry] {
+    public func fetchUsages() async throws -> [VendorUsageEntry] {
         guard let account = resolveActiveAccount() else {
             logger.log(.warning, "Cannot resolve active account — skipping fetch")
             return [errorEntry(account: "unknown", type: "account_unknown")]
@@ -222,7 +222,7 @@ actor ClaudeCodeConnector: UsageConnector {
     }
 }
 
-enum ConnectorError: Error, CustomStringConvertible {
+public enum ConnectorError: Error, CustomStringConvertible {
     case keychainAccessDenied
     case keychainEmpty
     case keychainTimeout

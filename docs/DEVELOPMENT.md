@@ -6,4 +6,5 @@ All commands run from `AIUsagesTrackers/` (the Swift Package root).
 - Run (launches the menubar app): `swift run AIUsagesTrackers`
 - Clean: `swift package clean`
 
-No tests are configured in `Package.swift` yet.
+- Test: `swift test`
+- Log level: set `AI_TRACKER_LOG_LEVEL` environment variable (`debug`, `info`, `warning`, `error`; defaults to `info`)

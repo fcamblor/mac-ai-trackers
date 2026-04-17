@@ -2,25 +2,25 @@ import Foundation
 
 // MARK: - Root
 
-struct UsagesFile: Codable, Equatable, Sendable {
-    var usages: [VendorUsageEntry]
+public struct UsagesFile: Codable, Equatable, Sendable {
+    public var usages: [VendorUsageEntry]
 
-    init(usages: [VendorUsageEntry] = []) {
+    public init(usages: [VendorUsageEntry] = []) {
         self.usages = usages
     }
 }
 
 // MARK: - Entry
 
-struct VendorUsageEntry: Codable, Equatable, Sendable {
-    let vendor: String
-    let account: String
-    var isActive: Bool
-    var lastAcquiredOn: String?
-    var lastError: UsageError?
-    var metrics: [UsageMetric]
+public struct VendorUsageEntry: Codable, Equatable, Sendable {
+    public let vendor: String
+    public let account: String
+    public var isActive: Bool
+    public var lastAcquiredOn: String?
+    public var lastError: UsageError?
+    public var metrics: [UsageMetric]
 
-    init(
+    public init(
         vendor: String,
         account: String,
         isActive: Bool = false,
@@ -39,14 +39,19 @@ struct VendorUsageEntry: Codable, Equatable, Sendable {
 
 // MARK: - Error
 
-struct UsageError: Codable, Equatable, Sendable {
-    let timestamp: String
-    let type: String
+public struct UsageError: Codable, Equatable, Sendable {
+    public let timestamp: String
+    public let type: String
+
+    public init(timestamp: String, type: String) {
+        self.timestamp = timestamp
+        self.type = type
+    }
 }
 
 // MARK: - Metric (polymorphic on "type" discriminator)
 
-enum UsageMetric: Codable, Equatable, Sendable {
+public enum UsageMetric: Codable, Equatable, Sendable {
     case timeWindow(name: String, resetAt: String, windowDurationMinutes: Int, usagePercent: Int)
     case payAsYouGo(name: String, currentAmount: Double, currency: String)
 
@@ -61,7 +66,7 @@ enum UsageMetric: Codable, Equatable, Sendable {
         case payAsYouGo = "pay-as-you-go"
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let metricType = try container.decode(MetricType.self, forKey: .type)
         switch metricType {
@@ -81,7 +86,7 @@ enum UsageMetric: Codable, Equatable, Sendable {
         }
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
         case let .timeWindow(name, resetAt, windowDurationMinutes, usagePercent):
