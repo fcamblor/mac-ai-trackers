@@ -1,0 +1,14 @@
+Generate a concise conversation title (3-6 words) for this user message. The title should capture the essence of what the user is asking or doing. Return ONLY the title text, nothing else — no quotes, no punctuation at the end, no explanation.
+
+Workflow: archon-assist
+User message: ## Prior Context
+
+Branch: archon/task-td-usage-display-test-coverage | Last workflow: archon-assist (run 59746d19e0d208e99d3149a16b7754f5, failed)
+
+### Recent Commits
+
+```
+[33ma47a0fc[m test(store): add behavioral assertions to lifecycle tests and start/stop/start
+[33mf4adee7[m refactor(tests): replace Task.sleep with eventually helper in UsageStoreTests
+[33mda4d11d[m feat(store): add dataProcessedCount observable for test observability
+[33ma49f6c6[m feat(tech-debt): add resolution plan

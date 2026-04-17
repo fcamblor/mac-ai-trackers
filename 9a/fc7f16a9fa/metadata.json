@@ -3,7 +3,7 @@
   "checkpoint_id": "9afc7f16a9fa",
   "strategy": "manual-commit",
   "branch": "archon/task-td-usage-display-test-coverage",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "AIUsagesTrackers/Sources/AIUsagesTrackers/Store/UsageStore.swift",
     "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageStoreTests.swift"
@@ -20,13 +20,19 @@
       "transcript": "/9a/fc7f16a9fa/1/full.jsonl",
       "content_hash": "/9a/fc7f16a9fa/1/content_hash.txt",
       "prompt": "/9a/fc7f16a9fa/1/prompt.txt"
+    },
+    {
+      "metadata": "/9a/fc7f16a9fa/2/metadata.json",
+      "transcript": "/9a/fc7f16a9fa/2/full.jsonl",
+      "content_hash": "/9a/fc7f16a9fa/2/content_hash.txt",
+      "prompt": "/9a/fc7f16a9fa/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 26,
-    "cache_creation_tokens": 88288,
-    "cache_read_tokens": 1125704,
-    "output_tokens": 30780,
-    "api_call_count": 22
+    "input_tokens": 29,
+    "cache_creation_tokens": 90090,
+    "cache_read_tokens": 1132332,
+    "output_tokens": 30788,
+    "api_call_count": 23
   }
 }
