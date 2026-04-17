@@ -1,0 +1,565 @@
+# FCR-Dev — Agrégation des reviews & application de la sélection
+
+## Reviews sources
+- Qualité de code : # Review — Qualité de code
+
+1. **[ClaudeCodeConnector.swift:158-160]** `Int(sessionUtil)` tronque le `Double` — si l'API renvoie une utilisation en fraction (ex. `0.75` pour 75 %), le résultat sera `0`. Vérifier si la valeur doit être multipliée par 100 avant la conversion, ou utiliser `Int((sessionUtil * 100).rounded())`.
+
+2. **[UsagePoller.swift:29-34]** `[weak self]` suivi de `guard let self else { return }` **avant** le `while` : une fois le guard passé, `self` est fortement retenu pour toute la durée de la boucle. Le `weak` ne sert à rien. Déplacer le `guard let self` à l'intérieur du `while` pour que la référence forte soit relâchée entre chaque itération et que l'acteur puisse être libéré.
+
+3. **[Logger.swift:39]** Les paramètres `file` et `line` sont capturés (`#file`, `#line`) mais jamais utilisés dans le format du log (l.42). Soit les intégrer dans `entry`, soit les retirer de la signature pour ne pas induire en erreur l'appelant.
+
+4. **[Logger.swift:41]** `ISO8601DateFormatter()` est instancié à chaque appel de `log()`. C'est un objet lourd. Pour un logger potentiellement appelé très fréquemment, en faire une propriété `static let` (ou `nonisolated(unsafe) static let` pour la Sendability).
+
+5. **[UsagesFileManager.swift:74-85]** L'écriture « atomique » est fragile : `moveItem` échoue si la destination existe, puis on `removeItem` + retry. Entre le remove et le move, un autre process peut écrire. Utiliser `Data.write(to:options: .atomic)` directement, ou `FileManager.replaceItemAt(_:withItemAt:)` qui gère le remplacement de façon atomique et sûre.
+
+6. **[UsagesFileManager.swift:39]** `merge(existing:incoming:)` est `public` alors qu'il s'agit d'un détail d'implémentation interne (seul `update(with:)` l'appelle). Il n'est public que pour les tests — préférer un accès `internal` (ou `package`) et `@testable import` suffit déjà dans les tests.
+- Gestion d'erreurs : # Review — Gestion d'erreurs
+
+1. **ClaudeCodeConnector.swift:108-116** — `fetchOAuthToken()` appelle `process.waitUntilExit()` sans timeout. Si le processus `security` se bloque (prompt Keychain interactif, deadlock), le thread est bloqué indéfiniment. Ajouter un `DispatchQueue.global().asyncAfter` ou utiliser `terminationHandler` avec un timeout pour tuer le processus après N secondes.
+
+2. **ClaudeCodeConnector.swift:120-121** — `readDataToEndOfFile()` est appelé **après** `waitUntilExit()`. Si le pipe buffer est plein (> 64 Ko), `waitUntilExit()` deadlock car le processus enfant est bloqué en écriture tandis que personne ne lit le pipe. Lire le pipe **avant** d'attendre la fin du processus, ou lire de manière asynchrone.
+
+3. **ClaudeCodeConnector.swift:158** — `Int(sessionUtil)` tronque un `Double` (ex. `0.75` → `0`). Si l'API renvoie une utilisation entre 0.0 et 1.0 (un ratio), le pourcentage affiché sera toujours 0 ou 1. Vérifier le format de l'API ; probablement il faut `Int(sessionUtil * 100)` ou `Int(sessionUtil.rounded())`.
+
+4. **UsagesFileManager.swift:18** — `try? FileManager.default.createDirectory(...)` avale silencieusement l'échec de création du répertoire. Si le dossier n'est pas créé, tous les writes échoueront ensuite sans diagnostic clair à la racine. Logger l'erreur.
+
+5. **UsagesFileManager.swift:76** — `moveItem(atPath:toPath:)` échoue si la destination existe déjà (comportement documenté de `FileManager`). Le fallback (L79-81) supprime le fichier existant puis re-tente le move, mais entre le `removeItem` et le `moveItem`, un crash ou un autre processus concurrent crée une fenêtre de perte de données. Utiliser `replaceItemAt(_:withItemAt:)` qui est atomique sur macOS.
+
+6. **UsagesFileManager.swift:30-34** — `withFlockExclusive` dans `update(with:)` ne retourne rien, mais si le flock échoue (retourne `nil` dans `withFlock`), l'update est silencieusement ignorée : les données reçues sont perdues sans aucun log au niveau appelant. Propager l'échec ou au minimum logger au niveau `update()`.
+
+7. **UsagesFileManager.swift:100-102** — TOCTOU race sur le fichier lock : `fileExists` (L101) suivi de `createFile` (L102) n'est pas atomique. Un autre processus peut supprimer le fichier entre les deux. Utiliser directement `open(lockPath, O_RDWR | O_CREAT, 0o644)` qui crée atomiquement.
+
+8. **UsagePoller.swift:29-35** — Le `Task` capture `[weak self]` mais l'actor `UsagePoller` n'est pas une classe — c'est un actor, qui ne supporte pas `weak`. Ce code compile mais `weak self` n'a aucun effet : l'actor ne sera jamais déalloué tant que la task tourne. `stop()` annule la task, mais si `stop()` n'est jamais appelé (ex. crash avant), la task et l'actor fuient.
+
+9. **UsagePoller.swift:33** — `try? await Task.sleep(for: self.interval)` avale le `CancellationError`. C'est intentionnel (boucle while), mais après le sleep le `Task.isCancelled` est vérifié uniquement au prochain tour de boucle, ce qui signifie qu'un `pollOnce()` complet sera exécuté après l'annulation si le timing est défavorable. Vérifier `Task.isCancelled` immédiatement après le sleep.
+
+10. **UsagePoller.swift:53** — `Loggers.app.log(...)` est utilisé au lieu de `self.logger`. Cela contourne l'injection de dépendance du logger, rendant cette erreur invisible dans les tests qui injectent un logger custom.
+
+11. **Logger.swift:48-61** — `append()` n'a aucune synchronisation. `FileLogger` est marqué `Sendable` et peut être utilisé depuis plusieurs threads/actors concurrents. Deux appels concurrents à `append()` peuvent interleaver les écritures (seek + write non-atomique), corrompant le fichier log. Protéger avec un `DispatchQueue` ou un lock, ou utiliser `os_log` / `OSLog`.
+
+12. **Logger.swift:69-70** — Durant la rotation, si `moveItem` échoue silencieusement (`try?`), puis `createFile` crée un fichier vide, les logs existants sont perdus sans avertissement. Logger le résultat du move (dans stderr au minimum, puisque le fichier log est en cours de rotation).
+
+13. **AIUsagesTrackersApp.swift:13** — `Task { await pollerRef.start() }` est fire-and-forget. Si le poller échoue lors du premier poll, aucune UI ne reflète l'erreur. Ce n'est pas un bug critique mais un point d'attention pour l'observabilité.
+
+14. **ClaudeCodeConnector.swift:53** — `URL(string: ...)!` force-unwrap. L'URL est un littéral donc le crash est improbable en pratique, mais un `guard let` serait plus défensif et cohérent avec le style du reste du fichier.
+
+---
+
+**Résumé des priorités :**
+- **Critiques** : #2 (deadlock pipe), #3 (conversion % probablement erronée), #11 (data race sur le logger)
+- **Hauts** : #1 (timeout processus), #5 (write non-atomique), #7 (TOCTOU flock), #8 (weak self sur actor)
+- **Moyens** : #4, #6, #9, #10, #12
+- **Bas** : #13, #14
+- Couverture de tests : # Review — Couverture de tests
+
+## Trous majeurs
+
+1. **ClaudeCodeConnector.swift:49** — `fetchUsages()` n'est **jamais testé**. C'est le cœur du connecteur : appel HTTP, construction des `VendorUsageEntry`, et les 4 chemins d'erreur (token_error, api_error, http_xxx, parse_error). Le test suite ne couvre que `resolveActiveAccount()`. Il faudrait injecter un `URLProtocol` custom (ou un mock `URLSession`) pour tester :
+   - Réponse 200 avec JSON valide → entrée avec 2 métriques
+   - Réponse 200 avec JSON incomplet → `parse_error` entry
+   - Réponse HTTP 401/500 → `http_401` / `http_500` entry
+   - Timeout réseau → `api_error` entry
+   - Échec keychain → `token_error` entry
+
+2. **ClaudeCodeConnector.swift:101** — `fetchOAuthToken()` n'est pas testé. C'est privé et appelle `Process` (keychain), ce qui rend le test unitaire délicat — mais le design ne permet pas d'injection. **Suggestion** : extraire une closure/protocole `KeychainProvider` injectable pour tester les branches `keychainAccessDenied`, `keychainEmpty`, `tokenParseError` (JSON keychain mal formé, token vide, `claudeAiOauth` absent).
+
+3. **ClaudeCodeConnector.swift:137** — `parseAPIResponse()` est privé et non testé directement. Les cas limites manquants :
+   - `utilization` à 0.0, 99.99, ou exactement 100.0
+   - Troncature `Int(Double)` : `utilization: 42.7` → 42 (pas 43). Est-ce voulu ? Pas d'assertion là-dessus.
+   - Champs manquants (`five_hour` absent, `resets_at` manquant)
+
+4. **UsagePoller.swift:38** — `start()` appelé deux fois ne démarre pas un deuxième polling (guard). **Aucun test** ne vérifie cette idempotence. Un test devrait appeler `start()` deux fois et vérifier qu'il n'y a qu'un seul flux de polling.
+
+5. **UsagePoller.swift:44** — `stop()` appelé sans `start()` ne crashe pas. **Pas testé.**
+
+6. **UsagePoller.swift:49** — `pollOnce()` avec un tableau de connecteurs vide (`connectors: []`) → les entries seront vides, `guard !entries.isEmpty` déclenche un early return. **Pas testé.**
+
+## Trous modérés
+
+7. **Logger.swift:56–63** — `rotateIfNeeded()` n'est **jamais testé**. Il faudrait écrire > 5 MB et vérifier que le fichier `.1` apparaît et que le fichier principal est réinitialisé. C'est du code avec des `try?` silencieux — un bug ici serait invisible.
+
+8. **Logger.swift:44** — Appels concurrents à `append()` : `FileLogger` est `Sendable` mais n'a aucun lock interne. Deux threads écrivant simultanément pourraient entrelacer des entrées. Un test de concurrence (même léger, avec `TaskGroup`) détecterait les corruptions.
+
+9. **UsagesFileManager.swift:74–88** — `writeUnsafe` : le fallback `removeItem` + `moveItem` (quand la destination existe déjà) n'est pas couvert. Il faudrait pré-créer le fichier destination pour forcer ce chemin.
+
+10. **UsagesFileManager.swift:91–113** — Le verrouillage `flock` n'est testé qu'implicitement. Un test devrait vérifier que deux `update()` concurrents ne corrompent pas le fichier (par ex. 50 mises à jour parallèles, puis vérifier l'intégrité du JSON final).
+
+11. **UsagesFileManager.swift:98** — `withFlock` retourne `nil` si `open()` échoue (fd < 0). Dans `read()`, cela retourne `UsagesFile()` silencieusement. Pas testé — et potentiellement trompeur (le fichier existe mais le lock échoue → on croit que le fichier est vide).
+
+## Faiblesses qualitatives
+
+12. **UsagePollerTests.swift:93–109** — `startStop()` utilise `Task.sleep(200ms)` et `#expect(count >= 2)`. C'est flaky par nature : sur une CI chargée, le sleep peut ne pas laisser assez de temps. Préférer un mécanisme d'attente déterministe (par ex. le mock signale un `AsyncStream` ou un `Semaphore`).
+
+13. **ClaudeCodeConnectorTests.swift** — Les 4 tests ne couvrent que `resolveActiveAccount()` (pure lecture de fichier). Le ratio tests/LOC du connecteur est de ~53 lignes de test pour ~185 lignes de source, et 100% des lignes réseau/keychain sont non couvertes.
+
+14. **UsageModelsTests.swift** — Bonne couverture Codable, mais **aucun test de valeurs limites** : `usagePercent` négatif, `windowDurationMinutes` à 0, `currentAmount` négatif ou NaN, chaîne vide pour `resetAt`. Le modèle accepte tout sans validation — si c'est voulu, un test devrait le documenter explicitement.
+
+15. **UsagesFileManagerTests.swift** — Pas de test vérifiant que le `lockPath` est bien `.lock` suffixé. Si quelqu'un change le calcul du lockPath, aucun test ne casse.
+
+## Résumé
+
+| Module | LOC source | Tests | Couverture estimée |
+|---|---|---|---|
+| ClaudeCodeConnector | 185 | 4 | ~15% (account resolution uniquement) |
+| Logger | 88 | 5 | ~60% (rotation, concurrence manquantes) |
+| UsageModels | 105 | 8 | ~85% (limites manquantes) |
+| UsagesFileManager | 123 | 7 | ~65% (concurrence, fallback write) |
+| UsagePoller | 73 | 5 | ~70% (idempotence, edge cases) |
+
+**Priorité n°1** : rendre `ClaudeCodeConnector.fetchUsages()` testable (injection URLSession/Keychain) et écrire les tests correspondants — c'est le chemin critique de l'app et il a 0% de couverture réseau.
+- Qualité des commentaires : # Review — Qualité des commentaires
+
+1. **ClaudeCodeConnector.swift:56** — **ajouter** — la valeur `"oauth-2025-04-20"` est un flag beta opaque ; rien n'explique pourquoi il est obligatoire ni qu'il est requis par l'endpoint `/api/oauth/usage`.
+   > `// Required by the OAuth usage endpoint — beta flag must match the rollout date`
+
+2. **ClaudeCodeConnector.swift:88 & 94** — **ajouter** — `windowDurationMinutes: 300` et `10080` sont des valeurs hardcodées parce que l'API ne les retourne pas (cf. plan §2.1). Sans commentaire, on croirait qu'elles viennent de la réponse.
+   > `// 300 min (5 h) and 10 080 min (7 d): window durations are not in the API response — they're fixed by Claude's rate-limit policy`
+
+3. **UsagesFileManager.swift:100** — **supprimer** — `// Ensure lock file exists` paraphrase exactement les deux lignes suivantes (`fileExists` + `createFile`). Aucune valeur ajoutée.
+
+4. **UsagesFileManager.swift:78** — **conserver tel quel** — `// moveItem fails if destination exists; remove then retry` explique le WHY du double-essai. Bon commentaire.
+
+5. **AIUsagesTrackersApp.swift:11-12** — **ajouter** — l'indirection `pollerRef` est un contournement de l'isolation acteur de Swift (`self` n'est pas capturble directement depuis un `Task` dans `init`). Sans commentaire c'est du code "magique".
+   > `// pollerRef captures the actor value before self is fully available in the Task closure`
+- Impact doc : ```
+# Review — Impact doc
+
+1. **docs/DEVELOPMENT.md** — ligne 9 : `No tests are configured in Package.swift yet.`
+   Cette phrase est désormais fausse. Le PR ajoute une cible `testTarget` dans `Package.swift` et 31 tests répartis sur 5 fichiers.
+   À remplacer par la commande pour lancer les tests, ex. :
+   ```
+   - Test: `swift test`
+   ```
+
+2. **docs/ARCHITECTURE.md** — Le document ne mentionne que l'application menubar (activation policy `.accessory`, `MenuBarExtra`). Le PR introduit une couche architecturale entière qui n'y figure pas :
+   - Découpage du package en deux cibles (`AIUsagesTrackersLib` / exécutable `AIUsagesTrackers`) + cible de tests.
+   - Protocole `UsageConnector` et premier connecteur `ClaudeCodeConnector` (Keychain OAuth + API Anthropic).
+   - `UsagesFileManager` avec double verrouillage (POSIX `flock` + acteur Swift).
+   - `UsagePoller` (acteur Swift, polling périodique concurrent).
+   Le doc devrait décrire ces couches et leurs invariants (ex. : le `flock` est systématiquement relâché dans un `defer`; au plus un `fetchUsages` en vol par connecteur).
+
+Aucun autre fichier de doc (`CLAUDE.md`, `plan-ai-usages-tracker.md`) ne nécessite de mise à jour : le plan est neuf et cohérent avec l'implémentation, `CLAUDE.md` délègue volontairement aux fichiers `docs/`.
+
+**Dernier message utilisateur** : re-run reviews
+
+---
+
+## Principe non-négociable — discipline des commits
+
+**Tu commites AVANT de présenter le résultat à l'utilisateur, JAMAIS
+après son approbation finale.** Dans cette phase : l'utilisateur a
+déjà approuvé une *sélection* de recommandations → tu les appliques
+→ tu commites → tu présentes le résultat → l'utilisateur choisit
+ensuite entre "apply more", "re-run reviews" ou "ship it". Le
+commit correspond à un état produit, pas à une validation finale.
+
+**LANGUE — règle absolue : tous les messages de commit (sujet ET body)
+sont rédigés en anglais, sans exception.**
+
+**FIXUP — règle absolue pour cette phase :** chaque application de
+recommandation doit produire des commits `--fixup` rattachés au commit
+source qui a introduit le code modifié, PAS des commits indépendants
+`review(axe):`. Procédure pour chaque bloc de fichiers modifiés :
+```bash
+# Trouver le commit source pour les fichiers concernés
+git log --oneline origin/main..HEAD -- <fichier1> <fichier2>
+# Le commit le plus récent qui a touché ces fichiers est le commit source
+SOURCE_HASH=<hash du commit source>
+git add <fichiers du bloc>
+git commit --fixup=$SOURCE_HASH
+```
+Si un bloc touche des fichiers issus de **plusieurs** commits sources
+distincts, crée **un fixup par commit source** (staging séparé par commit).
+L'historique final doit être squashable proprement avec
+`git rebase --autosquash`.
+
+## Outillage d'exploration préféré
+
+Privilégie **Serena** si disponible, sinon Grep/Glob/Read.
+
+---
+
+## Première itération (re-run reviews vide)
+
+1. Consolide les 5 reviews en un plan d'action numéroté unique.
+   Déduplique les recommandations similaires entre axes.
+   Priorité : CRITICAL > HIGH > MED > LOW.
+   Format par item :
+   ```
+   N. [priorité] [axe] [fichier:ligne] <recommandation>
+   ```
+2. Présente-le. Demande quelles appliquer :
+   - `all` → tout appliquer
+   - `none` → skip, prêt à finaliser
+   - `1,3,5` → numéros spécifiques
+   - texte libre → clarifier
+3. N'émets **PAS** le signal de complétion.
+
+## Itérations suivantes — interpréter l'entrée utilisateur
+
+### Si l'utilisateur dit "none" / "aucune" / "skip" / "ship it" / "finaliser"
+→ Émets : <promise>REVIEWS_DONE</promise>
+
+### Si l'utilisateur donne une sélection (`all`, `1,3,5`, etc.)
+1. Applique chaque recommandation sélectionnée. Sois chirurgical.
+2. Commit par bloc logique (AVANT de présenter le résultat) — **impérativement
+   avec `--fixup`** (voir section "FIXUP" ci-dessus). Ne crée JAMAIS un commit
+   `review(<axe>):` indépendant à la place.
+3. Lance le gate déterministe via le MÊME script que la phase implement :
+   ```bash
+   bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
+   ```
+   Si le gate échoue (exit non-zero), corrige AVANT de présenter le
+   résultat. NE présente PAS "apply done" tant que le gate n'est pas
+   vert. L'utilisateur ne doit être sollicité à nouveau qu'après
+   stabilisation.
+4. Rapporte : ce qui a été appliqué, ce qui reste de la liste initiale,
+   diff stat.
+5. Demande : "apply more / re-run reviews / ship it ?" — n'émets PAS
+   le signal.
+
+### Si l'utilisateur demande un re-run des reviews
+Signaux : "re-run reviews", "relance les reviews", "rerun", "nouvelle
+passe", "re-review".
+Le re-run tourne **sur l'état courant du code** (les commits fixup
+que tu viens d'appliquer sont donc inclus dans le diff).
+
+**C'est une fonctionnalité CÂBLÉE — tu DOIS l'exécuter ici-même,
+en lançant 5 Tasks en parallèle. Ne dis PAS que c'est impossible
+ou non câblé : tu as accès à l'outil Agent/Task.**
+
+1. Lance **5 Tasks en parallèle** — un seul message Claude Code avec
+   5 invocations du tool `Agent` (`subagent_type: general-purpose`,
+   ou équivalent Task) — un axe par Task.
+   Chaque prompt commence par restituer le diff via
+   `git diff origin/main...HEAD`, puis applique l'axe défini
+   ci-dessous. Demande à chaque Task de répondre dans le même format
+   strict que les reviews initiales (bullet "[fichier:ligne]
+   recommandation", ou "Aucun problème significatif.").
+
+   **Axe 1 — QUALITÉ DE CODE** : idiomes du langage, lisibilité,
+   simplicité, over-engineering, nommage, duplication. Ce qu'un humain
+   voit et qu'un linter ne voit pas. Ignorer ce qu'un type-checker /
+   linter attraperait déjà.
+
+   **Axe 2 — GESTION D'ERREURS** : chemins d'erreur, cas limites,
+   null/undefined, race conditions, timeouts, échecs partiels,
+   nettoyage des ressources. Silent swallowing ?
+
+   **Axe 3 — COUVERTURE DE TESTS** : branches, cas limites + qualité
+   qualitative (tests qui assertent le comportement ou
+   l'implémentation ? mocks cassants ? modes d'échec manquants ?).
+   Tests qui DEVRAIENT exister mais manquent, tests existants faibles.
+
+   **Axe 4 — QUALITÉ DES COMMENTAIRES** : POURQUOI vs QUOI ? Code
+   non-trivial documenté ? Commentaires périmés / redondants /
+   trompeurs ?
+
+   **Axe 5 — IMPACT DOC** : quels README / CHANGELOG / docstrings
+   publics / docs d'API / notes de migration devraient être mis à jour
+   mais ne l'ont pas été ? Inclut les fichiers de plan projet (ex.
+   `plans/PLAN.md`) si le projet en a.
+
+   Pour l'exploration complémentaire dans chaque Task : privilégier
+   Serena (`mcp__serena__*`) si disponible, sinon Grep/Glob/Read.
+
+2. Ré-agrège les 5 sorties avec la même méthodologie qu'en première
+   itération (consolidation, déduplication, priorité CRITICAL > HIGH
+   > MED > LOW, numérotation `N. [priorité] [axe] [fichier:ligne] <reco>`).
+
+3. Présente le nouveau plan d'action à l'utilisateur.
+
+4. Repose la question : "apply more / re-run reviews / ship it ?"
+
+5. N'émets PAS le signal de complétion.
+
+### CRITIQUE — discipline du signal
+Émets `<promise>REVIEWS_DONE</promise>` **uniquement** quand
+l'utilisateur dit explicitement "none", "skip", "finaliser",
+"ship it" ou équivalent. Les questions et demandes d'application
+NE SONT PAS des approbations.
+
+---
+
+# FCR-Dev — Agrégation des reviews & application de la sélection
+
+## Reviews sources
+- Qualité de code : # Review — Qualité de code
+
+1. **[ClaudeCodeConnector.swift:158-160]** `Int(sessionUtil)` tronque le `Double` — si l'API renvoie une utilisation en fraction (ex. `0.75` pour 75 %), le résultat sera `0`. Vérifier si la valeur doit être multipliée par 100 avant la conversion, ou utiliser `Int((sessionUtil * 100).rounded())`.
+
+2. **[UsagePoller.swift:29-34]** `[weak self]` suivi de `guard let self else { return }` **avant** le `while` : une fois le guard passé, `self` est fortement retenu pour toute la durée de la boucle. Le `weak` ne sert à rien. Déplacer le `guard let self` à l'intérieur du `while` pour que la référence forte soit relâchée entre chaque itération et que l'acteur puisse être libéré.
+
+3. **[Logger.swift:39]** Les paramètres `file` et `line` sont capturés (`#file`, `#line`) mais jamais utilisés dans le format du log (l.42). Soit les intégrer dans `entry`, soit les retirer de la signature pour ne pas induire en erreur l'appelant.
+
+4. **[Logger.swift:41]** `ISO8601DateFormatter()` est instancié à chaque appel de `log()`. C'est un objet lourd. Pour un logger potentiellement appelé très fréquemment, en faire une propriété `static let` (ou `nonisolated(unsafe) static let` pour la Sendability).
+
+5. **[UsagesFileManager.swift:74-85]** L'écriture « atomique » est fragile : `moveItem` échoue si la destination existe, puis on `removeItem` + retry. Entre le remove et le move, un autre process peut écrire. Utiliser `Data.write(to:options: .atomic)` directement, ou `FileManager.replaceItemAt(_:withItemAt:)` qui gère le remplacement de façon atomique et sûre.
+
+6. **[UsagesFileManager.swift:39]** `merge(existing:incoming:)` est `public` alors qu'il s'agit d'un détail d'implémentation interne (seul `update(with:)` l'appelle). Il n'est public que pour les tests — préférer un accès `internal` (ou `package`) et `@testable import` suffit déjà dans les tests.
+- Gestion d'erreurs : # Review — Gestion d'erreurs
+
+1. **ClaudeCodeConnector.swift:108-116** — `fetchOAuthToken()` appelle `process.waitUntilExit()` sans timeout. Si le processus `security` se bloque (prompt Keychain interactif, deadlock), le thread est bloqué indéfiniment. Ajouter un `DispatchQueue.global().asyncAfter` ou utiliser `terminationHandler` avec un timeout pour tuer le processus après N secondes.
+
+2. **ClaudeCodeConnector.swift:120-121** — `readDataToEndOfFile()` est appelé **après** `waitUntilExit()`. Si le pipe buffer est plein (> 64 Ko), `waitUntilExit()` deadlock car le processus enfant est bloqué en écriture tandis que personne ne lit le pipe. Lire le pipe **avant** d'attendre la fin du processus, ou lire de manière asynchrone.
+
+3. **ClaudeCodeConnector.swift:158** — `Int(sessionUtil)` tronque un `Double` (ex. `0.75` → `0`). Si l'API renvoie une utilisation entre 0.0 et 1.0 (un ratio), le pourcentage affiché sera toujours 0 ou 1. Vérifier le format de l'API ; probablement il faut `Int(sessionUtil * 100)` ou `Int(sessionUtil.rounded())`.
+
+4. **UsagesFileManager.swift:18** — `try? FileManager.default.createDirectory(...)` avale silencieusement l'échec de création du répertoire. Si le dossier n'est pas créé, tous les writes échoueront ensuite sans diagnostic clair à la racine. Logger l'erreur.
+
+5. **UsagesFileManager.swift:76** — `moveItem(atPath:toPath:)` échoue si la destination existe déjà (comportement documenté de `FileManager`). Le fallback (L79-81) supprime le fichier existant puis re-tente le move, mais entre le `removeItem` et le `moveItem`, un crash ou un autre processus concurrent crée une fenêtre de perte de données. Utiliser `replaceItemAt(_:withItemAt:)` qui est atomique sur macOS.
+
+6. **UsagesFileManager.swift:30-34** — `withFlockExclusive` dans `update(with:)` ne retourne rien, mais si le flock échoue (retourne `nil` dans `withFlock`), l'update est silencieusement ignorée : les données reçues sont perdues sans aucun log au niveau appelant. Propager l'échec ou au minimum logger au niveau `update()`.
+
+7. **UsagesFileManager.swift:100-102** — TOCTOU race sur le fichier lock : `fileExists` (L101) suivi de `createFile` (L102) n'est pas atomique. Un autre processus peut supprimer le fichier entre les deux. Utiliser directement `open(lockPath, O_RDWR | O_CREAT, 0o644)` qui crée atomiquement.
+
+8. **UsagePoller.swift:29-35** — Le `Task` capture `[weak self]` mais l'actor `UsagePoller` n'est pas une classe — c'est un actor, qui ne supporte pas `weak`. Ce code compile mais `weak self` n'a aucun effet : l'actor ne sera jamais déalloué tant que la task tourne. `stop()` annule la task, mais si `stop()` n'est jamais appelé (ex. crash avant), la task et l'actor fuient.
+
+9. **UsagePoller.swift:33** — `try? await Task.sleep(for: self.interval)` avale le `CancellationError`. C'est intentionnel (boucle while), mais après le sleep le `Task.isCancelled` est vérifié uniquement au prochain tour de boucle, ce qui signifie qu'un `pollOnce()` complet sera exécuté après l'annulation si le timing est défavorable. Vérifier `Task.isCancelled` immédiatement après le sleep.
+
+10. **UsagePoller.swift:53** — `Loggers.app.log(...)` est utilisé au lieu de `self.logger`. Cela contourne l'injection de dépendance du logger, rendant cette erreur invisible dans les tests qui injectent un logger custom.
+
+11. **Logger.swift:48-61** — `append()` n'a aucune synchronisation. `FileLogger` est marqué `Sendable` et peut être utilisé depuis plusieurs threads/actors concurrents. Deux appels concurrents à `append()` peuvent interleaver les écritures (seek + write non-atomique), corrompant le fichier log. Protéger avec un `DispatchQueue` ou un lock, ou utiliser `os_log` / `OSLog`.
+
+12. **Logger.swift:69-70** — Durant la rotation, si `moveItem` échoue silencieusement (`try?`), puis `createFile` crée un fichier vide, les logs existants sont perdus sans avertissement. Logger le résultat du move (dans stderr au minimum, puisque le fichier log est en cours de rotation).
+
+13. **AIUsagesTrackersApp.swift:13** — `Task { await pollerRef.start() }` est fire-and-forget. Si le poller échoue lors du premier poll, aucune UI ne reflète l'erreur. Ce n'est pas un bug critique mais un point d'attention pour l'observabilité.
+
+14. **ClaudeCodeConnector.swift:53** — `URL(string: ...)!` force-unwrap. L'URL est un littéral donc le crash est improbable en pratique, mais un `guard let` serait plus défensif et cohérent avec le style du reste du fichier.
+
+---
+
+**Résumé des priorités :**
+- **Critiques** : #2 (deadlock pipe), #3 (conversion % probablement erronée), #11 (data race sur le logger)
+- **Hauts** : #1 (timeout processus), #5 (write non-atomique), #7 (TOCTOU flock), #8 (weak self sur actor)
+- **Moyens** : #4, #6, #9, #10, #12
+- **Bas** : #13, #14
+- Couverture de tests : # Review — Couverture de tests
+
+## Trous majeurs
+
+1. **ClaudeCodeConnector.swift:49** — `fetchUsages()` n'est **jamais testé**. C'est le cœur du connecteur : appel HTTP, construction des `VendorUsageEntry`, et les 4 chemins d'erreur (token_error, api_error, http_xxx, parse_error). Le test suite ne couvre que `resolveActiveAccount()`. Il faudrait injecter un `URLProtocol` custom (ou un mock `URLSession`) pour tester :
+   - Réponse 200 avec JSON valide → entrée avec 2 métriques
+   - Réponse 200 avec JSON incomplet → `parse_error` entry
+   - Réponse HTTP 401/500 → `http_401` / `http_500` entry
+   - Timeout réseau → `api_error` entry
+   - Échec keychain → `token_error` entry
+
+2. **ClaudeCodeConnector.swift:101** — `fetchOAuthToken()` n'est pas testé. C'est privé et appelle `Process` (keychain), ce qui rend le test unitaire délicat — mais le design ne permet pas d'injection. **Suggestion** : extraire une closure/protocole `KeychainProvider` injectable pour tester les branches `keychainAccessDenied`, `keychainEmpty`, `tokenParseError` (JSON keychain mal formé, token vide, `claudeAiOauth` absent).
+
+3. **ClaudeCodeConnector.swift:137** — `parseAPIResponse()` est privé et non testé directement. Les cas limites manquants :
+   - `utilization` à 0.0, 99.99, ou exactement 100.0
+   - Troncature `Int(Double)` : `utilization: 42.7` → 42 (pas 43). Est-ce voulu ? Pas d'assertion là-dessus.
+   - Champs manquants (`five_hour` absent, `resets_at` manquant)
+
+4. **UsagePoller.swift:38** — `start()` appelé deux fois ne démarre pas un deuxième polling (guard). **Aucun test** ne vérifie cette idempotence. Un test devrait appeler `start()` deux fois et vérifier qu'il n'y a qu'un seul flux de polling.
+
+5. **UsagePoller.swift:44** — `stop()` appelé sans `start()` ne crashe pas. **Pas testé.**
+
+6. **UsagePoller.swift:49** — `pollOnce()` avec un tableau de connecteurs vide (`connectors: []`) → les entries seront vides, `guard !entries.isEmpty` déclenche un early return. **Pas testé.**
+
+## Trous modérés
+
+7. **Logger.swift:56–63** — `rotateIfNeeded()` n'est **jamais testé**. Il faudrait écrire > 5 MB et vérifier que le fichier `.1` apparaît et que le fichier principal est réinitialisé. C'est du code avec des `try?` silencieux — un bug ici serait invisible.
+
+8. **Logger.swift:44** — Appels concurrents à `append()` : `FileLogger` est `Sendable` mais n'a aucun lock interne. Deux threads écrivant simultanément pourraient entrelacer des entrées. Un test de concurrence (même léger, avec `TaskGroup`) détecterait les corruptions.
+
+9. **UsagesFileManager.swift:74–88** — `writeUnsafe` : le fallback `removeItem` + `moveItem` (quand la destination existe déjà) n'est pas couvert. Il faudrait pré-créer le fichier destination pour forcer ce chemin.
+
+10. **UsagesFileManager.swift:91–113** — Le verrouillage `flock` n'est testé qu'implicitement. Un test devrait vérifier que deux `update()` concurrents ne corrompent pas le fichier (par ex. 50 mises à jour parallèles, puis vérifier l'intégrité du JSON final).
+
+11. **UsagesFileManager.swift:98** — `withFlock` retourne `nil` si `open()` échoue (fd < 0). Dans `read()`, cela retourne `UsagesFile()` silencieusement. Pas testé — et potentiellement trompeur (le fichier existe mais le lock échoue → on croit que le fichier est vide).
+
+## Faiblesses qualitatives
+
+12. **UsagePollerTests.swift:93–109** — `startStop()` utilise `Task.sleep(200ms)` et `#expect(count >= 2)`. C'est flaky par nature : sur une CI chargée, le sleep peut ne pas laisser assez de temps. Préférer un mécanisme d'attente déterministe (par ex. le mock signale un `AsyncStream` ou un `Semaphore`).
+
+13. **ClaudeCodeConnectorTests.swift** — Les 4 tests ne couvrent que `resolveActiveAccount()` (pure lecture de fichier). Le ratio tests/LOC du connecteur est de ~53 lignes de test pour ~185 lignes de source, et 100% des lignes réseau/keychain sont non couvertes.
+
+14. **UsageModelsTests.swift** — Bonne couverture Codable, mais **aucun test de valeurs limites** : `usagePercent` négatif, `windowDurationMinutes` à 0, `currentAmount` négatif ou NaN, chaîne vide pour `resetAt`. Le modèle accepte tout sans validation — si c'est voulu, un test devrait le documenter explicitement.
+
+15. **UsagesFileManagerTests.swift** — Pas de test vérifiant que le `lockPath` est bien `.lock` suffixé. Si quelqu'un change le calcul du lockPath, aucun test ne casse.
+
+## Résumé
+
+| Module | LOC source | Tests | Couverture estimée |
+|---|---|---|---|
+| ClaudeCodeConnector | 185 | 4 | ~15% (account resolution uniquement) |
+| Logger | 88 | 5 | ~60% (rotation, concurrence manquantes) |
+| UsageModels | 105 | 8 | ~85% (limites manquantes) |
+| UsagesFileManager | 123 | 7 | ~65% (concurrence, fallback write) |
+| UsagePoller | 73 | 5 | ~70% (idempotence, edge cases) |
+
+**Priorité n°1** : rendre `ClaudeCodeConnector.fetchUsages()` testable (injection URLSession/Keychain) et écrire les tests correspondants — c'est le chemin critique de l'app et il a 0% de couverture réseau.
+- Qualité des commentaires : # Review — Qualité des commentaires
+
+1. **ClaudeCodeConnector.swift:56** — **ajouter** — la valeur `"oauth-2025-04-20"` est un flag beta opaque ; rien n'explique pourquoi il est obligatoire ni qu'il est requis par l'endpoint `/api/oauth/usage`.
+   > `// Required by the OAuth usage endpoint — beta flag must match the rollout date`
+
+2. **ClaudeCodeConnector.swift:88 & 94** — **ajouter** — `windowDurationMinutes: 300` et `10080` sont des valeurs hardcodées parce que l'API ne les retourne pas (cf. plan §2.1). Sans commentaire, on croirait qu'elles viennent de la réponse.
+   > `// 300 min (5 h) and 10 080 min (7 d): window durations are not in the API response — they're fixed by Claude's rate-limit policy`
+
+3. **UsagesFileManager.swift:100** — **supprimer** — `// Ensure lock file exists` paraphrase exactement les deux lignes suivantes (`fileExists` + `createFile`). Aucune valeur ajoutée.
+
+4. **UsagesFileManager.swift:78** — **conserver tel quel** — `// moveItem fails if destination exists; remove then retry` explique le WHY du double-essai. Bon commentaire.
+
+5. **AIUsagesTrackersApp.swift:11-12** — **ajouter** — l'indirection `pollerRef` est un contournement de l'isolation acteur de Swift (`self` n'est pas capturble directement depuis un `Task` dans `init`). Sans commentaire c'est du code "magique".
+   > `// pollerRef captures the actor value before self is fully available in the Task closure`
+- Impact doc : ```
+# Review — Impact doc
+
+1. **docs/DEVELOPMENT.md** — ligne 9 : `No tests are configured in Package.swift yet.`
+   Cette phrase est désormais fausse. Le PR ajoute une cible `testTarget` dans `Package.swift` et 31 tests répartis sur 5 fichiers.
+   À remplacer par la commande pour lancer les tests, ex. :
+   ```
+   - Test: `swift test`
+   ```
+
+2. **docs/ARCHITECTURE.md** — Le document ne mentionne que l'application menubar (activation policy `.accessory`, `MenuBarExtra`). Le PR introduit une couche architecturale entière qui n'y figure pas :
+   - Découpage du package en deux cibles (`AIUsagesTrackersLib` / exécutable `AIUsagesTrackers`) + cible de tests.
+   - Protocole `UsageConnector` et premier connecteur `ClaudeCodeConnector` (Keychain OAuth + API Anthropic).
+   - `UsagesFileManager` avec double verrouillage (POSIX `flock` + acteur Swift).
+   - `UsagePoller` (acteur Swift, polling périodique concurrent).
+   Le doc devrait décrire ces couches et leurs invariants (ex. : le `flock` est systématiquement relâché dans un `defer`; au plus un `fetchUsages` en vol par connecteur).
+
+Aucun autre fichier de doc (`CLAUDE.md`, `plan-ai-usages-tracker.md`) ne nécessite de mise à jour : le plan est neuf et cohérent avec l'implémentation, `CLAUDE.md` délègue volontairement aux fichiers `docs/`.
+
+**Dernier message utilisateur** : all
+
+---
+
+## Principe non-négociable — discipline des commits
+
+**Tu commites AVANT de présenter le résultat à l'utilisateur, JAMAIS
+après son approbation finale.** Dans cette phase : l'utilisateur a
+déjà approuvé une *sélection* de recommandations → tu les appliques
+→ tu commites → tu présentes le résultat → l'utilisateur choisit
+ensuite entre "apply more", "re-run reviews" ou "ship it". Le
+commit correspond à un état produit, pas à une validation finale.
+
+**LANGUE — règle absolue : tous les messages de commit (sujet ET body)
+sont rédigés en anglais, sans exception.**
+
+**FIXUP — règle absolue pour cette phase :** chaque application de
+recommandation doit produire des commits `--fixup` rattachés au commit
+source qui a introduit le code modifié, PAS des commits indépendants
+`review(axe):`. Procédure pour chaque bloc de fichiers modifiés :
+```bash
+# Trouver le commit source pour les fichiers concernés
+git log --oneline origin/main..HEAD -- <fichier1> <fichier2>
+# Le commit le plus récent qui a touché ces fichiers est le commit source
+SOURCE_HASH=<hash du commit source>
+git add <fichiers du bloc>
+git commit --fixup=$SOURCE_HASH
+```
+Si un bloc touche des fichiers issus de **plusieurs** commits sources
+distincts, crée **un fixup par commit source** (staging séparé par commit).
+L'historique final doit être squashable proprement avec
+`git rebase --autosquash`.
+
+## Outillage d'exploration préféré
+
+Privilégie **Serena** si disponible, sinon Grep/Glob/Read.
+
+---
+
+## Première itération (all vide)
+
+1. Consolide les 5 reviews en un plan d'action numéroté unique.
+   Déduplique les recommandations similaires entre axes.
+   Priorité : CRITICAL > HIGH > MED > LOW.
+   Format par item :
+   ```
+   N. [priorité] [axe] [fichier:ligne] <recommandation>
+   ```
+2. Présente-le. Demande quelles appliquer :
+   - `all` → tout appliquer
+   - `none` → skip, prêt à finaliser
+   - `1,3,5` → numéros spécifiques
+   - texte libre → clarifier
+3. N'émets **PAS** le signal de complétion.
+
+## Itérations suivantes — interpréter l'entrée utilisateur
+
+### Si l'utilisateur dit "none" / "aucune" / "skip" / "ship it" / "finaliser"
+→ Émets : <promise>REVIEWS_DONE</promise>
+
+### Si l'utilisateur donne une sélection (`all`, `1,3,5`, etc.)
+1. Applique chaque recommandation sélectionnée. Sois chirurgical.
+2. Commit par bloc logique (AVANT de présenter le résultat) — **impérativement
+   avec `--fixup`** (voir section "FIXUP" ci-dessus). Ne crée JAMAIS un commit
+   `review(<axe>):` indépendant à la place.
+3. Lance le gate déterministe via le MÊME script que la phase implement :
+   ```bash
+   bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
+   ```
+   Si le gate échoue (exit non-zero), corrige AVANT de présenter le
+   résultat. NE présente PAS "apply done" tant que le gate n'est pas
+   vert. L'utilisateur ne doit être sollicité à nouveau qu'après
+   stabilisation.
+4. Rapporte : ce qui a été appliqué, ce qui reste de la liste initiale,
+   diff stat.
+5. Demande : "apply more / re-run reviews / ship it ?" — n'émets PAS
+   le signal.
+
+### Si l'utilisateur demande un re-run des reviews
+Signaux : "re-run reviews", "relance les reviews", "rerun", "nouvelle
+passe", "re-review".
+Le re-run tourne **sur l'état courant du code** (les commits fixup
+que tu viens d'appliquer sont donc inclus dans le diff).
+
+**C'est une fonctionnalité CÂBLÉE — tu DOIS l'exécuter ici-même,
+en lançant 5 Tasks en parallèle. Ne dis PAS que c'est impossible
+ou non câblé : tu as accès à l'outil Agent/Task.**
+
+1. Lance **5 Tasks en parallèle** — un seul message Claude Code avec
+   5 invocations du tool `Agent` (`subagent_type: general-purpose`,
+   ou équivalent Task) — un axe par Task.
+   Chaque prompt commence par restituer le diff via
+   `git diff origin/main...HEAD`, puis applique l'axe défini
+   ci-dessous. Demande à chaque Task de répondre dans le même format
+   strict que les reviews initiales (bullet "[fichier:ligne]
+   recommandation", ou "Aucun problème significatif.").
+
+   **Axe 1 — QUALITÉ DE CODE** : idiomes du langage, lisibilité,
+   simplicité, over-engineering, nommage, duplication. Ce qu'un humain
+   voit et qu'un linter ne voit pas. Ignorer ce qu'un type-checker /
+   linter attraperait déjà.
+
+   **Axe 2 — GESTION D'ERREURS** : chemins d'erreur, cas limites,
+   null/undefined, race conditions, timeouts, échecs partiels,
+   nettoyage des ressources. Silent swallowing ?
+
+   **Axe 3 — COUVERTURE DE TESTS** : branches, cas limites + qualité
+   qualitative (tests qui assertent le comportement ou
+   l'implémentation ? mocks cassants ? modes d'échec manquants ?).
+   Tests qui DEVRAIENT exister mais manquent, tests existants faibles.
+
+   **Axe 4 — QUALITÉ DES COMMENTAIRES** : POURQUOI vs QUOI ? Code
+   non-trivial documenté ? Commentaires périmés / redondants /
+   trompeurs ?
+
+   **Axe 5 — IMPACT DOC** : quels README / CHANGELOG / docstrings
+   publics / docs d'API / notes de migration devraient être mis à jour
+   mais ne l'ont pas été ? Inclut les fichiers de plan projet (ex.
+   `plans/PLAN.md`) si le projet en a.
+
+   Pour l'exploration complémentaire dans chaque Task : privilégier
+   Serena (`mcp__serena__*`) si disponible, sinon Grep/Glob/Read.
+
+2. Ré-agrège les 5 sorties avec la même méthodologie qu'en première
+   itération (consolidation, déduplication, priorité CRITICAL > HIGH
+   > MED > LOW, numérotation `N. [priorité] [axe] [fichier:ligne] <reco>`).
+
+3. Présente le nouveau plan d'action à l'utilisateur.
+
+4. Repose la question : "apply more / re-run reviews / ship it ?"
+
+5. N'émets PAS le signal de complétion.
+
+### CRITIQUE — discipline du signal
+Émets `<promise>REVIEWS_DONE</promise>` **uniquement** quand
+l'utilisateur dit explicitement "none", "skip", "finaliser",
+"ship it" ou équivalent. Les questions et demandes d'application
+NE SONT PAS des approbations.
