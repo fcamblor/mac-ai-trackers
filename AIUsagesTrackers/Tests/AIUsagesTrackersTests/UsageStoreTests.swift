@@ -103,7 +103,6 @@ struct UsageStoreFormattingTests {
         ])
         watcher.send(data)
 
-        // Let the async stream deliver
         try await Task.sleep(nanoseconds: 50_000_000)
 
         #expect(store.menuBarText == "S 48% 2h 13m")
@@ -143,7 +142,6 @@ struct UsageStoreFormattingTests {
         watcher.send(data)
         try await Task.sleep(nanoseconds: 50_000_000)
 
-        // No time-window metrics → fallback
         #expect(store.menuBarText == "--")
         store.stop()
     }
@@ -303,7 +301,7 @@ struct UsageStoreLifecycleTests {
         let watcher = MockFileWatcher()
         let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
         store.start()
-        store.start() // second call should be no-op
+        store.start()
         store.stop()
     }
 
