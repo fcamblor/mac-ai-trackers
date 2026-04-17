@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "5a44e6ae6db6",
+  "strategy": "manual-commit",
+  "branch": "archon/task-feat-claude-usages-connector",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/ClaudeCodeConnector.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/ClaudeCodeConnectorTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/5a/44e6ae6db6/0/metadata.json",
+      "transcript": "/5a/44e6ae6db6/0/full.jsonl",
+      "content_hash": "/5a/44e6ae6db6/0/content_hash.txt",
+      "prompt": "/5a/44e6ae6db6/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 11,
+    "cache_creation_tokens": 17827,
+    "cache_read_tokens": 144647,
+    "output_tokens": 1491,
+    "api_call_count": 7
+  }
+}

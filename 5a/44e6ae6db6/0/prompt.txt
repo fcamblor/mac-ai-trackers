@@ -1,0 +1,11 @@
+comment le calcul du flag isActive est-il realise ? par quel process ?
+
+---
+
+ok, il faudrait faire en sorte d'avoir un process qui s'execute toutes les 15s et qui regarde le contenu du fichier ~/.claude.json et vienne positionner le isActive=true|false sur chacun des comptes de type claude present dans le fichier json
+
+---
+
+ok, il faudrait faire en sorte d'avoir un process qui s'execute toutes les 15s et qui regarde le contenu du fichier ~/.claude.json et vienne positionner le isActive=true|false sur chacun des comptes de type claude present dans le fichier json
+
+au moment de l'appel http, le connecteur doit aussi lire le fichier ~/.claude.json pour connaitre le compte claude pour lequel il se connecte (histoire que si le ~/.claude.json est altere entre le moment ou la payload se fait et le moment ou on recoit le retour http, l'utilisateur courant change)
