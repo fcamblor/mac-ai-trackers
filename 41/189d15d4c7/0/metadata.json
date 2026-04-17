@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "41189d15d4c7",
+  "session_id": "9d025928-f7a4-4015-9a8c-c1e2895c0194",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T22:25:35.296878Z",
+  "branch": "archon/task-td-code-quality-naming",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/ClaudeCodeConnector.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "e388ca88458c",
+  "checkpoint_transcript_start": 27,
+  "transcript_lines_at_start": 27,
+  "token_usage": {
+    "input_tokens": 6,
+    "cache_creation_tokens": 2205,
+    "cache_read_tokens": 207774,
+    "output_tokens": 1325,
+    "api_call_count": 6
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T22:25:35.097376Z",
+    "agent_lines": 7,
+    "agent_removed": 4,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 7,
+    "total_lines_changed": 11,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}
