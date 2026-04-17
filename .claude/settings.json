@@ -1,4 +1,12 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(swift run *)"
+    ],
+    "deny": [
+      "Read(./.entire/metadata/**)"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {
@@ -94,12 +102,7 @@
       }
     ]
   },
-  "permissions": {
-    "allow": [
-      "Bash(swift run *)"
-    ],
-    "deny": [
-      "Read(./.entire/metadata/**)"
-    ]
+  "enabledPlugins": {
+    "impeccable@impeccable": true
   }
 }
