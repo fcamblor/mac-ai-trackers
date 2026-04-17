@@ -129,7 +129,7 @@ public final class UsageStore {
     }
 
     private func formatTimeWindowSegment(_ metric: UsageMetric) -> String? {
-        guard case let .timeWindow(name, resetAt, _, usagePercent) = metric else {
+        guard case let .timeWindow(name, resetAt, _windowDuration, usagePercent) = metric else {
             return nil
         }
 

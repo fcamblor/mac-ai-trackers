@@ -35,7 +35,7 @@ private func makeUsagesJSON(
     account: String = "user@example.com",
     isActive: Bool = true,
     metrics: [[String: Any]] = []
-) -> Data {
+) throws -> Data {
     let entry: [String: Any] = [
         "vendor": vendor,
         "account": account,
@@ -43,7 +43,7 @@ private func makeUsagesJSON(
         "metrics": metrics,
     ]
     let root: [String: Any] = ["usages": [entry]]
-    return try! JSONSerialization.data(withJSONObject: root)
+    return try JSONSerialization.data(withJSONObject: root)
 }
 
 private func timeWindowMetric(
@@ -101,7 +101,7 @@ struct UsageStoreFormattingTests {
         store.start()
 
         // resetAt is 2h13m in the future from referenceDate
-        let data = makeUsagesJSON(metrics: [
+        let data = try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", usagePercent: 48),
         ])
         watcher.send(data)
@@ -121,7 +121,7 @@ struct UsageStoreFormattingTests {
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
-        let data = makeUsagesJSON(metrics: [
+        let data = try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", usagePercent: 48),
             timeWindowMetric(name: "weekly", resetAt: "2026-04-23T21:00:00Z", usagePercent: 7),
         ])
@@ -140,7 +140,7 @@ struct UsageStoreFormattingTests {
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
-        let data = makeUsagesJSON(metrics: [
+        let data = try makeUsagesJSON(metrics: [
             payAsYouGoMetric(),
         ])
         watcher.send(data)
@@ -159,7 +159,7 @@ struct UsageStoreFormattingTests {
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
-        let data = makeUsagesJSON(metrics: [
+        let data = try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", usagePercent: 48),
             payAsYouGoMetric(),
         ])
@@ -178,7 +178,7 @@ struct UsageStoreFormattingTests {
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
-        let data = makeUsagesJSON(metrics: [
+        let data = try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "session", resetAt: "2026-04-17T10:00:00Z", usagePercent: 100),
         ])
         watcher.send(data)
@@ -196,7 +196,7 @@ struct UsageStoreFormattingTests {
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
-        let data = makeUsagesJSON(metrics: [
+        let data = try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "session", resetAt: "2026-04-17T12:47:00Z", usagePercent: 50),
         ])
         watcher.send(data)
@@ -231,7 +231,7 @@ struct UsageStoreDegradationTests {
         let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
         store.start()
 
-        let data = makeUsagesJSON(isActive: false, metrics: [
+        let data = try makeUsagesJSON(isActive: false, metrics: [
             timeWindowMetric(),
         ])
         watcher.send(data)
@@ -248,7 +248,7 @@ struct UsageStoreDegradationTests {
         let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
         store.start()
 
-        let data = makeUsagesJSON(vendor: "other", metrics: [
+        let data = try makeUsagesJSON(vendor: "other", metrics: [
             timeWindowMetric(),
         ])
         watcher.send(data)
@@ -265,7 +265,7 @@ struct UsageStoreDegradationTests {
         let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
         store.start()
 
-        let data = makeUsagesJSON(metrics: [])
+        let data = try makeUsagesJSON(metrics: [])
         watcher.send(data)
         try await Task.sleep(nanoseconds: 50_000_000)
 
@@ -286,7 +286,7 @@ struct UsageStoreDegradationTests {
         try await Task.sleep(nanoseconds: 50_000_000)
         #expect(store.menuBarText == "--")
 
-        let data = makeUsagesJSON(metrics: [
+        let data = try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "session", resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
         ])
         watcher.send(data)
@@ -341,7 +341,7 @@ struct UsageStoreRemainingTimeTests {
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
-        let data = makeUsagesJSON(metrics: [
+        let data = try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "daily", resetAt: "2026-04-18T00:00:00Z", usagePercent: 0),
         ])
         watcher.send(data)
@@ -361,7 +361,7 @@ struct UsageStoreRemainingTimeTests {
         store.start()
 
         // 3 days, 5 hours, 30 minutes in the future
-        let data = makeUsagesJSON(metrics: [
+        let data = try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "weekly", resetAt: "2026-04-20T05:30:00Z", usagePercent: 15),
         ])
         watcher.send(data)
@@ -380,7 +380,7 @@ struct UsageStoreRemainingTimeTests {
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
-        let data = makeUsagesJSON(metrics: [
+        let data = try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "session", resetAt: "2026-04-17T14:50:00Z", usagePercent: 95),
         ])
         watcher.send(data)
@@ -397,7 +397,7 @@ struct UsageStoreRemainingTimeTests {
         let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
         store.start()
 
-        let data = makeUsagesJSON(metrics: [
+        let data = try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "session", resetAt: "not-a-date", usagePercent: 50),
         ])
         watcher.send(data)
