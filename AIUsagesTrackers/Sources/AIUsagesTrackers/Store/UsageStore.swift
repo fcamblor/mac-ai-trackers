@@ -24,6 +24,9 @@ public final class UsageStore {
     // MARK: Published state
 
     public private(set) var menuBarText: String = "--"
+    /// Incremented each time handleNewData is called, whether the data is valid or malformed.
+    /// Tests use this as a reliable signal that the store has consumed the latest yielded item.
+    public private(set) var dataProcessedCount: Int = 0
 
     // MARK: Dependencies
 
@@ -96,6 +99,7 @@ public final class UsageStore {
     // MARK: - Processing
 
     private func handleNewData(_ data: Data) {
+        dataProcessedCount += 1
         do {
             let file = try JSONDecoder().decode(UsagesFile.self, from: data)
             lastFile = file
