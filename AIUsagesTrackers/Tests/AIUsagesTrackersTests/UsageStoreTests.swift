@@ -309,22 +309,35 @@ struct UsageStoreLifecycleTests {
 
     @MainActor
     @Test("start is idempotent")
-    func startIdempotent() {
+    func startIdempotent() async throws {
         let watcher = MockFileWatcher()
-        let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
+        let f = ISO8601DateFormatter()
+        let clock = FixedClock(f.date(from: "2026-04-17T12:00:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
-        store.start() // second call should be no-op
+        store.start() // second call should be no-op; data must still flow
+        watcher.send(makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "session", resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
+        ]))
+        try await eventually { store.menuBarText != "--" }
+        #expect(store.menuBarText == "S 10% 1h")
         store.stop()
     }
 
     @MainActor
     @Test("stop is idempotent")
-    func stopIdempotent() {
+    func stopIdempotent() async throws {
         let watcher = MockFileWatcher()
         let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
         store.start()
         store.stop()
         store.stop() // second call should be no-op
+        watcher.send(makeUsagesJSON(metrics: [timeWindowMetric()]))
+        // watchTask is cancelled; no data processing will happen.
+        // Fixed sleep confirms absence of an event — no reactive condition to poll for.
+        try await Task.sleep(nanoseconds: 100_000_000)
+        #expect(store.dataProcessedCount == 0)
+        #expect(store.menuBarText == "--")
     }
 
     @MainActor
@@ -332,6 +345,31 @@ struct UsageStoreLifecycleTests {
     func stopBeforeStart() {
         let watcher = MockFileWatcher()
         let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
+        store.stop()
+    }
+
+    @MainActor
+    @Test("start, stop, then start again resumes data flow")
+    func startStopStart() async throws {
+        let watcher = MockFileWatcher()
+        let f = ISO8601DateFormatter()
+        let clock = FixedClock(f.date(from: "2026-04-17T12:00:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
+
+        store.start()
+        watcher.send(makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "session", resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
+        ]))
+        try await eventually { store.menuBarText != "--" }
+        #expect(store.menuBarText == "S 10% 1h")
+        store.stop()
+
+        store.start()
+        watcher.send(makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "weekly", resetAt: "2026-04-17T14:00:00Z", usagePercent: 50),
+        ]))
+        try await eventually { store.menuBarText == "W 50% 2h" }
+        #expect(store.menuBarText == "W 50% 2h")
         store.stop()
     }
 }
