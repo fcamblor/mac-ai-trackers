@@ -1,0 +1,577 @@
+# FCR-Dev — Agrégation des reviews & application de la sélection
+
+## Reviews sources
+- Qualité de code : Let me read the files that got cut off.# Review — Qualité de code
+
+1. **[TimeWindowMetricRow.swift:22,27]** `Date()` appelé directement dans des computed properties (`theoreticalFraction`, `remainingText`). Le store injecte un `ClockProvider` pour la testabilité, mais la vue court-circuite cette abstraction. Injecter le même `ClockProvider` (ou passer `now: Date` depuis le parent) pour que ces calculs soient déterministes et testables.
+
+2. **[TimeWindowMetricRow.swift:25-42]** La logique de formatage du temps restant (days/hours/minutes) est **dupliquée** quasi mot-pour-mot de `UsageStore.formatRemainingTime` (lignes 145-171). Extraire dans une fonction libre ou une extension partagée.
+
+3. **[UsageStore.swift:115]** `refreshMenuBarText()` réassigne `entries = file.usages` à chaque tick du countdown (toutes les 60s), même si les données n'ont pas changé. `@Observable` déclenche une notification à chaque écriture de propriété, ce qui provoque des redraws SwiftUI inutiles. Soit ne pas réassigner `entries` ici (seul `menuBarText` change avec le temps), soit comparer avant d'affecter.
+
+4. **[TimeWindowMetricRow.swift:47-49]** `DateFormatter` instancié à chaque appel de `resetDateText` (donc à chaque render SwiftUI). En faire une `static let` ou utiliser un `.formatted()` avec un style fixe.
+
+5. **[UsageDetailsView.swift:20]** `ForEach(…, id: \.offset)` sur des données dynamiques. Quand les `entries` changent (réordonnancement, ajout), SwiftUI ne peut pas différencier les éléments, cassant les animations et le recyclage de vues. Rendre `VendorUsageEntry` `Identifiable` ou utiliser un id stable (par ex. `vendor.rawValue + account.rawValue`).
+
+6. **[UsageDetailsView.swift:54-56]** `hasMultipleAccountsForVendor` fait un `filter` sur tout `store.entries` pour chaque entrée dans la boucle — O(n²). Précalculer un `Set<Vendor>` des vendors multi-comptes une fois dans `sortedEntries` ou un `vendorCounts: [Vendor: Int]`.
+- Gestion d'erreurs : Now let me check the relevant source files for context on error handling patterns.# Review — Gestion d'erreurs
+
+Le code nouveau est essentiellement de la présentation SwiftUI (views pures) + une propriété exposée dans le store. La surface d'erreur est réduite, mais voici les points notables :
+
+1. **`TimeWindowMetricRow.swift:47` — `DateFormatter` alloué à chaque calcul de `body`**
+   `resetDateText` (et `theoreticalFraction`, `remainingText`) instancient un `DateFormatter` / calculent des dates à chaque rendu. Ce n'est pas un bug d'erreur mais c'est une fragilité de thread-safety documentée dans `docs/SWIFT-CONCURRENCY.md` : `DateFormatter` n'est pas thread-safe. Ici c'est un `struct View` recalculé sur le main thread, donc acceptable — mais si ce code est extrait un jour dans un contexte concurrent, il cassera. Considérer un `static let` formatter par locale ou utiliser `ISO8601DateFormatter` déjà en place dans `ISODate`.
+
+2. **`TimeWindowMetricRow.swift:21` — `Date()` direct (non injectable)**
+   `theoreticalFraction` et `remainingText` appellent `Date()` directement. Cela rend ces propriétés calculées impossibles à tester de manière déterministe (le résultat dépend de l'heure d'exécution). Selon `docs/SWIFT-TESTABILITY.md`, le clock devrait être injectable. **Recommandation** : accepter un `now: Date` en paramètre ou un `Clock` protocol pour permettre des tests unitaires fiables sur les calculs de temps restant / fraction théorique.
+
+3. **`PayAsYouGoMetricRow.swift:10-17` — `NumberFormatter` fallback silencieux**
+   Le fallback `"\(currency) \(String(format: "%.2f", currentAmount))"` est bien présent si `formatter.string(from:)` retourne `nil`. C'est correct — le chemin d'erreur est couvert. Aucun problème ici.
+
+4. **`TimeWindowMetricRow.swift:17,26,46` — `ISODate.date` retourne `nil` sur parsing invalide**
+   Trois propriétés calculées gèrent le cas `resetAt.date == nil` avec des valeurs de fallback (`return 0`, `return "0m"`, `return "--"`). Les chemins sont couverts. Cependant, l'échec de parsing est **silencieux** : l'utilisateur verra "0m" et "--" sans savoir que la date est invalide. **Recommandation mineure** : pour `remainingText`, afficher `"--"` plutôt que `"0m"` quand le parsing échoue — `"0m"` est trompeur (il suggère que le reset est imminent alors que la date est simplement non parsable).
+
+5. **`UsageDetailsView.swift:20` — `ForEach` avec `id: \.offset` au lieu d'un identifiant stable**
+   Utiliser l'index comme identité SwiftUI peut provoquer des animations incohérentes et des bugs de recycling si la liste change pendant un rendu. Si `VendorUsageEntry` n'est pas `Identifiable`, il devrait le devenir (avec un id composite `vendor + account`). Pas un bug d'erreur à proprement parler, mais un cas limite de UI qui peut causer des comportements inattendus lors de mises à jour rapides.
+
+6. **`UsageStore.swift:115` — `refreshMenuBarText()` ré-assigne `entries` depuis `lastFile.usages`**
+   Ce n'est pas un bug, mais chaque tick du countdown timer reconstruit le tableau `entries` même si les données n'ont pas changé. Avec beaucoup d'entries, cela déclenchera des re-rendus SwiftUI inutiles. **Recommandation** : comparer avant de ré-assigner, ou ne mettre à jour `entries` que dans `handleFileData`.
+
+**Résumé** : Pas de silent swallowing critique ni de chemin d'erreur non couvert. Le point le plus actionnable est le **#4** (`"0m"` trompeur quand la date est invalide) et le **#2** (testabilité du clock).
+- Couverture de tests : # Review — Couverture de tests
+
+## Bilan quantitatif
+
+| Fichier modifié/ajouté | Tests | Verdict |
+|---|---|---|
+| `UsageStore.swift` (+`entries`) | 5 tests (suite `UsageStoreEntriesTests`) | Couvert |
+| `UsageDetailsView.swift` (NEW) | 0 | **Non couvert** |
+| `AccountCardView.swift` (NEW) | 0 | **Non couvert** |
+| `TimeWindowMetricRow.swift` (NEW) | 0 | **Non couvert** |
+| `GaugeBar.swift` (NEW) | 0 | **Non couvert** |
+| `PayAsYouGoMetricRow.swift` (NEW) | 0 | **Non couvert** |
+| `AIUsagesTrackersApp.swift` (wiring) | 0 | Acceptable (SwiftUI Scene) |
+
+## Tests manquants
+
+1. **`UsageDetailsView.swift:42-52`** — `sortedEntries` contient une logique de tri à 3 niveaux (vendor alphabétique, active-first, puis account alphabétique). C'est de la logique métier pure, facilement extractible et testable. Aucun test ne vérifie :
+   - le tri par vendor name
+   - le placement des comptes actifs avant les inactifs au sein d'un même vendor
+   - le tri alphabétique par account en dernier recours
+   - le cas où `entries` est vide (retourne `[]`)
+   - un seul entry (pas de comparaison)
+
+2. **`UsageDetailsView.swift:54-56`** — `hasMultipleAccountsForVendor` : aucun test pour la logique "afficher le badge active seulement quand il y a >1 compte pour ce vendor". Cas limites : 0 compte, 1 compte (pas de badge), 2+ comptes (badge affiché).
+
+3. **`TimeWindowMetricRow.swift:16-21`** — `theoreticalFraction` calcule `elapsed / totalWindow` clampé à `0...1`. Pas de test pour :
+   - `windowDuration == 0` (division par zéro ?) → le `DurationMinutes` accepte-t-il 0 ?
+   - `resetAt` dans le passé (elapsed > window → clamp à 1.0)
+   - `resetAt` invalide (date nil → elapsed = 0 → fraction = 0)
+
+4. **`TimeWindowMetricRow.swift:24-43`** — `remainingText` duplique la logique de formatage durée de `UsageStore.format(remaining:)` mais sans les mêmes tests. Les cas `0m`, jours+heures+minutes, juste minutes, `resetAt` invalide ne sont pas testés côté vue.
+
+5. **`TimeWindowMetricRow.swift:45-50`** — `resetDateText` utilise un `DateFormatter` créé à chaque appel (non injecté). Pas de test, et pas de moyen de contrôler le timezone → résultat non déterministe dans les tests.
+
+6. **`GaugeBar.swift:9-10`** — le clamping `min(max(…, 0), 1)` n'est testé nulle part. Cas limites : valeurs négatives, >1, NaN (si un calcul amont produit `0/0`).
+
+7. **`PayAsYouGoMetricRow.swift:12`** — le format `String(format: "%.2f", currentAmount)` n'est pas testé. Cas : montant à 0, montant très grand, précision décimale.
+
+## Tests existants — faiblesses
+
+8. **`UsageStoreTests.swift:495-496`** — `multipleEntries` asserte l'ordre des entries par index (`entries[0].isActive == true`, `entries[1].isActive == false`) mais l'ordre dépend de l'ordre du JSON, pas d'un tri garanti. Si l'implémentation change l'ordre, le test casse pour une mauvaise raison. Mieux vaut tester avec `contains` ou trier explicitement.
+
+9. **`UsageStoreTests.swift:109-111` et pattern similaire** — tous les tests async utilisent `Task.sleep(nanoseconds: 50_000_000)` comme mécanisme de synchronisation. C'est fragile (race condition sur CI lent). Idéalement, utiliser une `AsyncStream` avec confirmation ou un mécanisme d'attente déterministe.
+
+## Recommandation principale
+
+La logique de tri (`sortedEntries`) et les calculs temporels (`theoreticalFraction`, `remainingText`) sont des fonctions pures qui devraient être extraites dans des types/fonctions testables unitairement, plutôt que d'être enfouies dans des vues SwiftUI non testables. C'est le manque le plus critique car c'est la logique métier la plus complexe de cette PR et elle est entièrement non couverte.
+- Qualité des commentaires : # Review — Qualité des commentaires
+
+1. **`AccountCardView.swift:4`** — supprimer ou réécrire. La doc paraphrase le nom du struct. Ce qui vaut la peine d'expliquer : pourquoi `showActiveBadge` est passé de l'extérieur plutôt que calculé ici (pour éviter de traverser tous les entries à chaque card).
+   > Suggestion : `/// showActiveBadge is resolved by the parent so each card doesn't re-scan the full entry list.`
+
+2. **`AccountCardView.swift:11`** — supprimer `// Header`. Ce que ce bloc fait se lit directement dans le code (vendor + account + badge).
+
+3. **`AccountCardView.swift:34`** — supprimer `// Metrics`. `ForEach(entry.metrics…)` est auto-documenté.
+
+4. **`GaugeBar.swift:18`** — supprimer `// Track`. Un `RoundedRectangle` rempli de `.quaternary` dans un `ZStack` : c'est le fond, ça se lit.
+
+5. **`GaugeBar.swift:22`** — supprimer `// Actual fill`. Redondant avec le nom du paramètre `actual` passé juste en dessous.
+
+6. **`GaugeBar.swift:27`** — réécrire `// Theoretical marker tick`. Le `if theoretical > 0` mérite une explication de la condition, pas juste un label visuel.
+   > Suggestion : `// Skip marker when no window data — avoids a tick pinned to the left edge at 0.`
+
+7. **`UsageDetailsView.swift:4-5`** — la doc reformule le nom du struct. Si elle reste, aligner sur le WHY : pourquoi `LazyVStack` + `maxHeight` (éviter que le popover s'étire infiniment selon les données).
+
+---
+
+**Bien rédigés — rien à changer :**
+- `UsageStore.swift:40` — raison du cache `lastFile` (éviter le disque).
+- `UsageStore.swift:61` — explication du cycle de capture + qui le casse.
+- `UsageStore.swift:69` — `try?` intentionnel documenté avec la stratégie de vérification.
+- `PayAsYouGoMetricRow.swift:13` — fallback currency justifié.
+- `UsageDetailsView.swift:41` — critères de tri non-triviaux expliqués.
+- Impact doc : Analyse complète. Voici le rapport :
+
+---
+
+# Review — Impact doc
+
+**1. `roadmap/index.md` — statut de l'épic à mettre à jour**
+
+L'épic "Usage details popover" (item 2) est encore marquée `planned` alors que l'implémentation est complète (vues, store, tests). Elle devrait passer à `in-progress` (si la PR n'est pas encore mergée) ou `done` (si c'est la convention après merge).
+
+```
+2. `planned` → `in-progress`  — [Usage details popover](usage-details-popover.md)
+```
+
+---
+
+**2. `docs/ARCHITECTURE.md` — section "Display pipeline" à compléter**
+
+La section décrit l'ancien comportement (`MenuBarExtra` avec du texte brut + `Text("AI Usages Tracker")` + bouton Quit inline). Deux points ne sont plus exacts après cette branche :
+
+- Le `MenuBarExtra` est maintenant en style `.window` (popover natif) — le doc ne mentionne aucun style de présentation.
+- Le contenu du `MenuBarExtra` est désormais `UsageDetailsView` (vue dédiée avec scroll, cartes par compte, footer Quit) — le doc parle uniquement de la label textuelle du menubar.
+
+Passage à ajouter dans "Display pipeline" :
+
+> When the user clicks the menu bar item, a `.window`-style `MenuBarExtra` opens a scrollable popover. The popover renders one card per `VendorUsageEntry`, sorted alphabetically by vendor then by account (active first within a vendor). Each card shows time-window metrics (gauge bar, theoretical pace marker, remaining time, next reset date) and pay-as-you-go metrics (amount + currency). An empty state is shown when no entries are available. A footer provides the app name and a Quit shortcut.
+
+---
+
+**3. `roadmap/usage-details-popover.md` — acceptance criteria déjà couverts, rien à ajouter**
+
+Le fichier roadmap est complet et conforme à l'implémentation. Aucune mise à jour requise.
+
+---
+
+**Pas de README ni CHANGELOG dans ce repo** — rien à faire de ce côté.
+
+**Dernier message utilisateur** :
+
+---
+
+## Principe non-négociable — discipline des commits
+
+**Tu commites AVANT de présenter le résultat à l'utilisateur, JAMAIS
+après son approbation finale.** Dans cette phase : l'utilisateur a
+déjà approuvé une *sélection* de recommandations → tu les appliques
+→ tu commites → tu présentes le résultat → l'utilisateur choisit
+ensuite entre "apply more", "re-run reviews" ou "ship it". Le
+commit correspond à un état produit, pas à une validation finale.
+
+**LANGUE — règle absolue : tous les messages de commit (sujet ET body)
+sont rédigés en anglais, sans exception.**
+
+**FIXUP — règle absolue pour cette phase :** chaque application de
+recommandation doit produire des commits `--fixup` rattachés au commit
+source qui a introduit le code modifié, PAS des commits indépendants
+`review(axe):`. Procédure pour chaque bloc de fichiers modifiés :
+```bash
+# Trouver le commit source pour les fichiers concernés
+git log --oneline origin/main..HEAD -- <fichier1> <fichier2>
+# Le commit le plus récent qui a touché ces fichiers est le commit source
+SOURCE_HASH=<hash du commit source>
+git add <fichiers du bloc>
+git commit --fixup=$SOURCE_HASH
+```
+Si un bloc touche des fichiers issus de **plusieurs** commits sources
+distincts, crée **un fixup par commit source** (staging séparé par commit).
+L'historique final doit être squashable proprement avec
+`git rebase --autosquash`.
+
+## Outillage d'exploration préféré
+
+Privilégie **Serena** si disponible, sinon Grep/Glob/Read.
+
+---
+
+## Première itération ( vide)
+
+1. Consolide les 5 reviews en un plan d'action numéroté unique.
+   Déduplique les recommandations similaires entre axes.
+   Priorité : CRITICAL > HIGH > MED > LOW.
+   Format par item :
+   ```
+   N. [priorité] [axe] [fichier:ligne] <recommandation>
+   ```
+2. Présente-le. Demande quelles appliquer :
+   - `all` → tout appliquer
+   - `none` → skip, prêt à finaliser
+   - `1,3,5` → numéros spécifiques
+   - texte libre → clarifier
+3. N'émets **PAS** le signal de complétion.
+
+## Itérations suivantes — interpréter l'entrée utilisateur
+
+### Si l'utilisateur dit "none" / "aucune" / "skip" / "ship it" / "finaliser"
+→ Émets : <promise>REVIEWS_DONE</promise>
+
+### Si l'utilisateur donne une sélection (`all`, `1,3,5`, etc.)
+1. Applique chaque recommandation sélectionnée. Sois chirurgical.
+2. Commit par bloc logique (AVANT de présenter le résultat) — **impérativement
+   avec `--fixup`** (voir section "FIXUP" ci-dessus). Ne crée JAMAIS un commit
+   `review(<axe>):` indépendant à la place.
+3. Lance le gate déterministe via le MÊME script que la phase implement :
+   ```bash
+   bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
+   ```
+   Si le gate échoue (exit non-zero), corrige AVANT de présenter le
+   résultat. NE présente PAS "apply done" tant que le gate n'est pas
+   vert. L'utilisateur ne doit être sollicité à nouveau qu'après
+   stabilisation.
+4. Rapporte : ce qui a été appliqué, ce qui reste de la liste initiale,
+   diff stat.
+5. Demande : "apply more / re-run reviews / ship it ?" — n'émets PAS
+   le signal.
+
+### Si l'utilisateur demande un re-run des reviews
+Signaux : "re-run reviews", "relance les reviews", "rerun", "nouvelle
+passe", "re-review".
+Le re-run tourne **sur l'état courant du code** (les commits fixup
+que tu viens d'appliquer sont donc inclus dans le diff).
+
+**C'est une fonctionnalité CÂBLÉE — tu DOIS l'exécuter ici-même,
+en lançant 5 Tasks en parallèle. Ne dis PAS que c'est impossible
+ou non câblé : tu as accès à l'outil Agent/Task.**
+
+1. Lance **5 Tasks en parallèle** — un seul message Claude Code avec
+   5 invocations du tool `Agent` (`subagent_type: general-purpose`,
+   ou équivalent Task) — un axe par Task.
+   Chaque prompt commence par restituer le diff via
+   `git diff origin/main...HEAD`, puis applique l'axe défini
+   ci-dessous. Demande à chaque Task de répondre dans le même format
+   strict que les reviews initiales (bullet "[fichier:ligne]
+   recommandation", ou "Aucun problème significatif.").
+
+   **Axe 1 — QUALITÉ DE CODE** : idiomes du langage, lisibilité,
+   simplicité, over-engineering, nommage, duplication. Ce qu'un humain
+   voit et qu'un linter ne voit pas. Ignorer ce qu'un type-checker /
+   linter attraperait déjà.
+
+   **Axe 2 — GESTION D'ERREURS** : chemins d'erreur, cas limites,
+   null/undefined, race conditions, timeouts, échecs partiels,
+   nettoyage des ressources. Silent swallowing ?
+
+   **Axe 3 — COUVERTURE DE TESTS** : branches, cas limites + qualité
+   qualitative (tests qui assertent le comportement ou
+   l'implémentation ? mocks cassants ? modes d'échec manquants ?).
+   Tests qui DEVRAIENT exister mais manquent, tests existants faibles.
+
+   **Axe 4 — QUALITÉ DES COMMENTAIRES** : POURQUOI vs QUOI ? Code
+   non-trivial documenté ? Commentaires périmés / redondants /
+   trompeurs ?
+
+   **Axe 5 — IMPACT DOC** : quels README / CHANGELOG / docstrings
+   publics / docs d'API / notes de migration devraient être mis à jour
+   mais ne l'ont pas été ? Inclut les fichiers de plan projet (ex.
+   `plans/PLAN.md`) si le projet en a.
+
+   Pour l'exploration complémentaire dans chaque Task : privilégier
+   Serena (`mcp__serena__*`) si disponible, sinon Grep/Glob/Read.
+
+2. Ré-agrège les 5 sorties avec la même méthodologie qu'en première
+   itération (consolidation, déduplication, priorité CRITICAL > HIGH
+   > MED > LOW, numérotation `N. [priorité] [axe] [fichier:ligne] <reco>`).
+
+3. Présente le nouveau plan d'action à l'utilisateur.
+
+4. Repose la question : "apply more / re-run reviews / ship it ?"
+
+5. N'émets PAS le signal de complétion.
+
+### CRITIQUE — discipline du signal
+Émets `<promise>REVIEWS_DONE</promise>` **uniquement** quand
+l'utilisateur dit explicitement "none", "skip", "finaliser",
+"ship it" ou équivalent. Les questions et demandes d'application
+NE SONT PAS des approbations.
+
+---
+
+# FCR-Dev — Agrégation des reviews & application de la sélection
+
+## Reviews sources
+- Qualité de code : Let me read the files that got cut off.# Review — Qualité de code
+
+1. **[TimeWindowMetricRow.swift:22,27]** `Date()` appelé directement dans des computed properties (`theoreticalFraction`, `remainingText`). Le store injecte un `ClockProvider` pour la testabilité, mais la vue court-circuite cette abstraction. Injecter le même `ClockProvider` (ou passer `now: Date` depuis le parent) pour que ces calculs soient déterministes et testables.
+
+2. **[TimeWindowMetricRow.swift:25-42]** La logique de formatage du temps restant (days/hours/minutes) est **dupliquée** quasi mot-pour-mot de `UsageStore.formatRemainingTime` (lignes 145-171). Extraire dans une fonction libre ou une extension partagée.
+
+3. **[UsageStore.swift:115]** `refreshMenuBarText()` réassigne `entries = file.usages` à chaque tick du countdown (toutes les 60s), même si les données n'ont pas changé. `@Observable` déclenche une notification à chaque écriture de propriété, ce qui provoque des redraws SwiftUI inutiles. Soit ne pas réassigner `entries` ici (seul `menuBarText` change avec le temps), soit comparer avant d'affecter.
+
+4. **[TimeWindowMetricRow.swift:47-49]** `DateFormatter` instancié à chaque appel de `resetDateText` (donc à chaque render SwiftUI). En faire une `static let` ou utiliser un `.formatted()` avec un style fixe.
+
+5. **[UsageDetailsView.swift:20]** `ForEach(…, id: \.offset)` sur des données dynamiques. Quand les `entries` changent (réordonnancement, ajout), SwiftUI ne peut pas différencier les éléments, cassant les animations et le recyclage de vues. Rendre `VendorUsageEntry` `Identifiable` ou utiliser un id stable (par ex. `vendor.rawValue + account.rawValue`).
+
+6. **[UsageDetailsView.swift:54-56]** `hasMultipleAccountsForVendor` fait un `filter` sur tout `store.entries` pour chaque entrée dans la boucle — O(n²). Précalculer un `Set<Vendor>` des vendors multi-comptes une fois dans `sortedEntries` ou un `vendorCounts: [Vendor: Int]`.
+- Gestion d'erreurs : Now let me check the relevant source files for context on error handling patterns.# Review — Gestion d'erreurs
+
+Le code nouveau est essentiellement de la présentation SwiftUI (views pures) + une propriété exposée dans le store. La surface d'erreur est réduite, mais voici les points notables :
+
+1. **`TimeWindowMetricRow.swift:47` — `DateFormatter` alloué à chaque calcul de `body`**
+   `resetDateText` (et `theoreticalFraction`, `remainingText`) instancient un `DateFormatter` / calculent des dates à chaque rendu. Ce n'est pas un bug d'erreur mais c'est une fragilité de thread-safety documentée dans `docs/SWIFT-CONCURRENCY.md` : `DateFormatter` n'est pas thread-safe. Ici c'est un `struct View` recalculé sur le main thread, donc acceptable — mais si ce code est extrait un jour dans un contexte concurrent, il cassera. Considérer un `static let` formatter par locale ou utiliser `ISO8601DateFormatter` déjà en place dans `ISODate`.
+
+2. **`TimeWindowMetricRow.swift:21` — `Date()` direct (non injectable)**
+   `theoreticalFraction` et `remainingText` appellent `Date()` directement. Cela rend ces propriétés calculées impossibles à tester de manière déterministe (le résultat dépend de l'heure d'exécution). Selon `docs/SWIFT-TESTABILITY.md`, le clock devrait être injectable. **Recommandation** : accepter un `now: Date` en paramètre ou un `Clock` protocol pour permettre des tests unitaires fiables sur les calculs de temps restant / fraction théorique.
+
+3. **`PayAsYouGoMetricRow.swift:10-17` — `NumberFormatter` fallback silencieux**
+   Le fallback `"\(currency) \(String(format: "%.2f", currentAmount))"` est bien présent si `formatter.string(from:)` retourne `nil`. C'est correct — le chemin d'erreur est couvert. Aucun problème ici.
+
+4. **`TimeWindowMetricRow.swift:17,26,46` — `ISODate.date` retourne `nil` sur parsing invalide**
+   Trois propriétés calculées gèrent le cas `resetAt.date == nil` avec des valeurs de fallback (`return 0`, `return "0m"`, `return "--"`). Les chemins sont couverts. Cependant, l'échec de parsing est **silencieux** : l'utilisateur verra "0m" et "--" sans savoir que la date est invalide. **Recommandation mineure** : pour `remainingText`, afficher `"--"` plutôt que `"0m"` quand le parsing échoue — `"0m"` est trompeur (il suggère que le reset est imminent alors que la date est simplement non parsable).
+
+5. **`UsageDetailsView.swift:20` — `ForEach` avec `id: \.offset` au lieu d'un identifiant stable**
+   Utiliser l'index comme identité SwiftUI peut provoquer des animations incohérentes et des bugs de recycling si la liste change pendant un rendu. Si `VendorUsageEntry` n'est pas `Identifiable`, il devrait le devenir (avec un id composite `vendor + account`). Pas un bug d'erreur à proprement parler, mais un cas limite de UI qui peut causer des comportements inattendus lors de mises à jour rapides.
+
+6. **`UsageStore.swift:115` — `refreshMenuBarText()` ré-assigne `entries` depuis `lastFile.usages`**
+   Ce n'est pas un bug, mais chaque tick du countdown timer reconstruit le tableau `entries` même si les données n'ont pas changé. Avec beaucoup d'entries, cela déclenchera des re-rendus SwiftUI inutiles. **Recommandation** : comparer avant de ré-assigner, ou ne mettre à jour `entries` que dans `handleFileData`.
+
+**Résumé** : Pas de silent swallowing critique ni de chemin d'erreur non couvert. Le point le plus actionnable est le **#4** (`"0m"` trompeur quand la date est invalide) et le **#2** (testabilité du clock).
+- Couverture de tests : # Review — Couverture de tests
+
+## Bilan quantitatif
+
+| Fichier modifié/ajouté | Tests | Verdict |
+|---|---|---|
+| `UsageStore.swift` (+`entries`) | 5 tests (suite `UsageStoreEntriesTests`) | Couvert |
+| `UsageDetailsView.swift` (NEW) | 0 | **Non couvert** |
+| `AccountCardView.swift` (NEW) | 0 | **Non couvert** |
+| `TimeWindowMetricRow.swift` (NEW) | 0 | **Non couvert** |
+| `GaugeBar.swift` (NEW) | 0 | **Non couvert** |
+| `PayAsYouGoMetricRow.swift` (NEW) | 0 | **Non couvert** |
+| `AIUsagesTrackersApp.swift` (wiring) | 0 | Acceptable (SwiftUI Scene) |
+
+## Tests manquants
+
+1. **`UsageDetailsView.swift:42-52`** — `sortedEntries` contient une logique de tri à 3 niveaux (vendor alphabétique, active-first, puis account alphabétique). C'est de la logique métier pure, facilement extractible et testable. Aucun test ne vérifie :
+   - le tri par vendor name
+   - le placement des comptes actifs avant les inactifs au sein d'un même vendor
+   - le tri alphabétique par account en dernier recours
+   - le cas où `entries` est vide (retourne `[]`)
+   - un seul entry (pas de comparaison)
+
+2. **`UsageDetailsView.swift:54-56`** — `hasMultipleAccountsForVendor` : aucun test pour la logique "afficher le badge active seulement quand il y a >1 compte pour ce vendor". Cas limites : 0 compte, 1 compte (pas de badge), 2+ comptes (badge affiché).
+
+3. **`TimeWindowMetricRow.swift:16-21`** — `theoreticalFraction` calcule `elapsed / totalWindow` clampé à `0...1`. Pas de test pour :
+   - `windowDuration == 0` (division par zéro ?) → le `DurationMinutes` accepte-t-il 0 ?
+   - `resetAt` dans le passé (elapsed > window → clamp à 1.0)
+   - `resetAt` invalide (date nil → elapsed = 0 → fraction = 0)
+
+4. **`TimeWindowMetricRow.swift:24-43`** — `remainingText` duplique la logique de formatage durée de `UsageStore.format(remaining:)` mais sans les mêmes tests. Les cas `0m`, jours+heures+minutes, juste minutes, `resetAt` invalide ne sont pas testés côté vue.
+
+5. **`TimeWindowMetricRow.swift:45-50`** — `resetDateText` utilise un `DateFormatter` créé à chaque appel (non injecté). Pas de test, et pas de moyen de contrôler le timezone → résultat non déterministe dans les tests.
+
+6. **`GaugeBar.swift:9-10`** — le clamping `min(max(…, 0), 1)` n'est testé nulle part. Cas limites : valeurs négatives, >1, NaN (si un calcul amont produit `0/0`).
+
+7. **`PayAsYouGoMetricRow.swift:12`** — le format `String(format: "%.2f", currentAmount)` n'est pas testé. Cas : montant à 0, montant très grand, précision décimale.
+
+## Tests existants — faiblesses
+
+8. **`UsageStoreTests.swift:495-496`** — `multipleEntries` asserte l'ordre des entries par index (`entries[0].isActive == true`, `entries[1].isActive == false`) mais l'ordre dépend de l'ordre du JSON, pas d'un tri garanti. Si l'implémentation change l'ordre, le test casse pour une mauvaise raison. Mieux vaut tester avec `contains` ou trier explicitement.
+
+9. **`UsageStoreTests.swift:109-111` et pattern similaire** — tous les tests async utilisent `Task.sleep(nanoseconds: 50_000_000)` comme mécanisme de synchronisation. C'est fragile (race condition sur CI lent). Idéalement, utiliser une `AsyncStream` avec confirmation ou un mécanisme d'attente déterministe.
+
+## Recommandation principale
+
+La logique de tri (`sortedEntries`) et les calculs temporels (`theoreticalFraction`, `remainingText`) sont des fonctions pures qui devraient être extraites dans des types/fonctions testables unitairement, plutôt que d'être enfouies dans des vues SwiftUI non testables. C'est le manque le plus critique car c'est la logique métier la plus complexe de cette PR et elle est entièrement non couverte.
+- Qualité des commentaires : # Review — Qualité des commentaires
+
+1. **`AccountCardView.swift:4`** — supprimer ou réécrire. La doc paraphrase le nom du struct. Ce qui vaut la peine d'expliquer : pourquoi `showActiveBadge` est passé de l'extérieur plutôt que calculé ici (pour éviter de traverser tous les entries à chaque card).
+   > Suggestion : `/// showActiveBadge is resolved by the parent so each card doesn't re-scan the full entry list.`
+
+2. **`AccountCardView.swift:11`** — supprimer `// Header`. Ce que ce bloc fait se lit directement dans le code (vendor + account + badge).
+
+3. **`AccountCardView.swift:34`** — supprimer `// Metrics`. `ForEach(entry.metrics…)` est auto-documenté.
+
+4. **`GaugeBar.swift:18`** — supprimer `// Track`. Un `RoundedRectangle` rempli de `.quaternary` dans un `ZStack` : c'est le fond, ça se lit.
+
+5. **`GaugeBar.swift:22`** — supprimer `// Actual fill`. Redondant avec le nom du paramètre `actual` passé juste en dessous.
+
+6. **`GaugeBar.swift:27`** — réécrire `// Theoretical marker tick`. Le `if theoretical > 0` mérite une explication de la condition, pas juste un label visuel.
+   > Suggestion : `// Skip marker when no window data — avoids a tick pinned to the left edge at 0.`
+
+7. **`UsageDetailsView.swift:4-5`** — la doc reformule le nom du struct. Si elle reste, aligner sur le WHY : pourquoi `LazyVStack` + `maxHeight` (éviter que le popover s'étire infiniment selon les données).
+
+---
+
+**Bien rédigés — rien à changer :**
+- `UsageStore.swift:40` — raison du cache `lastFile` (éviter le disque).
+- `UsageStore.swift:61` — explication du cycle de capture + qui le casse.
+- `UsageStore.swift:69` — `try?` intentionnel documenté avec la stratégie de vérification.
+- `PayAsYouGoMetricRow.swift:13` — fallback currency justifié.
+- `UsageDetailsView.swift:41` — critères de tri non-triviaux expliqués.
+- Impact doc : Analyse complète. Voici le rapport :
+
+---
+
+# Review — Impact doc
+
+**1. `roadmap/index.md` — statut de l'épic à mettre à jour**
+
+L'épic "Usage details popover" (item 2) est encore marquée `planned` alors que l'implémentation est complète (vues, store, tests). Elle devrait passer à `in-progress` (si la PR n'est pas encore mergée) ou `done` (si c'est la convention après merge).
+
+```
+2. `planned` → `in-progress`  — [Usage details popover](usage-details-popover.md)
+```
+
+---
+
+**2. `docs/ARCHITECTURE.md` — section "Display pipeline" à compléter**
+
+La section décrit l'ancien comportement (`MenuBarExtra` avec du texte brut + `Text("AI Usages Tracker")` + bouton Quit inline). Deux points ne sont plus exacts après cette branche :
+
+- Le `MenuBarExtra` est maintenant en style `.window` (popover natif) — le doc ne mentionne aucun style de présentation.
+- Le contenu du `MenuBarExtra` est désormais `UsageDetailsView` (vue dédiée avec scroll, cartes par compte, footer Quit) — le doc parle uniquement de la label textuelle du menubar.
+
+Passage à ajouter dans "Display pipeline" :
+
+> When the user clicks the menu bar item, a `.window`-style `MenuBarExtra` opens a scrollable popover. The popover renders one card per `VendorUsageEntry`, sorted alphabetically by vendor then by account (active first within a vendor). Each card shows time-window metrics (gauge bar, theoretical pace marker, remaining time, next reset date) and pay-as-you-go metrics (amount + currency). An empty state is shown when no entries are available. A footer provides the app name and a Quit shortcut.
+
+---
+
+**3. `roadmap/usage-details-popover.md` — acceptance criteria déjà couverts, rien à ajouter**
+
+Le fichier roadmap est complet et conforme à l'implémentation. Aucune mise à jour requise.
+
+---
+
+**Pas de README ni CHANGELOG dans ce repo** — rien à faire de ce côté.
+
+**Dernier message utilisateur** : all
+
+---
+
+## Principe non-négociable — discipline des commits
+
+**Tu commites AVANT de présenter le résultat à l'utilisateur, JAMAIS
+après son approbation finale.** Dans cette phase : l'utilisateur a
+déjà approuvé une *sélection* de recommandations → tu les appliques
+→ tu commites → tu présentes le résultat → l'utilisateur choisit
+ensuite entre "apply more", "re-run reviews" ou "ship it". Le
+commit correspond à un état produit, pas à une validation finale.
+
+**LANGUE — règle absolue : tous les messages de commit (sujet ET body)
+sont rédigés en anglais, sans exception.**
+
+**FIXUP — règle absolue pour cette phase :** chaque application de
+recommandation doit produire des commits `--fixup` rattachés au commit
+source qui a introduit le code modifié, PAS des commits indépendants
+`review(axe):`. Procédure pour chaque bloc de fichiers modifiés :
+```bash
+# Trouver le commit source pour les fichiers concernés
+git log --oneline origin/main..HEAD -- <fichier1> <fichier2>
+# Le commit le plus récent qui a touché ces fichiers est le commit source
+SOURCE_HASH=<hash du commit source>
+git add <fichiers du bloc>
+git commit --fixup=$SOURCE_HASH
+```
+Si un bloc touche des fichiers issus de **plusieurs** commits sources
+distincts, crée **un fixup par commit source** (staging séparé par commit).
+L'historique final doit être squashable proprement avec
+`git rebase --autosquash`.
+
+## Outillage d'exploration préféré
+
+Privilégie **Serena** si disponible, sinon Grep/Glob/Read.
+
+---
+
+## Première itération (all vide)
+
+1. Consolide les 5 reviews en un plan d'action numéroté unique.
+   Déduplique les recommandations similaires entre axes.
+   Priorité : CRITICAL > HIGH > MED > LOW.
+   Format par item :
+   ```
+   N. [priorité] [axe] [fichier:ligne] <recommandation>
+   ```
+2. Présente-le. Demande quelles appliquer :
+   - `all` → tout appliquer
+   - `none` → skip, prêt à finaliser
+   - `1,3,5` → numéros spécifiques
+   - texte libre → clarifier
+3. N'émets **PAS** le signal de complétion.
+
+## Itérations suivantes — interpréter l'entrée utilisateur
+
+### Si l'utilisateur dit "none" / "aucune" / "skip" / "ship it" / "finaliser"
+→ Émets : <promise>REVIEWS_DONE</promise>
+
+### Si l'utilisateur donne une sélection (`all`, `1,3,5`, etc.)
+1. Applique chaque recommandation sélectionnée. Sois chirurgical.
+2. Commit par bloc logique (AVANT de présenter le résultat) — **impérativement
+   avec `--fixup`** (voir section "FIXUP" ci-dessus). Ne crée JAMAIS un commit
+   `review(<axe>):` indépendant à la place.
+3. Lance le gate déterministe via le MÊME script que la phase implement :
+   ```bash
+   bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
+   ```
+   Si le gate échoue (exit non-zero), corrige AVANT de présenter le
+   résultat. NE présente PAS "apply done" tant que le gate n'est pas
+   vert. L'utilisateur ne doit être sollicité à nouveau qu'après
+   stabilisation.
+4. Rapporte : ce qui a été appliqué, ce qui reste de la liste initiale,
+   diff stat.
+5. Demande : "apply more / re-run reviews / ship it ?" — n'émets PAS
+   le signal.
+
+### Si l'utilisateur demande un re-run des reviews
+Signaux : "re-run reviews", "relance les reviews", "rerun", "nouvelle
+passe", "re-review".
+Le re-run tourne **sur l'état courant du code** (les commits fixup
+que tu viens d'appliquer sont donc inclus dans le diff).
+
+**C'est une fonctionnalité CÂBLÉE — tu DOIS l'exécuter ici-même,
+en lançant 5 Tasks en parallèle. Ne dis PAS que c'est impossible
+ou non câblé : tu as accès à l'outil Agent/Task.**
+
+1. Lance **5 Tasks en parallèle** — un seul message Claude Code avec
+   5 invocations du tool `Agent` (`subagent_type: general-purpose`,
+   ou équivalent Task) — un axe par Task.
+   Chaque prompt commence par restituer le diff via
+   `git diff origin/main...HEAD`, puis applique l'axe défini
+   ci-dessous. Demande à chaque Task de répondre dans le même format
+   strict que les reviews initiales (bullet "[fichier:ligne]
+   recommandation", ou "Aucun problème significatif.").
+
+   **Axe 1 — QUALITÉ DE CODE** : idiomes du langage, lisibilité,
+   simplicité, over-engineering, nommage, duplication. Ce qu'un humain
+   voit et qu'un linter ne voit pas. Ignorer ce qu'un type-checker /
+   linter attraperait déjà.
+
+   **Axe 2 — GESTION D'ERREURS** : chemins d'erreur, cas limites,
+   null/undefined, race conditions, timeouts, échecs partiels,
+   nettoyage des ressources. Silent swallowing ?
+
+   **Axe 3 — COUVERTURE DE TESTS** : branches, cas limites + qualité
+   qualitative (tests qui assertent le comportement ou
+   l'implémentation ? mocks cassants ? modes d'échec manquants ?).
+   Tests qui DEVRAIENT exister mais manquent, tests existants faibles.
+
+   **Axe 4 — QUALITÉ DES COMMENTAIRES** : POURQUOI vs QUOI ? Code
+   non-trivial documenté ? Commentaires périmés / redondants /
+   trompeurs ?
+
+   **Axe 5 — IMPACT DOC** : quels README / CHANGELOG / docstrings
+   publics / docs d'API / notes de migration devraient être mis à jour
+   mais ne l'ont pas été ? Inclut les fichiers de plan projet (ex.
+   `plans/PLAN.md`) si le projet en a.
+
+   Pour l'exploration complémentaire dans chaque Task : privilégier
+   Serena (`mcp__serena__*`) si disponible, sinon Grep/Glob/Read.
+
+2. Ré-agrège les 5 sorties avec la même méthodologie qu'en première
+   itération (consolidation, déduplication, priorité CRITICAL > HIGH
+   > MED > LOW, numérotation `N. [priorité] [axe] [fichier:ligne] <reco>`).
+
+3. Présente le nouveau plan d'action à l'utilisateur.
+
+4. Repose la question : "apply more / re-run reviews / ship it ?"
+
+5. N'émets PAS le signal de complétion.
+
+### CRITIQUE — discipline du signal
+Émets `<promise>REVIEWS_DONE</promise>` **uniquement** quand
+l'utilisateur dit explicitement "none", "skip", "finaliser",
+"ship it" ou équivalent. Les questions et demandes d'application
+NE SONT PAS des approbations.

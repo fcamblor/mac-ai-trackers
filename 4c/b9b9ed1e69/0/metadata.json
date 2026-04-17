@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "4cb9b9ed1e69",
+  "session_id": "21e036ba-613d-4211-8157-feb667fbaa68",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T22:28:45.50052Z",
+  "branch": "archon/task-feat-usage-details-popover",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/ARCHITECTURE.md",
+    "roadmap/index.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "2fcf6b9b2536",
+  "token_usage": {
+    "input_tokens": 35,
+    "cache_creation_tokens": 108969,
+    "cache_read_tokens": 1973284,
+    "output_tokens": 22349,
+    "api_call_count": 31
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T22:28:45.275666Z",
+    "agent_lines": 3,
+    "agent_removed": 1,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 3,
+    "total_lines_changed": 4,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}
