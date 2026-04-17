@@ -93,11 +93,11 @@ struct UsageStoreFormattingTests {
     @Test("single time-window metric formats correctly")
     func singleTimeWindow() async throws {
         let watcher = MockFileWatcher()
-        let clock = FixedClock(referenceDate)
+        let clock = FixedClock(Self.referenceDate)
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
-        // resetAt is 2h13m in the future from referenceDate
+        // resetAt is 2h13m in the future from Self.referenceDate
         let data = makeUsagesJSON(metrics: [
             timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", usagePercent: 48),
         ])
@@ -113,7 +113,7 @@ struct UsageStoreFormattingTests {
     @Test("multiple time-window metrics joined by pipe")
     func multipleTimeWindows() async throws {
         let watcher = MockFileWatcher()
-        let clock = FixedClock(referenceDate)
+        let clock = FixedClock(Self.referenceDate)
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
@@ -132,7 +132,7 @@ struct UsageStoreFormattingTests {
     @Test("pay-as-you-go metrics are ignored")
     func payAsYouGoIgnored() async throws {
         let watcher = MockFileWatcher()
-        let clock = FixedClock(referenceDate)
+        let clock = FixedClock(Self.referenceDate)
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
@@ -150,7 +150,7 @@ struct UsageStoreFormattingTests {
     @Test("mixed metrics: only time-window rendered")
     func mixedMetrics() async throws {
         let watcher = MockFileWatcher()
-        let clock = FixedClock(referenceDate)
+        let clock = FixedClock(Self.referenceDate)
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
@@ -169,7 +169,7 @@ struct UsageStoreFormattingTests {
     @Test("resetAt in the past shows 0m")
     func resetAtInPast() async throws {
         let watcher = MockFileWatcher()
-        let clock = FixedClock(referenceDate)
+        let clock = FixedClock(Self.referenceDate)
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
@@ -187,7 +187,7 @@ struct UsageStoreFormattingTests {
     @Test("resetAt exactly now shows 0m")
     func resetAtExactlyNow() async throws {
         let watcher = MockFileWatcher()
-        let clock = FixedClock(referenceDate)
+        let clock = FixedClock(Self.referenceDate)
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 

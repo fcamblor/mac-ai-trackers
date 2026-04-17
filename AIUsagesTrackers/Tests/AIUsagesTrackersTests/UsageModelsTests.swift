@@ -59,7 +59,7 @@ struct UsageMetricCodableTests {
     @Test("unknown type discriminator throws")
     func unknownTypeThrows() throws {
         let bad = #"{"type":"unknown","name":"x"}"#.data(using: .utf8)!
-        #expect(throws: (any Error).self) {
+        #expect(throws: DecodingError.self) {
             try decoder.decode(UsageMetric.self, from: bad)
         }
     }
