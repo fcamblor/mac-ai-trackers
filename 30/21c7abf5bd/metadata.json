@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "3021c7abf5bd",
+  "strategy": "manual-commit",
+  "branch": "archon/task-td-concurrency-blocking-swift",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Logging/Logger.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/LoggerTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/30/21c7abf5bd/0/metadata.json",
+      "transcript": "/30/21c7abf5bd/0/full.jsonl",
+      "content_hash": "/30/21c7abf5bd/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 8,
+    "cache_creation_tokens": 9649,
+    "cache_read_tokens": 415433,
+    "output_tokens": 5215,
+    "api_call_count": 8
+  }
+}
