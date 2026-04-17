@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "dc1ced48ba0c",
+  "strategy": "manual-commit",
+  "branch": "archon/task-td-usage-display-test-coverage",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageStoreTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/dc/1ced48ba0c/0/metadata.json",
+      "transcript": "/dc/1ced48ba0c/0/full.jsonl",
+      "content_hash": "/dc/1ced48ba0c/0/content_hash.txt",
+      "prompt": "/dc/1ced48ba0c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 3,
+    "cache_creation_tokens": 8406,
+    "cache_read_tokens": 0,
+    "output_tokens": 8,
+    "api_call_count": 1
+  }
+}
