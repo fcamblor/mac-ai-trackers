@@ -1,0 +1,15 @@
+j'aimerais─faire─en─sorte─d'utiliser─des─value─objects─sur─les─differents─champs─des─usages.json:
+- un value object pour representer un account
+- un value object pour representer des zoned datetime ISO sans fraction ms
+- un value object pour representer un vendor (uniquement "claude" supporte pour le moment)
+- un value object pour representer les metrics type ("time-window" | "pay-as-you-go")
+
+---
+
+j'aimerais─faire─en─sorte─d'utiliser─des─value─objects─sur─les─differents─champs─des─usages.json:
+- un value object pour representer un account
+- un value object pour representer des zoned datetime ISO sans fraction ms
+- un value object pour representer un vendor (uniquement "claude" supporte pour le moment)
+- un value object pour representer les metrics type ("time-window" | "pay-as-you-go")
+- un value object pour representer une valeur en pourcentage
+- un value object pour representer une duree en minutes

@@ -3,9 +3,22 @@
   "checkpoint_id": "33e74f0f301f",
   "strategy": "manual-commit",
   "branch": "archon/task-feat-menubar-usage-metrics",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
-    "AIUsagesTrackers/Sources/AIUsagesTrackers/Store/UsageStore.swift"
+    ".claude/rules/swift-quality.md",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/ClaudeActiveAccountMonitor.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/ClaudeCodeConnector.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/UsageConnector.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/UsageModels.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/ValueObjects.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/UsagesFileManager.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Store/UsageStore.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/ClaudeCodeConnectorTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageModelsTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsagePollerTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsagesFileManagerTests.swift",
+    "CLAUDE.md",
+    "docs/SWIFT-VALUE-OBJECTS.md"
   ],
   "sessions": [
     {
@@ -19,13 +32,19 @@
       "transcript": "/33/e74f0f301f/1/full.jsonl",
       "content_hash": "/33/e74f0f301f/1/content_hash.txt",
       "prompt": "/33/e74f0f301f/1/prompt.txt"
+    },
+    {
+      "metadata": "/33/e74f0f301f/2/metadata.json",
+      "transcript": "/33/e74f0f301f/2/full.jsonl",
+      "content_hash": "/33/e74f0f301f/2/content_hash.txt",
+      "prompt": "/33/e74f0f301f/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 2052,
-    "cache_creation_tokens": 439714,
-    "cache_read_tokens": 5567483,
-    "output_tokens": 37060,
-    "api_call_count": 72
+    "input_tokens": 4727,
+    "cache_creation_tokens": 686392,
+    "cache_read_tokens": 7979274,
+    "output_tokens": 96760,
+    "api_call_count": 104
   }
 }
