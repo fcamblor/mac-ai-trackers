@@ -88,6 +88,108 @@ struct UsagesFileManagerTests {
         #expect(merged.usages.count == 2)
     }
 
+    // MARK: - lastError cleanup on success
+
+    @Test("merge clears lastError when same account fetch succeeds")
+    func mergeSuccessClearsLastError() async {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+        let errorEntry = VendorUsageEntry(
+            vendor: "claude", account: "a@b.com",
+            lastError: UsageError(timestamp: "2026-04-17T10:00:00+00:00", type: "api_error")
+        )
+        await mgr.update(with: [errorEntry])
+
+        let successEntry = VendorUsageEntry(
+            vendor: "claude", account: "a@b.com", isActive: true,
+            lastAcquiredOn: "2026-04-17T11:00:00+00:00",
+            metrics: [.timeWindow(name: "session", resetAt: "2026-04-17T16:00:00+00:00",
+                                  windowDuration: 300, usagePercent: 10)]
+        )
+        await mgr.update(with: [successEntry])
+
+        let result = await mgr.read()
+        #expect(result.usages.count == 1)
+        #expect(result.usages[0].lastError == nil)
+    }
+
+    @Test("merge removes stale account_unknown entry when real account fetch succeeds")
+    func mergeRemovesUnknownAccountPlaceholderOnSuccess() async {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+        let placeholderError = VendorUsageEntry(
+            vendor: "claude", account: "unknown",
+            lastError: UsageError(timestamp: "2026-04-17T10:00:00+00:00", type: "account_unknown")
+        )
+        await mgr.update(with: [placeholderError])
+
+        let successEntry = VendorUsageEntry(
+            vendor: "claude", account: "real@b.com", isActive: true,
+            lastAcquiredOn: "2026-04-17T11:00:00+00:00",
+            metrics: [.timeWindow(name: "session", resetAt: "2026-04-17T16:00:00+00:00",
+                                  windowDuration: 300, usagePercent: 20)]
+        )
+        await mgr.update(with: [successEntry])
+
+        let result = await mgr.read()
+        #expect(result.usages.count == 1)
+        #expect(result.usages[0].account == "real@b.com")
+        #expect(result.usages[0].lastError == nil)
+    }
+
+    @Test("merge keeps error entries for other vendors when one vendor succeeds")
+    func mergeKeepsOtherVendorErrorsOnSuccess() async {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+        let claudeError = VendorUsageEntry(
+            vendor: "claude", account: "a@b.com",
+            lastError: UsageError(timestamp: "2026-04-17T10:00:00+00:00", type: "api_error")
+        )
+        let codexError = VendorUsageEntry(
+            vendor: "codex", account: "a@b.com",
+            lastError: UsageError(timestamp: "2026-04-17T10:00:00+00:00", type: "api_error")
+        )
+        await mgr.update(with: [claudeError, codexError])
+
+        let claudeSuccess = VendorUsageEntry(
+            vendor: "claude", account: "a@b.com", isActive: true,
+            lastAcquiredOn: "2026-04-17T11:00:00+00:00",
+            metrics: []
+        )
+        await mgr.update(with: [claudeSuccess])
+
+        let result = await mgr.read()
+        let codexEntry = result.usages.first { $0.vendor == "codex" }
+        #expect(codexEntry != nil)
+        #expect(codexEntry?.lastError?.type == "api_error")
+    }
+
+    @Test("merge preserves prior successful entry for other account when new account errors")
+    func mergePreservesSuccessfulEntryForOtherAccount() async {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+
+        // Account A had a prior successful fetch (lastError nil, lastAcquiredOn set)
+        let accountASuccess = VendorUsageEntry(
+            vendor: "claude", account: "a@b.com", isActive: false,
+            lastAcquiredOn: "2026-04-17T09:00:00+00:00",
+            metrics: []
+        )
+        await mgr.update(with: [accountASuccess])
+
+        // Account B has an error; account A's entry (which has no error) must be preserved
+        let accountBError = VendorUsageEntry(
+            vendor: "claude", account: "b@b.com",
+            lastError: UsageError(timestamp: "2026-04-17T11:00:00+00:00", type: "api_error")
+        )
+        await mgr.update(with: [accountBError])
+
+        let result = await mgr.read()
+        let entryA = result.usages.first { $0.account == "a@b.com" }
+        #expect(entryA != nil)
+        #expect(entryA?.lastError == nil)
+    }
+
     @Test("read handles corrupt JSON gracefully")
     func readCorruptJSON() async {
         let dir = makeTempDir()

@@ -71,6 +71,18 @@ public actor UsagesFileManager {
                 usages.append(entry)
             }
         }
+        // When a vendor fetch succeeds, discard stale error entries that won't be replaced
+        // (e.g. the "unknown" placeholder written while resolveActiveAccount() temporarily failed).
+        let incomingKeys = Set(incoming.map { "\($0.vendor.rawValue)|\($0.account.rawValue)" })
+        let vendorsWithSuccess = Set(incoming.filter { $0.lastError == nil }.map { $0.vendor })
+        if !vendorsWithSuccess.isEmpty {
+            usages = usages.filter { entry in
+                let key = "\(entry.vendor.rawValue)|\(entry.account.rawValue)"
+                return !vendorsWithSuccess.contains(entry.vendor)
+                    || incomingKeys.contains(key)
+                    || entry.lastError == nil
+            }
+        }
         return UsagesFile(usages: usages)
     }
 
