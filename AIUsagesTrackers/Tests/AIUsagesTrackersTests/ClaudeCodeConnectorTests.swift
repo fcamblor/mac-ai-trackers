@@ -251,6 +251,21 @@ struct ClaudeCodeConnectorFetchTests {
         }
     }
 
+    @Test("URLError returns api_error entry")
+    func urlErrorReturnsApiError() async throws {
+        let dir = makeTempDir()
+        MockURLProtocol.capturedRequest = nil
+        MockURLProtocol.errorToThrow = URLError(.notConnectedToInternet)
+        MockURLProtocol.handler = nil
+        let connector = makeConnector(dir: dir) { "fake-token" }
+        let entries = try await connector.fetchUsages()
+        MockURLProtocol.errorToThrow = nil
+
+        #expect(entries.count == 1)
+        #expect(entries[0].lastError?.type == "api_error")
+        #expect(entries[0].metrics.isEmpty)
+    }
+
     @Test("success path sends correct Authorization and anthropic-beta headers")
     func successPathHeaders() async throws {
         let dir = makeTempDir()
