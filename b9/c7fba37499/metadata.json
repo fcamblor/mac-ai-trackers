@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "b9c7fba37499",
+  "strategy": "manual-commit",
+  "branch": "archon/task-td-usage-display-code-and-doc-polish",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageStoreTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/b9/c7fba37499/0/metadata.json",
+      "transcript": "/b9/c7fba37499/0/full.jsonl",
+      "content_hash": "/b9/c7fba37499/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 5,
+    "cache_creation_tokens": 2116,
+    "cache_read_tokens": 277914,
+    "output_tokens": 1295,
+    "api_call_count": 5
+  }
+}
