@@ -347,7 +347,7 @@ struct UsageStoreLifecycleTests {
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
         store.start() // second call should be no-op; data must still flow
-        watcher.send(makeUsagesJSON(metrics: [
+        watcher.send(try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "session", resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
         ]))
         try await eventually { store.menuBarText != "--" }
@@ -363,7 +363,7 @@ struct UsageStoreLifecycleTests {
         store.start()
         store.stop()
         store.stop() // second call should be no-op
-        watcher.send(makeUsagesJSON(metrics: [timeWindowMetric()]))
+        watcher.send(try makeUsagesJSON(metrics: [timeWindowMetric()]))
         // watchTask is cancelled; no data processing will happen.
         // Fixed sleep confirms absence of an event — no reactive condition to poll for.
         try await Task.sleep(nanoseconds: 100_000_000)
@@ -388,7 +388,7 @@ struct UsageStoreLifecycleTests {
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
 
         store.start()
-        watcher.send(makeUsagesJSON(metrics: [
+        watcher.send(try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "session", resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
         ]))
         try await eventually { store.menuBarText != "--" }
@@ -396,7 +396,7 @@ struct UsageStoreLifecycleTests {
         store.stop()
 
         store.start()
-        watcher.send(makeUsagesJSON(metrics: [
+        watcher.send(try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "weekly", resetAt: "2026-04-17T14:00:00Z", usagePercent: 50),
         ]))
         try await eventually { store.menuBarText == "W 50% 2h" }
@@ -488,7 +488,7 @@ struct UsageStoreRemainingTimeTests {
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
-        let data = makeUsagesJSON(metrics: [
+        let data = try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "session", resetAt: "2026-04-17T14:00:00Z", usagePercent: 42),
         ])
         watcher.send(data)
@@ -508,7 +508,7 @@ struct UsageStoreRemainingTimeTests {
         store.start()
 
         // 30 seconds in the future: totalSeconds=30, minutes=0, parts empty → "0m"
-        let data = makeUsagesJSON(metrics: [
+        let data = try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "session", resetAt: "2026-04-17T12:00:30Z", usagePercent: 99),
         ])
         watcher.send(data)
@@ -533,7 +533,7 @@ struct UsageStoreCountdownTests {
         store.start()
 
         // 3h remaining at initial clock
-        let data = makeUsagesJSON(metrics: [
+        let data = try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", usagePercent: 42),
         ])
         watcher.send(data)
@@ -605,7 +605,7 @@ struct UsageStoreEntryTests {
         let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
         store.start()
 
-        let data = makeUsagesJSON(metrics: [
+        let data = try makeUsagesJSON(metrics: [
             timeWindowMetric(name: ""),
         ])
         watcher.send(data)
