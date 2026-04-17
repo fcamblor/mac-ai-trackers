@@ -1,0 +1,108 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "f877fec950de",
+  "session_id": "faa8fdf2-fc6d-4b53-b515-20d512796965",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T16:18:50.259862Z",
+  "branch": "archon/task-feat-claude-usages-connector",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/App/AIUsagesTrackersApp.swift",
+    "AIUsagesTrackers/Sources/App/AppPidGuard.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "b8d417d71451",
+  "token_usage": {
+    "input_tokens": 801,
+    "cache_creation_tokens": 106174,
+    "cache_read_tokens": 616118,
+    "output_tokens": 7410,
+    "api_call_count": 19
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T16:18:50.174498Z",
+    "agent_lines": 40,
+    "agent_removed": 6,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 40,
+    "total_lines_changed": 46,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 61,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10,
+        ".idea/codeStyles/codeStyleConfig.xml": 5,
+        ".idea/copilot.data.migration.agent.xml": 6,
+        ".idea/go.imports.xml": 11,
+        ".idea/misc.xml": 6,
+        ".idea/modules.xml": 8,
+        ".idea/task-feat-claude-usages-connector.iml": 9,
+        ".idea/vcs.xml": 6
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 61,
+      "user_lines_removed": 0,
+      "agent_lines_added": 10,
+      "agent_lines_removed": 4,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10,
+        ".idea/codeStyles/codeStyleConfig.xml": 5,
+        ".idea/copilot.data.migration.agent.xml": 6,
+        ".idea/go.imports.xml": 11,
+        ".idea/misc.xml": 6,
+        ".idea/modules.xml": 8,
+        ".idea/task-feat-claude-usages-connector.iml": 9,
+        ".idea/vcs.xml": 6
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 61,
+      "user_lines_removed": 0,
+      "agent_lines_added": 18,
+      "agent_lines_removed": 5,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10,
+        ".idea/codeStyles/codeStyleConfig.xml": 5,
+        ".idea/copilot.data.migration.agent.xml": 6,
+        ".idea/go.imports.xml": 11,
+        ".idea/misc.xml": 6,
+        ".idea/modules.xml": 8,
+        ".idea/task-feat-claude-usages-connector.iml": 9,
+        ".idea/vcs.xml": 6
+      }
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 61,
+      "user_lines_removed": 0,
+      "agent_lines_added": 40,
+      "agent_lines_removed": 6,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10,
+        ".idea/codeStyles/codeStyleConfig.xml": 5,
+        ".idea/copilot.data.migration.agent.xml": 6,
+        ".idea/go.imports.xml": 11,
+        ".idea/misc.xml": 6,
+        ".idea/modules.xml": 8,
+        ".idea/task-feat-claude-usages-connector.iml": 9,
+        ".idea/vcs.xml": 6
+      }
+    }
+  ]
+}

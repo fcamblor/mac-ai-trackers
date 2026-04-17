@@ -1,0 +1,9 @@
+lorsqu'un pid existe deja, je vois aucun log pour me le dire et pour me dire ce qui est fait par la suite (verif si le process tourne toujours ou pas)
+
+---
+
+le message dans l'alert n'est pas parlant quand "process is still alive", il faudrait quelque chose de plus comprehensible
+
+---
+
+quand je ctrl+c le process, le fichier pid n'est pas supprime ... ce n'est pas possible de faire un nettoyage propre sur arret (meme force) du process ?
