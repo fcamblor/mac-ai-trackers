@@ -12,6 +12,9 @@ public actor ClaudeCodeConnector: UsageConnector {
 
     private var lastKnownMetrics: [UsageMetric] = []
 
+    // Long enough for a cached keychain lookup; short enough to avoid stalling the poller
+    private static let keychainTimeoutSeconds: Int = 10
+
     nonisolated(unsafe) private static let isoFormatter = ISO8601DateFormatter()
     // API responses may include sub-second precision; this formatter handles them for normalization
     nonisolated(unsafe) private static let isoFormatterFractional: ISO8601DateFormatter = {
@@ -122,13 +125,13 @@ public actor ClaudeCodeConnector: UsageConnector {
                 .timeWindow(
                     name: "session",
                     resetAt: usage.sessionResetAt,
-                    windowDuration: DurationMinutes(rawValue: 300),  // 5 hours
+                    windowDuration: DurationMinutes(rawValue: 300),
                     usagePercent: UsagePercent(rawValue: usage.sessionPercent)
                 ),
                 .timeWindow(
                     name: "weekly",
                     resetAt: usage.weeklyResetAt,
-                    windowDuration: DurationMinutes(rawValue: 10080),  // 7 days
+                    windowDuration: DurationMinutes(rawValue: 10080),
                     usagePercent: UsagePercent(rawValue: usage.weeklyPercent)
                 ),
             ]
@@ -170,7 +173,7 @@ public actor ClaudeCodeConnector: UsageConnector {
                 // Keychain may prompt the user or hang if the login keychain is locked;
                 // 10 s is long enough for a cached lookup, short enough to not stall the poller
                 let timedOut = DispatchSemaphore(value: 0)
-                DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(10)) {
+                DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(Self.keychainTimeoutSeconds)) {
                     guard process.isRunning else { return }
                     process.terminate()
                     timedOut.signal()
@@ -182,7 +185,7 @@ public actor ClaudeCodeConnector: UsageConnector {
                 // Check the flag rather than terminationReason, which may not
                 // reflect SIGTERM reliably if the process handles the signal
                 if timedOut.wait(timeout: .now()) == .success {
-                    continuation.resume(throwing: ConnectorError.keychainTimeout(serviceName: serviceName, timeoutSeconds: 10))
+                    continuation.resume(throwing: ConnectorError.keychainTimeout(serviceName: serviceName, timeoutSeconds: Self.keychainTimeoutSeconds))
                     return
                 }
                 guard process.terminationStatus == 0 else {
