@@ -1,0 +1,61 @@
+<task-notification>
+<task-id>btwxy2nz8</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/a5f27627-1618-4ab5-94f5-e7c0458c1488/tasks/btwxy2nz8.output</output-file>
+<status>completed</status>
+<summary>Background command "Implement: usage-display-minor-nits" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b5d363hqd</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/a5f27627-1618-4ab5-94f5-e7c0458c1488/tasks/b5d363hqd.output</output-file>
+<status>completed</status>
+<summary>Background command "Implement: code-quality-naming" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bj5wotaek</task-id>
+<tool-use-id>toolu_01R7QpRnbQ5Rkt8jcN1369H9</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/a5f27627-1618-4ab5-94f5-e7c0458c1488/tasks/bj5wotaek.output</output-file>
+<status>completed</status>
+<summary>Background command "Implement: connector-test-coverage" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b3swbbnpt</task-id>
+<tool-use-id>toolu_01QT8PoNvTu42bzkGCmPQvtc</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/a5f27627-1618-4ab5-94f5-e7c0458c1488/tasks/b3swbbnpt.output</output-file>
+<status>completed</status>
+<summary>Background command "Implement: concurrency-blocking-swift" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b95dkr83d</task-id>
+<tool-use-id>toolu_015rk1m2f34tpmW71Um1MHhc</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/a5f27627-1618-4ab5-94f5-e7c0458c1488/tasks/b95dkr83d.output</output-file>
+<status>completed</status>
+<summary>Background command "Implement: usage-display-code-and-doc-polish" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bstm8sd8b</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/a5f27627-1618-4ab5-94f5-e7c0458c1488/tasks/bstm8sd8b.output</output-file>
+<status>completed</status>
+<summary>Background command "Implement: usage-display-test-coverage" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+fais en sorte de resume le workflow
