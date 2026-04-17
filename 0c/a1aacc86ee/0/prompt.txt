@@ -1,0 +1,5 @@
+quelle est la constante qui permet de dire si un fetch des stats d'usage est a faire ou pas ? (la constante qui représente la fréquence de refresh des usage data claude) ?
+
+---
+
+ok, est-ce que tu pourrais faire en sorte de skip le polling lorsque le lastAcquiredOn pour le compte vise fait qu'on ne depasse pas cette duree ?
