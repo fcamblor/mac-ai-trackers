@@ -56,7 +56,7 @@ public actor UsagesFileManager {
 
     // MARK: - Merge logic
 
-    public func merge(existing: UsagesFile, incoming: [VendorUsageEntry]) -> UsagesFile {
+    private func merge(existing: UsagesFile, incoming: [VendorUsageEntry]) -> UsagesFile {
         var usages = existing.usages
         var indexByKey: [String: Int] = [:]
         for (i, entry) in usages.enumerated() {
@@ -86,7 +86,7 @@ public actor UsagesFileManager {
         return UsagesFile(usages: usages)
     }
 
-    // MARK: - Unsafe (actor-isolated, no external lock needed)
+    // MARK: - Lock-guarded internals
 
     private func readUnsafe() -> UsagesFile {
         guard let data = FileManager.default.contents(atPath: filePath) else {
