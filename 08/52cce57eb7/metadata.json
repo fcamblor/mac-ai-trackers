@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "0852cce57eb7",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".archon/config.yaml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/08/52cce57eb7/0/metadata.json",
+      "transcript": "/08/52cce57eb7/0/full.jsonl",
+      "content_hash": "/08/52cce57eb7/0/content_hash.txt",
+      "prompt": "/08/52cce57eb7/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 61,
+    "cache_creation_tokens": 31110,
+    "cache_read_tokens": 612156,
+    "output_tokens": 2925,
+    "api_call_count": 9
+  }
+}

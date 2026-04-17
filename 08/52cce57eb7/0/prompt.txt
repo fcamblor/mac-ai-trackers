@@ -1,0 +1,5 @@
+/commit le remplacement de copyFiles par linkFiles maintenant que c'est implemente dans archon
+
+---
+
+amend le message de commit pour faire de l'anglais
