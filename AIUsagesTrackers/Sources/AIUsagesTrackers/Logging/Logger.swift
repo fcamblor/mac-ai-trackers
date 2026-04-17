@@ -53,7 +53,7 @@ public final class FileLogger: Sendable {
     // MARK: - Private
 
     private func append(level: LogLevel, message: String) {
-        queue.sync {
+        queue.async {
             let timestamp = Self.isoFormatter.string(from: Date())
             let entry = "[\(timestamp)] [\(level.label)] \(message)\n"
             guard let data = entry.data(using: .utf8) else { return }
