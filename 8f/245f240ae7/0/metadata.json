@@ -1,0 +1,46 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "8f245f240ae7",
+  "session_id": "b767c390-0b80-4732-ad5c-2030f3c0bd20",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T22:14:19.636716Z",
+  "branch": "archon/task-td-concurrency-blocking-swift",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "tech-debt/20260417_high_M_concurrency-blocking-swift/plan.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "57dc0da2385b",
+  "token_usage": {
+    "input_tokens": 1285,
+    "cache_creation_tokens": 44309,
+    "cache_read_tokens": 330318,
+    "output_tokens": 13737,
+    "api_call_count": 11
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T22:14:19.474047Z",
+    "agent_lines": 255,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 255,
+    "total_lines_changed": 255,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 2,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".serena/.gitignore": 2
+      }
+    }
+  ]
+}
