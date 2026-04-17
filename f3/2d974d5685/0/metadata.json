@@ -1,0 +1,46 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "f32d974d5685",
+  "session_id": "9d025928-f7a4-4015-9a8c-c1e2895c0194",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T22:25:07.295168Z",
+  "branch": "archon/task-td-code-quality-naming",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/UsagesFileManager.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "e388ca88458c",
+  "token_usage": {
+    "input_tokens": 8,
+    "cache_creation_tokens": 23652,
+    "cache_read_tokens": 142596,
+    "output_tokens": 1707,
+    "api_call_count": 6
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T22:25:07.197708Z",
+    "agent_lines": 2,
+    "agent_removed": 2,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 2,
+    "total_lines_changed": 4,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 2,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".serena/.gitignore": 2
+      }
+    }
+  ]
+}
