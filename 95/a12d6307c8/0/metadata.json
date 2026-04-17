@@ -1,0 +1,45 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "95a12d6307c8",
+  "session_id": "0e988bfd-24e5-4417-9786-3260a04921d0",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T16:45:54.11041Z",
+  "branch": "archon/task-feat-menubar-usage-metrics",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/FileWatcher/UsagesFileWatcher.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Store/UsageStore.swift",
+    "AIUsagesTrackers/Sources/App/AIUsagesTrackersApp.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "f04260856d2d",
+  "token_usage": {
+    "input_tokens": 663,
+    "cache_creation_tokens": 41677,
+    "cache_read_tokens": 1258223,
+    "output_tokens": 10934,
+    "api_call_count": 33
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T16:45:53.930287Z",
+    "agent_lines": 295,
+    "agent_removed": 2,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 295,
+    "total_lines_changed": 297,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
