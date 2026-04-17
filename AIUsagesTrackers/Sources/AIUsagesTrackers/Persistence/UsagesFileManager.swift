@@ -56,7 +56,7 @@ public actor UsagesFileManager {
 
     // MARK: - Merge logic
 
-    private func merge(existing: UsagesFile, incoming: [VendorUsageEntry]) -> UsagesFile {
+    func merge(existing: UsagesFile, incoming: [VendorUsageEntry]) -> UsagesFile {
         var usages = existing.usages
         var indexByKey: [String: Int] = [:]
         for (i, entry) in usages.enumerated() {
