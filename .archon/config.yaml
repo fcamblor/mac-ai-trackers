@@ -1,5 +1,9 @@
 worktree:
   baseBranch: main
-  copyFiles:
-    - .entire/
-    - .serena/
+  linkFiles:
+    - .entire/logs/
+    - .entire/metadata/
+    - .entire/tmp/
+    - .serena/cache/
+    - .serena/memories/
+    - .serena/project.local.yml
