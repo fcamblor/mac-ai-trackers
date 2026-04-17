@@ -1,0 +1,83 @@
+# FCR-Dev — IMPLEMENT
+
+Session FRAÎCHE — tu n'as AUCUNE mémoire des itérations précédentes.
+Lis l'état depuis le disque.
+
+**Requête initiale** : créer le contenu du fichier ~/.cache/ai-usages-tracker/usages.json, sur le modèle de ~/.cache/ccstatusline/usages.json, avec quelques différences:
+- chaque entrée doit avoir un champ "vendor", qui vaudra "claude", "codex", "gh-copilot" etc...
+- email devrait être renommé en "account"
+- il faudrait décliner le nœud "usage" en un tableau de métriques. Chaque métrique a un nom (weekly, session, sonnet, pay-as-you-go pour claude par exemple). 2 types de métriques:
+  - time-window: à quelle date est prévue le prochain reset, quelle durée fait la time-window (en minutes), utilisation en pourcentage
+  - pay-as-you-go: montant consommé actuellement
+
+Créer des connecteurs qui permettent:
+- de récupérer les métriques ci-dessus (cf manière d'appeler l'API dans ~/bashscripts/ccstatusline-usage.sh)
+- lorsque du multi-account est possible, déterminer quel account est actif actuellement (ex: avec claude, regarder l'email de ~/.claude.json pour déterminer l'account actif)
+
+N'implémenter que le connecteur Claude Code pour le moment (à partir de la logique du ~/bashscripts/ccstatusline-usage.sh).
+Prévoir que le connecteur puisse tourner en tâche de fond à une fréquence paramétrable (toutes les 3 minutes par défaut).
+**Feedback de l'itération précédente échouée (le cas échéant)** : 
+
+## Discipline des commits
+
+**Tu commites AU FIL de ton implémentation, un commit par bloc logique,
+AVANT que le gate déterministe ou l'utilisateur ne valide quoi que ce
+soit.** Le commit matérialise le travail ; la validation porte sur
+l'état déjà committé.
+
+**LANGUE — règle absolue : tous les messages de commit (sujet ET body)
+sont rédigés en anglais, sans exception.**
+
+## Outillage d'exploration préféré
+
+Pour toute recherche / lecture de code : **privilégie Serena** via ses
+outils MCP (`mcp__serena__find_symbol`, `mcp__serena__search_for_pattern`,
+`mcp__serena__get_symbols_overview`, `mcp__serena__find_referencing_symbols`,
+`mcp__serena__read_file`) quand il est disponible. Fallback vers
+`Grep` / `Glob` / `Read` sinon.
+
+## Setup
+
+```bash
+PLAN_FILE=$(ls plan-*.md 2>/dev/null | head -1)
+[ -n "$PLAN_FILE" ] || { echo 'ERREUR : aucun fichier plan-*.md trouvé'; exit 1; }
+echo "=== $PLAN_FILE ==="
+cat "$PLAN_FILE"
+git log --oneline -20
+git status
+```
+
+Lis `CLAUDE.md` si présent.
+
+## Ta mission cette itération
+
+1. Identifie ce qui est déjà implémenté (via `git log`) vs ce qui reste
+   dans le fichier de plan.
+2. Implémente le prochain bloc logique (pas nécessairement tout —
+   itérer est OK).
+3. Écris des **tests solides** : cas nominal + cas limites + cas d'erreur.
+   N'attends pas qu'une review downstream de couverture de tests
+   rattrape les trous — tu possèdes la qualité de couverture ICI.
+4. Commit AU FIL, un commit par bloc logique :
+   ```bash
+   git add <fichiers>
+   git commit -m "<type>: <subject in English>" \
+     -m "<WHY — retained trade-offs, discarded alternatives, technical decisions, in English>"
+   ```
+   Types : `feat:`, `test:`, `refactor:`, `fix:`, `chore:`.
+   NE DÉCRIS JAMAIS le QUOI dans le body (le `git diff` s'en charge) —
+   toujours le POURQUOI.
+5. Avant de te déclarer prêt, lance toi-même le build + tests via bash.
+
+## Critère de sortie
+
+Quand tu es confiant que :
+- Tous les items pertinents du fichier de plan sont implémentés
+- Les tests couvrent cas nominal + limites + erreurs
+- Le build + les tests passent en local
+
+Émets : <promise>IMPL_READY</promise>
+
+Le moteur lancera alors `until_bash` comme GATE DÉTERMINISTE. En cas
+d'échec, tu reviendras ici avec la sortie d'erreur — corrige et
+re-itère.

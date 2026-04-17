@@ -1,0 +1,43 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "cd4df6d84e01",
+  "session_id": "46d6a514-6dac-4abd-b803-c3957238943a",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T12:20:45.443405Z",
+  "branch": "archon/task-feat-claude-usages-connector",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/UsageModels.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "34e15b880b9c",
+  "token_usage": {
+    "input_tokens": 19,
+    "cache_creation_tokens": 30323,
+    "cache_read_tokens": 462096,
+    "output_tokens": 4454,
+    "api_call_count": 16
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T12:20:45.356508Z",
+    "agent_lines": 100,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 100,
+    "total_lines_changed": 100,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
