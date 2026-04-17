@@ -1,0 +1,591 @@
+# FCR-Dev — Agrégation des reviews & application de la sélection
+
+## Reviews sources
+- Qualité de code : # Review — Qualité de code
+
+1. **[UsagesFileWatcher.swift:52-63] Data race sur `lastModDate`** — `emitIfChanged()` est appelée depuis le handler du `DispatchSource` (utility queue, ligne 73) ET depuis la boucle de polling du `Task` (cooperative pool, ligne 93). La variable `lastModDate` est lue et écrite des deux côtés sans synchronisation. `AsyncStream.Continuation` est thread-safe, mais pas la variable locale `lastModDate`. Protéger via un `os_unfair_lock`, ou mieux : ne déclencher `emitIfChanged` que depuis le Task (le DispatchSource se contenterait de signaler via une `AsyncStream` interne ou un `CheckedContinuation`).
+
+2. **[UsageStore.swift:79-86] `[weak self]` ineffectif dans `countdownTask`** — Le `guard let self else { return }` (ligne 80) capture `self` fortement pour toute la durée du `while` loop. Le `[weak self]` ne permet jamais la désallocation tant que le loop tourne. Même chose pour `watchTask` (ligne 72-77). Ce n'est pas un bug fonctionnel (stop() cancel les tasks), mais c'est trompeur — autant utiliser `[self]` explicitement et documenter que `stop()` est le seul chemin de libération.
+
+3. **[UsageStore.swift:144-145] `ISO8601DateFormatter` recréé à chaque appel** — `formatRemainingTime` instancie un nouveau `ISO8601DateFormatter()` à chaque rafraîchissement. Comme le store est `@MainActor`, pas de souci de thread-safety, mais c'est un coût inutile. En faire une propriété `static let` ou `private let` du store.
+
+4. **[UsageStore.swift:134] Destructuring inutilisé `_`** — `case let .timeWindow(name, resetAt, _, usagePercent)` : le `windowDurationMinutes` est ignoré silencieusement. C'est correct aujourd'hui mais fragile si de nouveaux cas d'enum apparaissent. Pas d'action immédiate, juste un point d'attention.
+
+5. **[UsageStoreTests.swift:47] `try!` dans helper de test** — `try! JSONSerialization.data(...)` dans `makeUsagesJSON`. Acceptable en test, mais un message d'erreur via `XCTUnwrap` / `try` serait plus diagnostique en cas de casse future. Mineur.
+
+6. **[UsageStoreTests.swift:112,131,etc.] Synchronisation par `Task.sleep` fixe** — Tous les tests attendent 50 ms pour que l'async stream livre. Pattern fragile : sur CI chargé, 50 ms peut ne pas suffire. Envisager un helper qui poll la condition avec timeout (ex. `await eventually { store.menuBarText == expected }`).
+- Gestion d'erreurs : Let me check the model files for the decoded types.Now I have the full picture. Here's the review:
+
+# Review — Gestion d'erreurs
+
+1. **`UsagesFileWatcher.swift:53`** — `try?` silencieux sur `attributesOfItem(atPath:)`. Si le fichier existe mais que la lecture des attributs échoue (permissions, volume démonté), l'erreur est avalée et aucun log n'est produit. Le consommateur ne sait jamais pourquoi il ne reçoit plus de mises à jour. Remplacer par un `do/catch` avec un log d'avertissement (au moins la première fois ou avec throttling).
+
+2. **`UsagesFileWatcher.swift:59`** — `FileManager.default.contents(atPath:)` retourne `nil` silencieusement si la lecture échoue. Même situation : la modDate est mise à jour (`lastModDate = modDate`) mais aucune donnée n'est émise et aucun log n'est produit. Pire : puisque `lastModDate` est déjà avancé, la prochaine tentative de poll ignorera ce fichier jusqu'à la prochaine écriture. Il faudrait soit ne pas avancer `lastModDate` quand `contents` retourne `nil`, soit logger l'échec.
+
+3. **`UsagesFileWatcher.swift:90`** — `try? await Task.sleep(...)`. Le `CancellationError` est avalé. C'est intentionnel ici (le `guard !Task.isCancelled` suit), mais c'est fragile : si `Task.sleep` lance une erreur autre que `CancellationError` dans une future version du runtime, elle sera ignorée. Mineur, acceptable.
+
+4. **`UsagesFileWatcher.swift:52-63`** — `emitIfChanged()` est appelé depuis le `setEventHandler` d'un `DispatchSource` (thread GCD utility) **et** depuis le `Task` (cooperative pool). Aucune synchronisation ne protège `lastModDate`. C'est une **race condition** : deux lectures concurrentes peuvent toutes deux voir `modDate != lastModDate`, produisant un doublon d'émission, ou un lecteur peut écraser la date de l'autre. Protéger avec un verrou (`NSLock`), un actor dédié, ou déplacer `emitIfChanged` dans un contexte sérialisé.
+
+5. **`UsageStore.swift:83`** — `try? await Task.sleep(nanoseconds: refreshNanos)`. Même pattern que le point 3 — `CancellationError` avalé. Acceptable mais le commentaire « silent swallow is intentional for cancellation » serait bienvenu.
+
+6. **`UsageStore.swift:143-146`** — `ISO8601DateFormatter` instancié à chaque appel de `formatRemainingTime`. Ce n'est pas un problème d'erreur mais de thread-safety : `ISO8601DateFormatter` (hérite de `Formatter`/`NSFormatter`) n'est pas thread-safe. Ici le `@MainActor` protège, donc OK dans le contexte actuel, mais si `format` est un jour appelé hors main actor, c'est un crash potentiel. Mentionner la contrainte dans un commentaire ou stocker le formatter comme propriété `@MainActor`.
+
+7. **`UsageStore.swift:144`** — Le parsing d'une date ISO 8601 invalide retourne silencieusement `"0m"` sans aucun log. L'utilisateur voit un countdown à zéro sans comprendre que la source de données est corrompue. Logger au moins un warning.
+
+8. **`UsagesFileWatcher.swift:66-77`** — Si `open()` échoue (ligne 67, `fd < 0`), l'erreur POSIX (`errno`) n'est ni loggée ni rapportée. Le watcher tombe silencieusement en mode polling-only sans diagnostic. Logger `errno`/`strerror` quand `open` échoue.
+
+9. **`UsagesFileWatcher.swift:82-86`** — Si `openSource()` retourne `nil` au démarrage (fichier absent, permissions…), aucun log n'est émis. On sait seulement qu'on est en polling via l'absence du log debug. Ajouter un log expliquant pourquoi le FS watcher n'a pas pu démarrer.
+
+10. **`AIUsagesTrackersApp.swift:48`** — `store.start()` est appelé dans un `Task { @MainActor in ... }` séparé du `init()`. Si l'app affiche la menubar avant que ce Task ne s'exécute, `menuBarText` sera `"--"` brièvement — c'est le fallback voulu, donc OK. Mais si le `Task` est retardé (thread contention), le poller et le file watcher pourraient écrire des données avant que le store ne soit en écoute, perdant le premier événement. Le poll timer du `UsagesFileWatcher` finira par rattraper, mais il y a un fenêtre de `pollInterval` (30s) où la menubar montre `"--"` alors que des données existent.
+
+**Résumé des priorités** :
+- **P0 (race condition)** : point 4 — accès concurrent à `lastModDate` depuis GCD + cooperative pool.
+- **P1 (silent swallowing affectant la correction)** : points 1, 2, 8, 9 — erreurs FS/IO avalées sans log.
+- **P2 (silent swallowing cosmétique)** : point 7 — date invalide silencieusement traitée comme `0m`.
+- **P3 (mineur/style)** : points 3, 5, 6, 10.
+- Couverture de tests : # Review — Couverture de tests
+
+## Tests manquants
+
+1. **UsageStore:119-131 — multiple vendor entries, first match wins**
+   Aucun test ne vérifie le comportement quand `usages[]` contient plusieurs entrées (ex: un `claude` inactif suivi d'un `claude` actif, ou un `other` actif puis un `claude` actif). `format()` utilise `.first(where:)` — il faut vérifier que l'ordre compte et que le bon entry est sélectionné.
+
+2. **UsageStore:138 — metric name vide**
+   `name.prefix(1).uppercased()` sur une string vide produit `""`. Pas de test pour `name: ""` → le format affiché serait `" 42% 2h 13m"` (espace initial). Cas limite à couvrir.
+
+3. **UsageStore:158-166 — formatRemainingTime quand exactement N heures (0 minutes)**
+   Le test `exactlyOneDay` vérifie `"1d"` (pas de minutes car `days+hours` > 0 en termes de parts, sauf que days=1, hours=0, minutes=0 → `parts = ["1d"]` → minutes omises car `parts` non-vide). Mais aucun test pour **exactement N heures** (ex: 2h 0m) → devrait afficher `"2h"` sans minutes. À vérifier.
+
+4. **UsageStore:79-87 — countdownTask rafraîchit menuBarText**
+   Aucun test ne vérifie que le countdown timer met effectivement à jour `menuBarText` sans nouvelle donnée du FileWatcher. C'est le point central de `countdownTask` : avancer le temps → le remaining time diminue. Un test avec `countdownRefreshSeconds: 1` et un court sleep pourrait valider.
+
+5. **UsageStore:100-109 — handleNewData reset `lastFile` à nil sur erreur**
+   Le test `recoveryAfterError` couvre la recovery, mais ne vérifie pas que `refreshMenuBarText()` (countdown) ne restaure pas de données périmées après une erreur. Scénario: données valides → erreur → countdown tick → le texte doit rester `"--"`.
+
+6. **UsageStore:68-88 — start() après stop()**
+   Aucun test pour le cycle `start → stop → start`. Après `stop()`, `watchTask` est nil, donc `start()` devrait fonctionner à nouveau. Ce cycle de vie restart est non-testé.
+
+7. **UsagesFileWatcher — 0 tests dans ce diff**
+   La classe production `UsagesFileWatcher` n'a aucun test. Les aspects testables (même avec un fichier temp) :
+   - Émet bien les données initiales si le fichier existe déjà au démarrage
+   - N'émet rien si le fichier n'existe pas
+   - Émet après une écriture dans le fichier (poll fallback)
+   - Déduplique si `modificationDate` n'a pas changé
+   - Re-ouvre le FS source quand le fd est devenu stale
+
+   L'abstraction `FileWatching` est bien en place pour les tests `UsageStore`, mais `UsagesFileWatcher` lui-même est entièrement non-testé.
+
+8. **AIUsagesTrackersApp — 0 tests**
+   L'intégration app (init, wiring des composants, quit flow) n'est pas testée. Moins critique car c'est du SwiftUI lifecycle, mais le wiring `store.start()`/`poller.start()`/`monitor.start()` au bon moment pourrait être couvert par un test d'intégration.
+
+## Tests existants faibles
+
+9. **Tous les tests async : `Task.sleep(50ms)` comme synchronisation**
+   Les 14 tests async utilisent un sleep fixe de 50ms pour attendre la livraison du stream. C'est fragile sous charge CI. Un pattern `poll/expect with timeout` (ou un helper qui attend une condition avec deadline) serait plus robuste.
+
+10. **UsageStoreLifecycleTests : pas d'assertions comportementales**
+    Les 3 tests lifecycle vérifient seulement que le code ne crash pas (pas de `#expect`). `startIdempotent` devrait vérifier qu'envoyer des données après le 2e `start()` fonctionne toujours. `stopIdempotent` devrait vérifier que `menuBarText` ne change plus après stop.
+
+11. **UsageStoreDegradationTests : pas de test pour données partiellement valides**
+    Ex: JSON valide mais un metric avec un `type` inconnu (ni `time-window` ni `pay-as-you-go`). Le `JSONDecoder` lèvera une erreur → fallback. Mais est-ce le comportement voulu ? Un type inconnu devrait peut-être être ignoré plutôt que de faire tomber tout le fichier.
+
+12. **UsageStoreRemainingTimeTests : pas de test pour secondes restantes < 60**
+    Ex: 30 secondes restantes → `totalSeconds=30`, `minutes=0`, `parts.isEmpty` → affiche `"0m"`. Est-ce correct ? Un test devrait documenter ce comportement.
+- Qualité des commentaires : # Review — Qualité des commentaires
+
+1. **UsagesFileWatcher.swift:6** — Supprimer `/// Delivers file content whenever the watched file changes.` — paraphrase exacte du nom `FileWatching` + méthode `changes()`.
+
+2. **UsagesFileWatcher.swift:8** — Supprimer `/// An async sequence of file 'Data' snapshots, emitted on each detected change.` — paraphrase de la signature `changes() -> AsyncStream<Data>`.
+
+3. **UsagesFileWatcher.swift:52** — Supprimer `// Signal that the file changed; actual read + dedup happens here` — paraphrase de `emitIfChanged()` ; le comportement debounce/dedup est déjà documenté dans le docstring de classe (lignes 15-18).
+
+4. **UsageStore.swift:11-12** — Supprimer `/// Default clock that returns the real current date.` — `SystemClock { func now() -> Date { Date() } }` est auto-documenté.
+
+5. **UsageStore.swift:19-21** — Réécrire le docstring de `UsageStore` : la première phrase paraphrase le nom. Garder seulement l'exemple de format (la seule partie non-évidente) :
+   ```swift
+   /// Formats the active Claude account's time-window metrics for the menu bar.
+   /// Example: `S 48% 2h13m | W 7% 6d 6h 13m`. Falls back to `"--"` when data is
+   /// unavailable, malformed, or no active account is found.
+   ```
+
+6. **UsageStoreTests.swift:33-34** — Supprimer `/// Builds valid JSON 'Data' for a 'UsagesFile'.` — paraphrase de `makeUsagesJSON`.
+
+7. **UsageStoreTests.swift:83** — Supprimer `// Fixed reference time: 2026-04-17T12:47:00Z` — recopie la valeur visible 2 lignes plus bas dans le code.
+
+8. **UsageStoreTests.swift:287 + 291** — Supprimer `// Bad data first` et `// Then valid data` — paraphrasent l'évident ; le nom du test `recoveryAfterError` suffit à contextualiser.
+
+---
+
+**Points positifs :** les commentaires sur le cas de charge hybride FS-events+poll (lignes 15-18 de `UsagesFileWatcher`), la raison du `lastFile` (ligne 42 de `UsageStore`), et l'explication arithmétique des durées dans les tests (ex. `// resetAt is 2h13m in the future`) expliquent bien le POURQUOI.
+- Impact doc : # Review — Impact doc
+
+## 1. `roadmap/index.md` — Status du premier epic à mettre à jour
+
+L'epic "Menubar usage metrics display" est encore `planned` alors que l'implémentation est complète (fichiers livrés, tests écrits, intégration dans `AIUsagesTrackersApp`).
+
+**Mise à jour requise :**
+```diff
+-1. `planned` — [Menubar usage metrics display](menubar-usage-metrics.md) — show…
++1. `done` — [Menubar usage metrics display](menubar-usage-metrics.md) — show…
+```
+
+---
+
+## 2. `docs/ARCHITECTURE.md` — Pipeline d'affichage non documenté
+
+La section "Usage-fetching pipeline" décrit uniquement la chaîne d'écriture (connectors → JSON). La chaîne de lecture introduite par cette branche (`usages.json → FileWatcher → UsageStore → MenuBarExtra label`) est absente du document.
+
+**Section à ajouter** (après "Persistence" ou après "Usage-fetching pipeline") :
+
+```markdown
+## Display pipeline
+
+A file watcher observes `usages.json` using a hybrid strategy: a kernel
+`DispatchSource` fires on `.write`/`.delete`/`.rename` events, backed by a
+polling timer that re-checks every 30 seconds to handle atomic replaces and
+network-mount edge cases. Events are debounced to coalesce rapid successive
+writes into a single read.
+
+An `@Observable` store (running on `@MainActor`) receives each new file
+snapshot, decodes it, locates the active Claude account, and formats the
+session and weekly time-window metrics into the menubar label
+(`S 48% 2h13m | W 7% 6d 6h 13m`). A secondary timer refreshes the countdown
+display every 60 seconds so remaining-time values stay current between file
+changes. When data is unavailable or malformed the label falls back to `"--"`.
+```
+
+**Dernier message utilisateur** :
+
+---
+
+## Principe non-négociable — discipline des commits
+
+**Tu commites AVANT de présenter le résultat à l'utilisateur, JAMAIS
+après son approbation finale.** Dans cette phase : l'utilisateur a
+déjà approuvé une *sélection* de recommandations → tu les appliques
+→ tu commites → tu présentes le résultat → l'utilisateur choisit
+ensuite entre "apply more", "re-run reviews" ou "ship it". Le
+commit correspond à un état produit, pas à une validation finale.
+
+**LANGUE — règle absolue : tous les messages de commit (sujet ET body)
+sont rédigés en anglais, sans exception.**
+
+**FIXUP — règle absolue pour cette phase :** chaque application de
+recommandation doit produire des commits `--fixup` rattachés au commit
+source qui a introduit le code modifié, PAS des commits indépendants
+`review(axe):`. Procédure pour chaque bloc de fichiers modifiés :
+```bash
+# Trouver le commit source pour les fichiers concernés
+git log --oneline origin/main..HEAD -- <fichier1> <fichier2>
+# Le commit le plus récent qui a touché ces fichiers est le commit source
+SOURCE_HASH=<hash du commit source>
+git add <fichiers du bloc>
+git commit --fixup=$SOURCE_HASH
+```
+Si un bloc touche des fichiers issus de **plusieurs** commits sources
+distincts, crée **un fixup par commit source** (staging séparé par commit).
+L'historique final doit être squashable proprement avec
+`git rebase --autosquash`.
+
+## Outillage d'exploration préféré
+
+Privilégie **Serena** si disponible, sinon Grep/Glob/Read.
+
+---
+
+## Première itération ( vide)
+
+1. Consolide les 5 reviews en un plan d'action numéroté unique.
+   Déduplique les recommandations similaires entre axes.
+   Priorité : CRITICAL > HIGH > MED > LOW.
+   Format par item :
+   ```
+   N. [priorité] [axe] [fichier:ligne] <recommandation>
+   ```
+2. Présente-le. Demande quelles appliquer :
+   - `all` → tout appliquer
+   - `none` → skip, prêt à finaliser
+   - `1,3,5` → numéros spécifiques
+   - texte libre → clarifier
+3. N'émets **PAS** le signal de complétion.
+
+## Itérations suivantes — interpréter l'entrée utilisateur
+
+### Si l'utilisateur dit "none" / "aucune" / "skip" / "ship it" / "finaliser"
+→ Émets : <promise>REVIEWS_DONE</promise>
+
+### Si l'utilisateur donne une sélection (`all`, `1,3,5`, etc.)
+1. Applique chaque recommandation sélectionnée. Sois chirurgical.
+2. Commit par bloc logique (AVANT de présenter le résultat) — **impérativement
+   avec `--fixup`** (voir section "FIXUP" ci-dessus). Ne crée JAMAIS un commit
+   `review(<axe>):` indépendant à la place.
+3. Lance le gate déterministe via le MÊME script que la phase implement :
+   ```bash
+   bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
+   ```
+   Si le gate échoue (exit non-zero), corrige AVANT de présenter le
+   résultat. NE présente PAS "apply done" tant que le gate n'est pas
+   vert. L'utilisateur ne doit être sollicité à nouveau qu'après
+   stabilisation.
+4. Rapporte : ce qui a été appliqué, ce qui reste de la liste initiale,
+   diff stat.
+5. Demande : "apply more / re-run reviews / ship it ?" — n'émets PAS
+   le signal.
+
+### Si l'utilisateur demande un re-run des reviews
+Signaux : "re-run reviews", "relance les reviews", "rerun", "nouvelle
+passe", "re-review".
+Le re-run tourne **sur l'état courant du code** (les commits fixup
+que tu viens d'appliquer sont donc inclus dans le diff).
+
+**C'est une fonctionnalité CÂBLÉE — tu DOIS l'exécuter ici-même,
+en lançant 5 Tasks en parallèle. Ne dis PAS que c'est impossible
+ou non câblé : tu as accès à l'outil Agent/Task.**
+
+1. Lance **5 Tasks en parallèle** — un seul message Claude Code avec
+   5 invocations du tool `Agent` (`subagent_type: general-purpose`,
+   ou équivalent Task) — un axe par Task.
+   Chaque prompt commence par restituer le diff via
+   `git diff origin/main...HEAD`, puis applique l'axe défini
+   ci-dessous. Demande à chaque Task de répondre dans le même format
+   strict que les reviews initiales (bullet "[fichier:ligne]
+   recommandation", ou "Aucun problème significatif.").
+
+   **Axe 1 — QUALITÉ DE CODE** : idiomes du langage, lisibilité,
+   simplicité, over-engineering, nommage, duplication. Ce qu'un humain
+   voit et qu'un linter ne voit pas. Ignorer ce qu'un type-checker /
+   linter attraperait déjà.
+
+   **Axe 2 — GESTION D'ERREURS** : chemins d'erreur, cas limites,
+   null/undefined, race conditions, timeouts, échecs partiels,
+   nettoyage des ressources. Silent swallowing ?
+
+   **Axe 3 — COUVERTURE DE TESTS** : branches, cas limites + qualité
+   qualitative (tests qui assertent le comportement ou
+   l'implémentation ? mocks cassants ? modes d'échec manquants ?).
+   Tests qui DEVRAIENT exister mais manquent, tests existants faibles.
+
+   **Axe 4 — QUALITÉ DES COMMENTAIRES** : POURQUOI vs QUOI ? Code
+   non-trivial documenté ? Commentaires périmés / redondants /
+   trompeurs ?
+
+   **Axe 5 — IMPACT DOC** : quels README / CHANGELOG / docstrings
+   publics / docs d'API / notes de migration devraient être mis à jour
+   mais ne l'ont pas été ? Inclut les fichiers de plan projet (ex.
+   `plans/PLAN.md`) si le projet en a.
+
+   Pour l'exploration complémentaire dans chaque Task : privilégier
+   Serena (`mcp__serena__*`) si disponible, sinon Grep/Glob/Read.
+
+2. Ré-agrège les 5 sorties avec la même méthodologie qu'en première
+   itération (consolidation, déduplication, priorité CRITICAL > HIGH
+   > MED > LOW, numérotation `N. [priorité] [axe] [fichier:ligne] <reco>`).
+
+3. Présente le nouveau plan d'action à l'utilisateur.
+
+4. Repose la question : "apply more / re-run reviews / ship it ?"
+
+5. N'émets PAS le signal de complétion.
+
+### CRITIQUE — discipline du signal
+Émets `<promise>REVIEWS_DONE</promise>` **uniquement** quand
+l'utilisateur dit explicitement "none", "skip", "finaliser",
+"ship it" ou équivalent. Les questions et demandes d'application
+NE SONT PAS des approbations.
+
+---
+
+# FCR-Dev — Agrégation des reviews & application de la sélection
+
+## Reviews sources
+- Qualité de code : # Review — Qualité de code
+
+1. **[UsagesFileWatcher.swift:52-63] Data race sur `lastModDate`** — `emitIfChanged()` est appelée depuis le handler du `DispatchSource` (utility queue, ligne 73) ET depuis la boucle de polling du `Task` (cooperative pool, ligne 93). La variable `lastModDate` est lue et écrite des deux côtés sans synchronisation. `AsyncStream.Continuation` est thread-safe, mais pas la variable locale `lastModDate`. Protéger via un `os_unfair_lock`, ou mieux : ne déclencher `emitIfChanged` que depuis le Task (le DispatchSource se contenterait de signaler via une `AsyncStream` interne ou un `CheckedContinuation`).
+
+2. **[UsageStore.swift:79-86] `[weak self]` ineffectif dans `countdownTask`** — Le `guard let self else { return }` (ligne 80) capture `self` fortement pour toute la durée du `while` loop. Le `[weak self]` ne permet jamais la désallocation tant que le loop tourne. Même chose pour `watchTask` (ligne 72-77). Ce n'est pas un bug fonctionnel (stop() cancel les tasks), mais c'est trompeur — autant utiliser `[self]` explicitement et documenter que `stop()` est le seul chemin de libération.
+
+3. **[UsageStore.swift:144-145] `ISO8601DateFormatter` recréé à chaque appel** — `formatRemainingTime` instancie un nouveau `ISO8601DateFormatter()` à chaque rafraîchissement. Comme le store est `@MainActor`, pas de souci de thread-safety, mais c'est un coût inutile. En faire une propriété `static let` ou `private let` du store.
+
+4. **[UsageStore.swift:134] Destructuring inutilisé `_`** — `case let .timeWindow(name, resetAt, _, usagePercent)` : le `windowDurationMinutes` est ignoré silencieusement. C'est correct aujourd'hui mais fragile si de nouveaux cas d'enum apparaissent. Pas d'action immédiate, juste un point d'attention.
+
+5. **[UsageStoreTests.swift:47] `try!` dans helper de test** — `try! JSONSerialization.data(...)` dans `makeUsagesJSON`. Acceptable en test, mais un message d'erreur via `XCTUnwrap` / `try` serait plus diagnostique en cas de casse future. Mineur.
+
+6. **[UsageStoreTests.swift:112,131,etc.] Synchronisation par `Task.sleep` fixe** — Tous les tests attendent 50 ms pour que l'async stream livre. Pattern fragile : sur CI chargé, 50 ms peut ne pas suffire. Envisager un helper qui poll la condition avec timeout (ex. `await eventually { store.menuBarText == expected }`).
+- Gestion d'erreurs : Let me check the model files for the decoded types.Now I have the full picture. Here's the review:
+
+# Review — Gestion d'erreurs
+
+1. **`UsagesFileWatcher.swift:53`** — `try?` silencieux sur `attributesOfItem(atPath:)`. Si le fichier existe mais que la lecture des attributs échoue (permissions, volume démonté), l'erreur est avalée et aucun log n'est produit. Le consommateur ne sait jamais pourquoi il ne reçoit plus de mises à jour. Remplacer par un `do/catch` avec un log d'avertissement (au moins la première fois ou avec throttling).
+
+2. **`UsagesFileWatcher.swift:59`** — `FileManager.default.contents(atPath:)` retourne `nil` silencieusement si la lecture échoue. Même situation : la modDate est mise à jour (`lastModDate = modDate`) mais aucune donnée n'est émise et aucun log n'est produit. Pire : puisque `lastModDate` est déjà avancé, la prochaine tentative de poll ignorera ce fichier jusqu'à la prochaine écriture. Il faudrait soit ne pas avancer `lastModDate` quand `contents` retourne `nil`, soit logger l'échec.
+
+3. **`UsagesFileWatcher.swift:90`** — `try? await Task.sleep(...)`. Le `CancellationError` est avalé. C'est intentionnel ici (le `guard !Task.isCancelled` suit), mais c'est fragile : si `Task.sleep` lance une erreur autre que `CancellationError` dans une future version du runtime, elle sera ignorée. Mineur, acceptable.
+
+4. **`UsagesFileWatcher.swift:52-63`** — `emitIfChanged()` est appelé depuis le `setEventHandler` d'un `DispatchSource` (thread GCD utility) **et** depuis le `Task` (cooperative pool). Aucune synchronisation ne protège `lastModDate`. C'est une **race condition** : deux lectures concurrentes peuvent toutes deux voir `modDate != lastModDate`, produisant un doublon d'émission, ou un lecteur peut écraser la date de l'autre. Protéger avec un verrou (`NSLock`), un actor dédié, ou déplacer `emitIfChanged` dans un contexte sérialisé.
+
+5. **`UsageStore.swift:83`** — `try? await Task.sleep(nanoseconds: refreshNanos)`. Même pattern que le point 3 — `CancellationError` avalé. Acceptable mais le commentaire « silent swallow is intentional for cancellation » serait bienvenu.
+
+6. **`UsageStore.swift:143-146`** — `ISO8601DateFormatter` instancié à chaque appel de `formatRemainingTime`. Ce n'est pas un problème d'erreur mais de thread-safety : `ISO8601DateFormatter` (hérite de `Formatter`/`NSFormatter`) n'est pas thread-safe. Ici le `@MainActor` protège, donc OK dans le contexte actuel, mais si `format` est un jour appelé hors main actor, c'est un crash potentiel. Mentionner la contrainte dans un commentaire ou stocker le formatter comme propriété `@MainActor`.
+
+7. **`UsageStore.swift:144`** — Le parsing d'une date ISO 8601 invalide retourne silencieusement `"0m"` sans aucun log. L'utilisateur voit un countdown à zéro sans comprendre que la source de données est corrompue. Logger au moins un warning.
+
+8. **`UsagesFileWatcher.swift:66-77`** — Si `open()` échoue (ligne 67, `fd < 0`), l'erreur POSIX (`errno`) n'est ni loggée ni rapportée. Le watcher tombe silencieusement en mode polling-only sans diagnostic. Logger `errno`/`strerror` quand `open` échoue.
+
+9. **`UsagesFileWatcher.swift:82-86`** — Si `openSource()` retourne `nil` au démarrage (fichier absent, permissions…), aucun log n'est émis. On sait seulement qu'on est en polling via l'absence du log debug. Ajouter un log expliquant pourquoi le FS watcher n'a pas pu démarrer.
+
+10. **`AIUsagesTrackersApp.swift:48`** — `store.start()` est appelé dans un `Task { @MainActor in ... }` séparé du `init()`. Si l'app affiche la menubar avant que ce Task ne s'exécute, `menuBarText` sera `"--"` brièvement — c'est le fallback voulu, donc OK. Mais si le `Task` est retardé (thread contention), le poller et le file watcher pourraient écrire des données avant que le store ne soit en écoute, perdant le premier événement. Le poll timer du `UsagesFileWatcher` finira par rattraper, mais il y a un fenêtre de `pollInterval` (30s) où la menubar montre `"--"` alors que des données existent.
+
+**Résumé des priorités** :
+- **P0 (race condition)** : point 4 — accès concurrent à `lastModDate` depuis GCD + cooperative pool.
+- **P1 (silent swallowing affectant la correction)** : points 1, 2, 8, 9 — erreurs FS/IO avalées sans log.
+- **P2 (silent swallowing cosmétique)** : point 7 — date invalide silencieusement traitée comme `0m`.
+- **P3 (mineur/style)** : points 3, 5, 6, 10.
+- Couverture de tests : # Review — Couverture de tests
+
+## Tests manquants
+
+1. **UsageStore:119-131 — multiple vendor entries, first match wins**
+   Aucun test ne vérifie le comportement quand `usages[]` contient plusieurs entrées (ex: un `claude` inactif suivi d'un `claude` actif, ou un `other` actif puis un `claude` actif). `format()` utilise `.first(where:)` — il faut vérifier que l'ordre compte et que le bon entry est sélectionné.
+
+2. **UsageStore:138 — metric name vide**
+   `name.prefix(1).uppercased()` sur une string vide produit `""`. Pas de test pour `name: ""` → le format affiché serait `" 42% 2h 13m"` (espace initial). Cas limite à couvrir.
+
+3. **UsageStore:158-166 — formatRemainingTime quand exactement N heures (0 minutes)**
+   Le test `exactlyOneDay` vérifie `"1d"` (pas de minutes car `days+hours` > 0 en termes de parts, sauf que days=1, hours=0, minutes=0 → `parts = ["1d"]` → minutes omises car `parts` non-vide). Mais aucun test pour **exactement N heures** (ex: 2h 0m) → devrait afficher `"2h"` sans minutes. À vérifier.
+
+4. **UsageStore:79-87 — countdownTask rafraîchit menuBarText**
+   Aucun test ne vérifie que le countdown timer met effectivement à jour `menuBarText` sans nouvelle donnée du FileWatcher. C'est le point central de `countdownTask` : avancer le temps → le remaining time diminue. Un test avec `countdownRefreshSeconds: 1` et un court sleep pourrait valider.
+
+5. **UsageStore:100-109 — handleNewData reset `lastFile` à nil sur erreur**
+   Le test `recoveryAfterError` couvre la recovery, mais ne vérifie pas que `refreshMenuBarText()` (countdown) ne restaure pas de données périmées après une erreur. Scénario: données valides → erreur → countdown tick → le texte doit rester `"--"`.
+
+6. **UsageStore:68-88 — start() après stop()**
+   Aucun test pour le cycle `start → stop → start`. Après `stop()`, `watchTask` est nil, donc `start()` devrait fonctionner à nouveau. Ce cycle de vie restart est non-testé.
+
+7. **UsagesFileWatcher — 0 tests dans ce diff**
+   La classe production `UsagesFileWatcher` n'a aucun test. Les aspects testables (même avec un fichier temp) :
+   - Émet bien les données initiales si le fichier existe déjà au démarrage
+   - N'émet rien si le fichier n'existe pas
+   - Émet après une écriture dans le fichier (poll fallback)
+   - Déduplique si `modificationDate` n'a pas changé
+   - Re-ouvre le FS source quand le fd est devenu stale
+
+   L'abstraction `FileWatching` est bien en place pour les tests `UsageStore`, mais `UsagesFileWatcher` lui-même est entièrement non-testé.
+
+8. **AIUsagesTrackersApp — 0 tests**
+   L'intégration app (init, wiring des composants, quit flow) n'est pas testée. Moins critique car c'est du SwiftUI lifecycle, mais le wiring `store.start()`/`poller.start()`/`monitor.start()` au bon moment pourrait être couvert par un test d'intégration.
+
+## Tests existants faibles
+
+9. **Tous les tests async : `Task.sleep(50ms)` comme synchronisation**
+   Les 14 tests async utilisent un sleep fixe de 50ms pour attendre la livraison du stream. C'est fragile sous charge CI. Un pattern `poll/expect with timeout` (ou un helper qui attend une condition avec deadline) serait plus robuste.
+
+10. **UsageStoreLifecycleTests : pas d'assertions comportementales**
+    Les 3 tests lifecycle vérifient seulement que le code ne crash pas (pas de `#expect`). `startIdempotent` devrait vérifier qu'envoyer des données après le 2e `start()` fonctionne toujours. `stopIdempotent` devrait vérifier que `menuBarText` ne change plus après stop.
+
+11. **UsageStoreDegradationTests : pas de test pour données partiellement valides**
+    Ex: JSON valide mais un metric avec un `type` inconnu (ni `time-window` ni `pay-as-you-go`). Le `JSONDecoder` lèvera une erreur → fallback. Mais est-ce le comportement voulu ? Un type inconnu devrait peut-être être ignoré plutôt que de faire tomber tout le fichier.
+
+12. **UsageStoreRemainingTimeTests : pas de test pour secondes restantes < 60**
+    Ex: 30 secondes restantes → `totalSeconds=30`, `minutes=0`, `parts.isEmpty` → affiche `"0m"`. Est-ce correct ? Un test devrait documenter ce comportement.
+- Qualité des commentaires : # Review — Qualité des commentaires
+
+1. **UsagesFileWatcher.swift:6** — Supprimer `/// Delivers file content whenever the watched file changes.` — paraphrase exacte du nom `FileWatching` + méthode `changes()`.
+
+2. **UsagesFileWatcher.swift:8** — Supprimer `/// An async sequence of file 'Data' snapshots, emitted on each detected change.` — paraphrase de la signature `changes() -> AsyncStream<Data>`.
+
+3. **UsagesFileWatcher.swift:52** — Supprimer `// Signal that the file changed; actual read + dedup happens here` — paraphrase de `emitIfChanged()` ; le comportement debounce/dedup est déjà documenté dans le docstring de classe (lignes 15-18).
+
+4. **UsageStore.swift:11-12** — Supprimer `/// Default clock that returns the real current date.` — `SystemClock { func now() -> Date { Date() } }` est auto-documenté.
+
+5. **UsageStore.swift:19-21** — Réécrire le docstring de `UsageStore` : la première phrase paraphrase le nom. Garder seulement l'exemple de format (la seule partie non-évidente) :
+   ```swift
+   /// Formats the active Claude account's time-window metrics for the menu bar.
+   /// Example: `S 48% 2h13m | W 7% 6d 6h 13m`. Falls back to `"--"` when data is
+   /// unavailable, malformed, or no active account is found.
+   ```
+
+6. **UsageStoreTests.swift:33-34** — Supprimer `/// Builds valid JSON 'Data' for a 'UsagesFile'.` — paraphrase de `makeUsagesJSON`.
+
+7. **UsageStoreTests.swift:83** — Supprimer `// Fixed reference time: 2026-04-17T12:47:00Z` — recopie la valeur visible 2 lignes plus bas dans le code.
+
+8. **UsageStoreTests.swift:287 + 291** — Supprimer `// Bad data first` et `// Then valid data` — paraphrasent l'évident ; le nom du test `recoveryAfterError` suffit à contextualiser.
+
+---
+
+**Points positifs :** les commentaires sur le cas de charge hybride FS-events+poll (lignes 15-18 de `UsagesFileWatcher`), la raison du `lastFile` (ligne 42 de `UsageStore`), et l'explication arithmétique des durées dans les tests (ex. `// resetAt is 2h13m in the future`) expliquent bien le POURQUOI.
+- Impact doc : # Review — Impact doc
+
+## 1. `roadmap/index.md` — Status du premier epic à mettre à jour
+
+L'epic "Menubar usage metrics display" est encore `planned` alors que l'implémentation est complète (fichiers livrés, tests écrits, intégration dans `AIUsagesTrackersApp`).
+
+**Mise à jour requise :**
+```diff
+-1. `planned` — [Menubar usage metrics display](menubar-usage-metrics.md) — show…
++1. `done` — [Menubar usage metrics display](menubar-usage-metrics.md) — show…
+```
+
+---
+
+## 2. `docs/ARCHITECTURE.md` — Pipeline d'affichage non documenté
+
+La section "Usage-fetching pipeline" décrit uniquement la chaîne d'écriture (connectors → JSON). La chaîne de lecture introduite par cette branche (`usages.json → FileWatcher → UsageStore → MenuBarExtra label`) est absente du document.
+
+**Section à ajouter** (après "Persistence" ou après "Usage-fetching pipeline") :
+
+```markdown
+## Display pipeline
+
+A file watcher observes `usages.json` using a hybrid strategy: a kernel
+`DispatchSource` fires on `.write`/`.delete`/`.rename` events, backed by a
+polling timer that re-checks every 30 seconds to handle atomic replaces and
+network-mount edge cases. Events are debounced to coalesce rapid successive
+writes into a single read.
+
+An `@Observable` store (running on `@MainActor`) receives each new file
+snapshot, decodes it, locates the active Claude account, and formats the
+session and weekly time-window metrics into the menubar label
+(`S 48% 2h13m | W 7% 6d 6h 13m`). A secondary timer refreshes the countdown
+display every 60 seconds so remaining-time values stay current between file
+changes. When data is unavailable or malformed the label falls back to `"--"`.
+```
+
+**Dernier message utilisateur** : faire les critical, high et med, mettre les low en tech debts
+
+---
+
+## Principe non-négociable — discipline des commits
+
+**Tu commites AVANT de présenter le résultat à l'utilisateur, JAMAIS
+après son approbation finale.** Dans cette phase : l'utilisateur a
+déjà approuvé une *sélection* de recommandations → tu les appliques
+→ tu commites → tu présentes le résultat → l'utilisateur choisit
+ensuite entre "apply more", "re-run reviews" ou "ship it". Le
+commit correspond à un état produit, pas à une validation finale.
+
+**LANGUE — règle absolue : tous les messages de commit (sujet ET body)
+sont rédigés en anglais, sans exception.**
+
+**FIXUP — règle absolue pour cette phase :** chaque application de
+recommandation doit produire des commits `--fixup` rattachés au commit
+source qui a introduit le code modifié, PAS des commits indépendants
+`review(axe):`. Procédure pour chaque bloc de fichiers modifiés :
+```bash
+# Trouver le commit source pour les fichiers concernés
+git log --oneline origin/main..HEAD -- <fichier1> <fichier2>
+# Le commit le plus récent qui a touché ces fichiers est le commit source
+SOURCE_HASH=<hash du commit source>
+git add <fichiers du bloc>
+git commit --fixup=$SOURCE_HASH
+```
+Si un bloc touche des fichiers issus de **plusieurs** commits sources
+distincts, crée **un fixup par commit source** (staging séparé par commit).
+L'historique final doit être squashable proprement avec
+`git rebase --autosquash`.
+
+## Outillage d'exploration préféré
+
+Privilégie **Serena** si disponible, sinon Grep/Glob/Read.
+
+---
+
+## Première itération (faire les critical, high et med, mettre les low en tech debts vide)
+
+1. Consolide les 5 reviews en un plan d'action numéroté unique.
+   Déduplique les recommandations similaires entre axes.
+   Priorité : CRITICAL > HIGH > MED > LOW.
+   Format par item :
+   ```
+   N. [priorité] [axe] [fichier:ligne] <recommandation>
+   ```
+2. Présente-le. Demande quelles appliquer :
+   - `all` → tout appliquer
+   - `none` → skip, prêt à finaliser
+   - `1,3,5` → numéros spécifiques
+   - texte libre → clarifier
+3. N'émets **PAS** le signal de complétion.
+
+## Itérations suivantes — interpréter l'entrée utilisateur
+
+### Si l'utilisateur dit "none" / "aucune" / "skip" / "ship it" / "finaliser"
+→ Émets : <promise>REVIEWS_DONE</promise>
+
+### Si l'utilisateur donne une sélection (`all`, `1,3,5`, etc.)
+1. Applique chaque recommandation sélectionnée. Sois chirurgical.
+2. Commit par bloc logique (AVANT de présenter le résultat) — **impérativement
+   avec `--fixup`** (voir section "FIXUP" ci-dessus). Ne crée JAMAIS un commit
+   `review(<axe>):` indépendant à la place.
+3. Lance le gate déterministe via le MÊME script que la phase implement :
+   ```bash
+   bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
+   ```
+   Si le gate échoue (exit non-zero), corrige AVANT de présenter le
+   résultat. NE présente PAS "apply done" tant que le gate n'est pas
+   vert. L'utilisateur ne doit être sollicité à nouveau qu'après
+   stabilisation.
+4. Rapporte : ce qui a été appliqué, ce qui reste de la liste initiale,
+   diff stat.
+5. Demande : "apply more / re-run reviews / ship it ?" — n'émets PAS
+   le signal.
+
+### Si l'utilisateur demande un re-run des reviews
+Signaux : "re-run reviews", "relance les reviews", "rerun", "nouvelle
+passe", "re-review".
+Le re-run tourne **sur l'état courant du code** (les commits fixup
+que tu viens d'appliquer sont donc inclus dans le diff).
+
+**C'est une fonctionnalité CÂBLÉE — tu DOIS l'exécuter ici-même,
+en lançant 5 Tasks en parallèle. Ne dis PAS que c'est impossible
+ou non câblé : tu as accès à l'outil Agent/Task.**
+
+1. Lance **5 Tasks en parallèle** — un seul message Claude Code avec
+   5 invocations du tool `Agent` (`subagent_type: general-purpose`,
+   ou équivalent Task) — un axe par Task.
+   Chaque prompt commence par restituer le diff via
+   `git diff origin/main...HEAD`, puis applique l'axe défini
+   ci-dessous. Demande à chaque Task de répondre dans le même format
+   strict que les reviews initiales (bullet "[fichier:ligne]
+   recommandation", ou "Aucun problème significatif.").
+
+   **Axe 1 — QUALITÉ DE CODE** : idiomes du langage, lisibilité,
+   simplicité, over-engineering, nommage, duplication. Ce qu'un humain
+   voit et qu'un linter ne voit pas. Ignorer ce qu'un type-checker /
+   linter attraperait déjà.
+
+   **Axe 2 — GESTION D'ERREURS** : chemins d'erreur, cas limites,
+   null/undefined, race conditions, timeouts, échecs partiels,
+   nettoyage des ressources. Silent swallowing ?
+
+   **Axe 3 — COUVERTURE DE TESTS** : branches, cas limites + qualité
+   qualitative (tests qui assertent le comportement ou
+   l'implémentation ? mocks cassants ? modes d'échec manquants ?).
+   Tests qui DEVRAIENT exister mais manquent, tests existants faibles.
+
+   **Axe 4 — QUALITÉ DES COMMENTAIRES** : POURQUOI vs QUOI ? Code
+   non-trivial documenté ? Commentaires périmés / redondants /
+   trompeurs ?
+
+   **Axe 5 — IMPACT DOC** : quels README / CHANGELOG / docstrings
+   publics / docs d'API / notes de migration devraient être mis à jour
+   mais ne l'ont pas été ? Inclut les fichiers de plan projet (ex.
+   `plans/PLAN.md`) si le projet en a.
+
+   Pour l'exploration complémentaire dans chaque Task : privilégier
+   Serena (`mcp__serena__*`) si disponible, sinon Grep/Glob/Read.
+
+2. Ré-agrège les 5 sorties avec la même méthodologie qu'en première
+   itération (consolidation, déduplication, priorité CRITICAL > HIGH
+   > MED > LOW, numérotation `N. [priorité] [axe] [fichier:ligne] <reco>`).
+
+3. Présente le nouveau plan d'action à l'utilisateur.
+
+4. Repose la question : "apply more / re-run reviews / ship it ?"
+
+5. N'émets PAS le signal de complétion.
+
+### CRITIQUE — discipline du signal
+Émets `<promise>REVIEWS_DONE</promise>` **uniquement** quand
+l'utilisateur dit explicitement "none", "skip", "finaliser",
+"ship it" ou équivalent. Les questions et demandes d'application
+NE SONT PAS des approbations.
