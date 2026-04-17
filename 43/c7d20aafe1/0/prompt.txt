@@ -1,0 +1,34 @@
+reprends
+
+---
+
+comment les locks se passent sur le fichier d'usages entre le ClaudeActiveAccountMonitor et ClaudeCodeConnector
+
+---
+
+oui
+
+---
+
+ok, est ce que le ClaudeActiveAccountMonitor update systematiquement le usages.json, ou bien uniquement lorsqu'il voit une diff avec ce qui est persiste ?
+
+---
+
+ok, pourquoi je vois un fichier de lock sur le filesystem si tu me dis que le lock est gere in memory par le file manager ?
+
+---
+
+ok, et ca ne serait pas possible de remplacer le lock fichier par un lock in memory en utilisant les capacite de swift pour s'assurer qu'un et un seul process accede en lecture/ecriture au fichier ?
+
+---
+
+ca devrait etre garanti monoprocessus
+les seuls moment où on pourrait avoir des lectures/ecritures concurrentes:
+- pendant les tests (est-ce qu'on mock le fichier partout ?)
+- pendatn des run locaux de debug où je pourrais lancer l'executable 2+ fois sans faire attention
+
+dans les 2 cas de figure, est-ce qu'on ne pourrait pas s'assurer, au startup de l'app, via un fichier .pid, qu'il n'y a pas deja un process qui est running (et empecher le demarrage s'il y a deja un fichier .pid existant, et que le process id existe bien toujours (s'il n'existe pas, overwrite le fichier .pid et demarrer ... c'est que le process a du se faire kill)
+
+---
+
+/commit tout ca en des commits atomiques
