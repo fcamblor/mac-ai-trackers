@@ -56,12 +56,19 @@ struct UsageMetricCodableTests {
         #expect(json["type"] as? String == "pay-as-you-go")
     }
 
-    @Test("unknown type discriminator throws")
-    func unknownTypeThrows() throws {
-        let bad = #"{"type":"unknown","name":"x"}"#.data(using: .utf8)!
-        #expect(throws: (any Error).self) {
-            try decoder.decode(UsageMetric.self, from: bad)
-        }
+    @Test("unknown type discriminator decodes as .unknown instead of throwing")
+    func unknownTypeDecodesAsUnknown() throws {
+        let json = #"{"type":"unknown","name":"x"}"#.data(using: .utf8)!
+        let decoded = try decoder.decode(UsageMetric.self, from: json)
+        #expect(decoded == .unknown("unknown"))
+    }
+
+    @Test("unknown metric type round-trips through JSON")
+    func unknownTypeRoundTrips() throws {
+        let metric = UsageMetric.unknown("future-type")
+        let data = try encoder.encode(metric)
+        let decoded = try decoder.decode(UsageMetric.self, from: data)
+        #expect(decoded == metric)
     }
 
     @Test("missing required field throws")

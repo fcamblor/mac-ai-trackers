@@ -54,13 +54,16 @@ public struct UsageError: Codable, Equatable, Sendable {
 public enum UsageMetric: Codable, Equatable, Sendable {
     case timeWindow(name: String, resetAt: ISODate, windowDuration: DurationMinutes, usagePercent: UsagePercent)
     case payAsYouGo(name: String, currentAmount: Double, currency: String)
+    /// A metric type not yet known to this client; retained for round-trip fidelity.
+    case unknown(String)
 
     // MARK: Kind
 
     public var kind: MetricKind {
         switch self {
-        case .timeWindow: .timeWindow
-        case .payAsYouGo: .payAsYouGo
+        case .timeWindow:       .timeWindow
+        case .payAsYouGo:       .payAsYouGo
+        case .unknown(let t):   .unknown(t)
         }
     }
 
@@ -89,6 +92,8 @@ public enum UsageMetric: Codable, Equatable, Sendable {
                 currentAmount: try container.decode(Double.self, forKey: .currentAmount),
                 currency: try container.decode(String.self, forKey: .currency)
             )
+        case .unknown(let t):
+            self = .unknown(t)
         }
     }
 
@@ -106,6 +111,9 @@ public enum UsageMetric: Codable, Equatable, Sendable {
             try container.encode(name, forKey: .name)
             try container.encode(currentAmount, forKey: .currentAmount)
             try container.encode(currency, forKey: .currency)
+        case let .unknown(t):
+            // Only the type discriminator round-trips; unknown fields are not preserved
+            try container.encode(MetricKind.unknown(t), forKey: .type)
         }
     }
 }
