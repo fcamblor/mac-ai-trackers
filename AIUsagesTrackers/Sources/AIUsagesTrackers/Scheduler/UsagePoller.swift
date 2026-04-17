@@ -29,6 +29,8 @@ public actor UsagePoller {
         pollingTask = Task {
             while !Task.isCancelled {
                 await self.pollOnce()
+                // Sleep-based cadence: effective period = poll duration + interval.
+                // This is intentional — avoids overlapping polls at the cost of slight drift.
                 try? await Task.sleep(for: self.interval)
                 guard !Task.isCancelled else { break }
             }
