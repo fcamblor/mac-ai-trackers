@@ -60,6 +60,24 @@
           {
             "type": "command",
             "command": "entire hooks claude-code stop"
+          },
+          {
+            "type": "command",
+            "command": "npx @fcamblor/gitdiff-watcher@0.2.0 --on '**/CLAUDE.md' --files-separator ',' --exec '.claude/scripts/check-claude-md-lines.sh {{ON_CHANGES_RUN_CHANGED_FILES}}'",
+            "timeout": 10,
+            "statusMessage": "Checking CLAUDE.md file sizes..."
+          },
+          {
+            "type": "command",
+            "command": "npx @fcamblor/gitdiff-watcher@0.2.0 --on 'AIUsagesTrackers/Sources/**/*.swift' --on 'AIUsagesTrackers/Package.swift' --exec 'cd AIUsagesTrackers && swift build'",
+            "timeout": 120,
+            "statusMessage": "Building Swift package..."
+          },
+          {
+            "type": "command",
+            "command": "npx @fcamblor/gitdiff-watcher@0.2.0 --on 'AIUsagesTrackers/Package.swift' --exec 'cd AIUsagesTrackers && swift package describe > /dev/null'",
+            "timeout": 30,
+            "statusMessage": "Validating Package.swift..."
           }
         ]
       }
