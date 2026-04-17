@@ -27,6 +27,8 @@ A file watcher observes `usages.json` using a hybrid strategy: a kernel `Dispatc
 
 An `@Observable` store (running on `@MainActor`) receives each new file snapshot, decodes it, locates the active Claude account, and formats the session and weekly time-window metrics into the menubar label. A secondary countdown timer periodically refreshes the remaining-time values in the display so they stay current between file changes. When data is unavailable or malformed the label falls back to `"--"`.
 
+When the user clicks the menu bar item, a `.window`-style `MenuBarExtra` opens a scrollable popover. The popover renders one card per vendor/account entry, sorted alphabetically by vendor then by account (active accounts first within a vendor). Each card shows time-window metrics (gauge bar, theoretical pace marker, remaining time, next reset date) and pay-as-you-go metrics (amount with currency). An empty state is shown when no entries are available. A footer provides the app name and a Quit shortcut.
+
 ## Account monitoring
 
 A separate monitoring actor polls the vendor's local config file at a short fixed interval to detect account switches in real time. When a switch is detected, it updates the `isActive` flag on the corresponding persistence entry without waiting for the next usage fetch. This separation keeps account-status latency low without coupling it to the (slower) API polling cadence.
