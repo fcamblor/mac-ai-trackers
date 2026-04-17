@@ -79,10 +79,7 @@ private func payAsYouGoMetric(
 @Suite("UsageStore formatting")
 struct UsageStoreFormattingTests {
 
-    private var referenceDate: Date {
-        let f = ISO8601DateFormatter()
-        return f.date(from: "2026-04-17T12:47:00Z")!
-    }
+    private static let referenceDate: Date = ISO8601DateFormatter().date(from: "2026-04-17T12:47:00Z")!
 
     @MainActor
     @Test("default menuBarText is fallback")
