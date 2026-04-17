@@ -7,6 +7,7 @@ struct AIUsagesTrackersApp: App {
     private let poller: UsagePoller
     private let accountMonitor: ClaudeActiveAccountMonitor
     private let pidGuard: AppPidGuard
+    @State private var usageStore: UsageStore
 
     init() {
         NSApplication.shared.setActivationPolicy(.accessory)
@@ -36,9 +37,15 @@ struct AIUsagesTrackersApp: App {
         poller = UsagePoller(connectors: [ClaudeCodeConnector()], fileManager: fileManager)
         accountMonitor = ClaudeActiveAccountMonitor(fileManager: fileManager)
 
+        let usagesPath = fileManager.filePath
+        let fileWatcher = UsagesFileWatcher(path: usagesPath)
+        let store = UsageStore(fileWatcher: fileWatcher)
+        _usageStore = State(initialValue: store)
+
         let pollerRef = poller
         let monitorRef = accountMonitor
-        Task {
+        Task { @MainActor in
+            store.start()
             await pollerRef.start()
             await monitorRef.start()
         }
@@ -53,12 +60,13 @@ struct AIUsagesTrackersApp: App {
                     await poller.stop()
                     await accountMonitor.stop()
                 }
+                usageStore.stop()
                 pidGuard.release()
                 NSApplication.shared.terminate(nil)
             }
             .keyboardShortcut("q")
         } label: {
-            Text("AI Tracker")
+            Text(usageStore.menuBarText)
         }
     }
 }

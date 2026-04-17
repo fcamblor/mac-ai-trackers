@@ -1,0 +1,139 @@
+import Foundation
+
+// MARK: - Protocol (injectable for tests)
+
+public protocol FileWatching: Sendable {
+    func changes() -> AsyncStream<Data>
+}
+
+// MARK: - Production implementation
+
+/// Watches a single file using FS events (DispatchSource) with a polling fallback.
+///
+/// Hybrid strategy: a `DispatchSource.makeFileSystemObjectSource` watches for
+/// `.write` events. A fallback timer re-checks every `pollInterval` seconds in
+/// case FS events are missed (network mounts, fd invalidation after atomic
+/// replace). Duplicate reads are suppressed by comparing modification dates.
+public final class UsagesFileWatcher: FileWatching, @unchecked Sendable {
+    private let path: String
+    private let pollInterval: TimeInterval
+    private let logger: FileLogger
+
+    public static let defaultPollSeconds: TimeInterval = 30
+
+    public init(
+        path: String,
+        pollInterval: TimeInterval = UsagesFileWatcher.defaultPollSeconds,
+        logger: FileLogger = Loggers.app
+    ) {
+        self.path = path
+        self.pollInterval = pollInterval
+        self.logger = logger
+    }
+
+    public func changes() -> AsyncStream<Data> {
+        let path = self.path
+        let pollInterval = self.pollInterval
+        let logger = self.logger
+
+        return AsyncStream { continuation in
+            let watcherTask = Task {
+                // Protects lastModDate from concurrent access (GCD handler + cooperative pool)
+                let lock = NSLock()
+                var lastModDate: Date?
+                var dispatchSource: DispatchSourceFileSystemObject?
+                var fileDescriptor: Int32 = -1
+                // Prevents repeated warnings when the file stays unreadable across poll ticks
+                var contentReadFailed = false
+
+                func emitIfChanged() {
+                    lock.lock()
+                    defer { lock.unlock() }
+
+                    let attrs: [FileAttributeKey: Any]
+                    do {
+                        attrs = try FileManager.default.attributesOfItem(atPath: path)
+                    } catch {
+                        if !contentReadFailed {
+                            logger.log(.warning, "FileWatcher: attributesOfItem failed on \(path): \(error)")
+                            contentReadFailed = true
+                        }
+                        return
+                    }
+                    guard let modDate = attrs[.modificationDate] as? Date else {
+                        return
+                    }
+                    if modDate != lastModDate {
+                        if let data = FileManager.default.contents(atPath: path) {
+                            lastModDate = modDate
+                            contentReadFailed = false
+                            continuation.yield(data)
+                        } else {
+                            if !contentReadFailed {
+                                logger.log(.warning, "FileWatcher: contents(atPath:) returned nil for \(path)")
+                                contentReadFailed = true
+                            }
+                        }
+                    }
+                }
+
+                func openSource() -> (DispatchSourceFileSystemObject, Int32)? {
+                    let fd = open(path, O_EVTONLY)
+                    guard fd >= 0 else {
+                        logger.log(.warning, "FileWatcher: open() failed on \(path): \(String(cString: strerror(errno)))")
+                        return nil
+                    }
+                    // If cancelled before resume(), the cancel handler won't fire — guard against fd leak
+                    guard !Task.isCancelled else {
+                        close(fd)
+                        return nil
+                    }
+                    let source = DispatchSource.makeFileSystemObjectSource(
+                        fileDescriptor: fd,
+                        eventMask: [.write, .delete, .rename],
+                        queue: DispatchQueue.global(qos: .utility)
+                    )
+                    source.setEventHandler { emitIfChanged() }
+                    source.setCancelHandler { close(fd) }
+                    source.resume()
+                    return (source, fd)
+                }
+
+                emitIfChanged()
+
+                if let (src, fd) = openSource() {
+                    dispatchSource = src
+                    fileDescriptor = fd
+                    logger.log(.debug, "FileWatcher: FS events active on \(path)")
+                } else {
+                    logger.log(.warning, "FileWatcher: FS source unavailable on \(path), using poll-only mode")
+                }
+
+                while !Task.isCancelled {
+                    // CancellationError swallowed intentionally; checked on next loop iteration
+                    try? await Task.sleep(nanoseconds: UInt64(pollInterval * 1_000_000_000))
+                    guard !Task.isCancelled else { break }
+
+                    emitIfChanged()
+
+                    // Re-establish FS watcher if fd went stale (file was replaced)
+                    let fileExists = FileManager.default.fileExists(atPath: path)
+                    let fdValid = fileDescriptor >= 0 && fcntl(fileDescriptor, F_GETFD) != -1
+                    if fileExists && !fdValid {
+                        dispatchSource?.cancel()
+                        if let (src, fd) = openSource() {
+                            dispatchSource = src
+                            fileDescriptor = fd
+                            logger.log(.debug, "FileWatcher: re-opened FS source on \(path)")
+                        }
+                    }
+                }
+
+                dispatchSource?.cancel()
+                continuation.finish()
+            }
+
+            continuation.onTermination = { _ in watcherTask.cancel() }
+        }
+    }
+}
