@@ -5,7 +5,8 @@
   "branch": "main",
   "checkpoints_count": 1,
   "files_touched": [
-    ".claude/settings.json"
+    ".claude/settings.json",
+    ".serena/project.yml"
   ],
   "sessions": [
     {
