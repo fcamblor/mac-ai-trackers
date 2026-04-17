@@ -1,0 +1,38 @@
+j'aimerais creer une nouvelle feature
+
+---
+
+# nom: popover précisant les consommations
+
+# objectif
+
+Au clic sur l'élément de menu, ouvrir une popover avec à l'intérieur 1 card par account (quand multi-account pour un vendor donné, afficher le compte actif de manière proéminente)
+
+Dans chaque card, on affiche les usages de chaque account:
+- pour les time-window: une progressbar avec libellé + pourcentage consommé + durée d'ici au prochain reset + date du prochain reset + indicateur de consommation théorique (en fonction de la taille de la fenetre + du temps restant d'ici au prochain reset)
+- pour les pay-as-you-go: le montant actuellement consommé
+
+Utiliser le skill impeccable pour faire une jolie UI avec une bonne UX
+
+
+
+Planifier les autres features suivantes (à détailler ensemble):
+- Afficher des erreurs de status monitor pour tous les vendors dont on a au moins un account (pour claude: https://status.claude.com/)
+- Rajouter de la couleur sur les métriques (dans toolbar (pastille) + progress bars) : en fonction du ratio consommation réelle / consommation théorique : <0.7 c'est vert, [0.7, 0.9[ c'est bleu, [0.9, 1[ c'est jaune, [1, 1.2[ c'est orange, [1.2, 1.6[ c'est rouge, >1.6 c'est noir
+- Ajouter un cog dans la popover, permettant d'ouvrir une fenetre de configuration de l'app
+- Ajouter un bouton "buy me a coffee"
+
+---
+
+Je suis pas d'accord sur:
+> The menubar badge color reflects the worst (highest-ratio) metric across all active accounts.
+
+En fait, dans le menubar, on affiche la weekly et la session, donc c'est pas la worst qu'il faut afficher
+
+On verra plus tard (dans la partie configuration de l'app) comment on pourra customiser les métriques affichées dans la menubar.
+La pastille affichée devra correspondre à l'état de la métrique cible
+
+
+concernant vendor-status-monitor: oui il faut un process qui va chercher cette info, mais elle doit être contribuée dans le fichier json de configuration, et la logique doit rester la même: se servir du fichier json qui aura été tenu à jour pour l'afficher de manière jolie dans la popover
+
+Il faudra peut-être retravailler le usages.json afin de créer des sections par vendors, dans lesquelles on nestera les accounts, mais également les éventuels messages d'outage pour le vendor en question

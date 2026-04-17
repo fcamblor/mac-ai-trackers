@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "b4c815e72fa7",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "roadmap/buy-me-a-coffee.md",
+    "roadmap/consumption-color-indicators.md",
+    "roadmap/index.md",
+    "roadmap/settings-window.md",
+    "roadmap/usage-details-popover.md",
+    "roadmap/vendor-status-monitor.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/b4/c815e72fa7/0/metadata.json",
+      "transcript": "/b4/c815e72fa7/0/full.jsonl",
+      "content_hash": "/b4/c815e72fa7/0/content_hash.txt",
+      "prompt": "/b4/c815e72fa7/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 40,
+    "cache_creation_tokens": 114521,
+    "cache_read_tokens": 492500,
+    "output_tokens": 7593,
+    "api_call_count": 19
+  }
+}
