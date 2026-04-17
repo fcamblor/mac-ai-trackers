@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "75b7cb591cb1",
+  "strategy": "manual-commit",
+  "branch": "archon/task-feat-claude-usages-connector",
+  "checkpoints_count": 0,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/75/b7cb591cb1/0/metadata.json",
+      "transcript": "/75/b7cb591cb1/0/full.jsonl",
+      "content_hash": "/75/b7cb591cb1/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 16,
+    "cache_creation_tokens": 35399,
+    "cache_read_tokens": 838409,
+    "output_tokens": 22440,
+    "api_call_count": 17
+  }
+}
