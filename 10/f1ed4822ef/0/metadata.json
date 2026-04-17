@@ -1,0 +1,46 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "10f1ed4822ef",
+  "session_id": "de6122e6-750d-40f4-9bbc-e9c8adfdea2b",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T22:12:34.911679Z",
+  "branch": "archon/task-td-code-quality-naming",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "tech-debt/20260417_low_XS_code-quality-naming/plan.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "62a460302d40",
+  "token_usage": {
+    "input_tokens": 12,
+    "cache_creation_tokens": 36090,
+    "cache_read_tokens": 225093,
+    "output_tokens": 6913,
+    "api_call_count": 10
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T22:12:34.804669Z",
+    "agent_lines": 79,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 79,
+    "total_lines_changed": 79,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 2,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".serena/.gitignore": 2
+      }
+    }
+  ]
+}

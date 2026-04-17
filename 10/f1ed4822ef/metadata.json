@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "10f1ed4822ef",
+  "strategy": "manual-commit",
+  "branch": "archon/task-td-code-quality-naming",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "tech-debt/20260417_low_XS_code-quality-naming/plan.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/10/f1ed4822ef/0/metadata.json",
+      "transcript": "/10/f1ed4822ef/0/full.jsonl",
+      "content_hash": "/10/f1ed4822ef/0/content_hash.txt",
+      "prompt": "/10/f1ed4822ef/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 12,
+    "cache_creation_tokens": 36090,
+    "cache_read_tokens": 225093,
+    "output_tokens": 6913,
+    "api_call_count": 10
+  }
+}
