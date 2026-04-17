@@ -8,7 +8,7 @@ See `docs/ROADMAP.md` for the process and file conventions.
 
 ## Epics
 
-1. `planned` — [Menubar usage metrics display](menubar-usage-metrics.md) — show the active Claude account's session and weekly usage percentages plus reset delays in the macOS menubar.
+1. `done` — [Menubar usage metrics display](menubar-usage-metrics.md) — show the active Claude account's session and weekly usage percentages plus reset delays in the macOS menubar.
 2. `planned` — [Usage details popover](usage-details-popover.md) — open a polished popover on click with one card per account showing progress bars, reset dates, theoretical pace, and pay-as-you-go amounts.
 3. `planned` — [Vendor status monitor](vendor-status-monitor.md) — surface active incidents from vendor status pages (Claude, and others as accounts are added) inside the app.
 4. `planned` — [Consumption color indicators](consumption-color-indicators.md) — color menubar badge and progress bars by the ratio of actual to theoretical consumption across six severity tiers.

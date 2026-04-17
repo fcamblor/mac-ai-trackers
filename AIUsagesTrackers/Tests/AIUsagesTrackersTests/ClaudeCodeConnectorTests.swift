@@ -211,6 +211,37 @@ struct ClaudeCodeConnectorFetchTests {
         #expect(entries[0].lastError?.type == "parse_error")
     }
 
+    @Test("resets_at with fractional seconds is normalized to whole-second ISO8601")
+    func resetsAtFractionalSecondsNormalized() async throws {
+        let dir = makeTempDir()
+        let apiJSON = """
+        {"five_hour":{"utilization":5,"resets_at":"2026-04-23T19:00:00.107277+00:00"},
+         "seven_day":{"utilization":17,"resets_at":"2026-04-24T00:00:00.999999+00:00"}}
+        """
+        MockURLProtocol.handler = { _ in
+            let data = apiJSON.data(using: .utf8)!
+            let resp = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (data, resp)
+        }
+        let connector = makeConnector(dir: dir) { "fake-token" }
+        let entries = try await connector.fetchUsages()
+
+        #expect(entries.count == 1)
+        if case .timeWindow(_, let sessionResetAt, _, _) = entries[0].metrics[0] {
+            // Fractional seconds must be stripped; standard ISO8601DateFormatter must parse the result
+            #expect(sessionResetAt.date != nil)
+            #expect(!sessionResetAt.rawValue.contains("."))
+        } else {
+            Issue.record("Expected timeWindow metric for session")
+        }
+        if case .timeWindow(_, let weeklyResetAt, _, _) = entries[0].metrics[1] {
+            #expect(weeklyResetAt.date != nil)
+            #expect(!weeklyResetAt.rawValue.contains("."))
+        } else {
+            Issue.record("Expected timeWindow metric for weekly")
+        }
+    }
+
     @Test("nil account returns account_unknown error entry")
     func unknownAccount() async throws {
         let dir = makeTempDir()

@@ -23,6 +23,12 @@ Usage data is persisted as a JSON file at `~/.cache/ai-usages-tracker/usages.jso
 
 Note: external processes reading the file (widgets, scripts) must tolerate a brief window where the file contains partial JSON between the OS atomic rename and their `read` call. A future addition of `flock` (see `docs/SWIFT-IO-ROBUSTNESS.md`) would remove this window.
 
+## Display pipeline
+
+A file watcher observes `usages.json` using a hybrid strategy: a kernel `DispatchSource` fires on `.write`/`.delete`/`.rename` events, backed by a polling timer that re-checks every 30 seconds to handle atomic replaces and network-mount edge cases. Events are debounced to coalesce rapid successive writes into a single read.
+
+An `@Observable` store (running on `@MainActor`) receives each new file snapshot, decodes it, locates the active Claude account, and formats the session and weekly time-window metrics into the menubar label (`S 48% 2h 13m | W 7% 6d 6h 13m`). A secondary timer refreshes the countdown display every 60 seconds so remaining-time values stay current between file changes. When data is unavailable or malformed the label falls back to `"--"`.
+
 ## Account monitoring
 
 A separate monitoring actor polls the vendor's local config file at a short fixed interval to detect account switches in real time. When a switch is detected, it updates the `isActive` flag on the corresponding persistence entry without waiting for the next usage fetch. This separation keeps account-status latency low without coupling it to the (slower) API polling cadence.

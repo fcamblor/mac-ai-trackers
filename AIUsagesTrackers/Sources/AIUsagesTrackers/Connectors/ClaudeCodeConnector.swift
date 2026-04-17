@@ -1,18 +1,24 @@
 import Foundation
 
 public actor ClaudeCodeConnector: UsageConnector {
-    nonisolated public let vendor = "claude"
+    nonisolated public let vendor: Vendor = .claude
 
     private let claudeConfigPath: String
     private let logger: FileLogger
     private let session: URLSession
     private let keychainServiceName: String
     private let tokenProvider: (@Sendable () async throws -> String)?
-    private let accountProvider: (@Sendable () -> String?)?
+    private let accountProvider: (@Sendable () -> AccountEmail?)?
 
     private var lastKnownMetrics: [UsageMetric] = []
 
     nonisolated(unsafe) private static let isoFormatter = ISO8601DateFormatter()
+    // API responses may include sub-second precision; this formatter handles them for normalization
+    nonisolated(unsafe) private static let isoFormatterFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
 
     public init(
         claudeConfigPath: String? = nil,
@@ -20,7 +26,7 @@ public actor ClaudeCodeConnector: UsageConnector {
         session: URLSession = .shared,
         keychainServiceName: String = "Claude Code-credentials",
         tokenProvider: (@Sendable () async throws -> String)? = nil,
-        accountProvider: (@Sendable () -> String?)? = nil
+        accountProvider: (@Sendable () -> AccountEmail?)? = nil
     ) {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         self.claudeConfigPath = claudeConfigPath ?? "\(home)/.claude.json"
@@ -33,7 +39,7 @@ public actor ClaudeCodeConnector: UsageConnector {
 
     // MARK: - UsageConnector
 
-    nonisolated public func resolveActiveAccount() -> String? {
+    nonisolated public func resolveActiveAccount() -> AccountEmail? {
         if let provider = accountProvider {
             return provider()
         }
@@ -44,7 +50,7 @@ public actor ClaudeCodeConnector: UsageConnector {
         do {
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             let oauth = json?["oauthAccount"] as? [String: Any]
-            return oauth?["emailAddress"] as? String
+            return (oauth?["emailAddress"] as? String).map(AccountEmail.init(rawValue:))
         } catch {
             logger.log(.error, "Failed to parse \(claudeConfigPath): \(error)")
             return nil
@@ -110,21 +116,20 @@ public actor ClaudeCodeConnector: UsageConnector {
 
         do {
             let usage = try parseAPIResponse(data)
-            let now = Self.isoFormatter.string(from: Date())
             logger.log(.info, "Fetched successfully: session=\(usage.sessionPercent)% weekly=\(usage.weeklyPercent)%")
             // Window durations are not in the API response — they're fixed by Claude's rate-limit policy
             let metrics: [UsageMetric] = [
                 .timeWindow(
                     name: "session",
                     resetAt: usage.sessionResetAt,
-                    windowDurationMinutes: 300,  // 5 hours
-                    usagePercent: usage.sessionPercent
+                    windowDuration: DurationMinutes(rawValue: 300),  // 5 hours
+                    usagePercent: UsagePercent(rawValue: usage.sessionPercent)
                 ),
                 .timeWindow(
                     name: "weekly",
                     resetAt: usage.weeklyResetAt,
-                    windowDurationMinutes: 10080,  // 7 days
-                    usagePercent: usage.weeklyPercent
+                    windowDuration: DurationMinutes(rawValue: 10080),  // 7 days
+                    usagePercent: UsagePercent(rawValue: usage.weeklyPercent)
                 ),
             ]
             lastKnownMetrics = metrics
@@ -132,7 +137,7 @@ public actor ClaudeCodeConnector: UsageConnector {
                 vendor: vendor,
                 account: account,
                 isActive: true,
-                lastAcquiredOn: now,
+                lastAcquiredOn: ISODate(date: Date()),
                 lastError: nil,
                 metrics: metrics
             )]
@@ -248,9 +253,9 @@ public actor ClaudeCodeConnector: UsageConnector {
 
     private struct ParsedUsage {
         let sessionPercent: Int
-        let sessionResetAt: String
+        let sessionResetAt: ISODate
         let weeklyPercent: Int
-        let weeklyResetAt: String
+        let weeklyResetAt: ISODate
     }
 
     private func parseAPIResponse(_ data: Data) throws -> ParsedUsage {
@@ -268,22 +273,31 @@ public actor ClaudeCodeConnector: UsageConnector {
         }
         return ParsedUsage(
             sessionPercent: Int(sessionUtil.rounded()),
-            sessionResetAt: sessionReset,
+            sessionResetAt: Self.normalizeISO8601(sessionReset),
             weeklyPercent: Int(weeklyUtil.rounded()),
-            weeklyResetAt: weeklyReset
+            weeklyResetAt: Self.normalizeISO8601(weeklyReset)
         )
+    }
+
+    /// Strips sub-second precision from API-provided ISO8601 strings so downstream
+    /// consumers can rely on the standard formatter (no fractional-seconds option needed).
+    /// Returns the original string unchanged if it cannot be parsed.
+    private static func normalizeISO8601(_ raw: String) -> ISODate {
+        if let date = isoFormatterFractional.date(from: raw) ?? isoFormatter.date(from: raw) {
+            return ISODate(rawValue: isoFormatter.string(from: date))
+        }
+        return ISODate(rawValue: raw)
     }
 
     // MARK: - Helpers
 
-    private func errorEntry(account: String, type: String, isActive: Bool = false, preservedMetrics: [UsageMetric] = []) -> VendorUsageEntry {
-        let now = Self.isoFormatter.string(from: Date())
+    private func errorEntry(account: AccountEmail, type: String, isActive: Bool = false, preservedMetrics: [UsageMetric] = []) -> VendorUsageEntry {
         return VendorUsageEntry(
             vendor: vendor,
             account: account,
             isActive: isActive,
             lastAcquiredOn: nil,
-            lastError: UsageError(timestamp: now, type: type),
+            lastError: UsageError(timestamp: ISODate(date: Date()), type: type),
             metrics: preservedMetrics
         )
     }

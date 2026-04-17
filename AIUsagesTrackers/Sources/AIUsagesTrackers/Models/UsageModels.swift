@@ -13,18 +13,18 @@ public struct UsagesFile: Codable, Equatable, Sendable {
 // MARK: - Entry
 
 public struct VendorUsageEntry: Codable, Equatable, Sendable {
-    public let vendor: String
-    public let account: String
+    public let vendor: Vendor
+    public let account: AccountEmail
     public var isActive: Bool
-    public var lastAcquiredOn: String?
+    public var lastAcquiredOn: ISODate?
     public var lastError: UsageError?
     public var metrics: [UsageMetric]
 
     public init(
-        vendor: String,
-        account: String,
+        vendor: Vendor,
+        account: AccountEmail,
         isActive: Bool = false,
-        lastAcquiredOn: String? = nil,
+        lastAcquiredOn: ISODate? = nil,
         lastError: UsageError? = nil,
         metrics: [UsageMetric] = []
     ) {
@@ -40,10 +40,10 @@ public struct VendorUsageEntry: Codable, Equatable, Sendable {
 // MARK: - Error
 
 public struct UsageError: Codable, Equatable, Sendable {
-    public let timestamp: String
+    public let timestamp: ISODate
     public let type: String
 
-    public init(timestamp: String, type: String) {
+    public init(timestamp: ISODate, type: String) {
         self.timestamp = timestamp
         self.type = type
     }
@@ -52,30 +52,36 @@ public struct UsageError: Codable, Equatable, Sendable {
 // MARK: - Metric (polymorphic on "type" discriminator)
 
 public enum UsageMetric: Codable, Equatable, Sendable {
-    case timeWindow(name: String, resetAt: String, windowDurationMinutes: Int, usagePercent: Int)
+    case timeWindow(name: String, resetAt: ISODate, windowDuration: DurationMinutes, usagePercent: UsagePercent)
     case payAsYouGo(name: String, currentAmount: Double, currency: String)
+
+    // MARK: Kind
+
+    public var kind: MetricKind {
+        switch self {
+        case .timeWindow: .timeWindow
+        case .payAsYouGo: .payAsYouGo
+        }
+    }
 
     // MARK: Coding
 
     private enum CodingKeys: String, CodingKey {
-        case type, name, resetAt, windowDurationMinutes, usagePercent, currentAmount, currency
-    }
-
-    private enum MetricType: String, Codable {
-        case timeWindow = "time-window"
-        case payAsYouGo = "pay-as-you-go"
+        case type, name, resetAt
+        case windowDuration = "windowDurationMinutes"
+        case usagePercent, currentAmount, currency
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let metricType = try container.decode(MetricType.self, forKey: .type)
-        switch metricType {
+        let metricKind = try container.decode(MetricKind.self, forKey: .type)
+        switch metricKind {
         case .timeWindow:
             self = .timeWindow(
                 name: try container.decode(String.self, forKey: .name),
-                resetAt: try container.decode(String.self, forKey: .resetAt),
-                windowDurationMinutes: try container.decode(Int.self, forKey: .windowDurationMinutes),
-                usagePercent: try container.decode(Int.self, forKey: .usagePercent)
+                resetAt: try container.decode(ISODate.self, forKey: .resetAt),
+                windowDuration: try container.decode(DurationMinutes.self, forKey: .windowDuration),
+                usagePercent: try container.decode(UsagePercent.self, forKey: .usagePercent)
             )
         case .payAsYouGo:
             self = .payAsYouGo(
@@ -89,14 +95,14 @@ public enum UsageMetric: Codable, Equatable, Sendable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
-        case let .timeWindow(name, resetAt, windowDurationMinutes, usagePercent):
-            try container.encode(MetricType.timeWindow, forKey: .type)
+        case let .timeWindow(name, resetAt, windowDuration, usagePercent):
+            try container.encode(MetricKind.timeWindow, forKey: .type)
             try container.encode(name, forKey: .name)
             try container.encode(resetAt, forKey: .resetAt)
-            try container.encode(windowDurationMinutes, forKey: .windowDurationMinutes)
+            try container.encode(windowDuration, forKey: .windowDuration)
             try container.encode(usagePercent, forKey: .usagePercent)
         case let .payAsYouGo(name, currentAmount, currency):
-            try container.encode(MetricType.payAsYouGo, forKey: .type)
+            try container.encode(MetricKind.payAsYouGo, forKey: .type)
             try container.encode(name, forKey: .name)
             try container.encode(currentAmount, forKey: .currentAmount)
             try container.encode(currency, forKey: .currency)
