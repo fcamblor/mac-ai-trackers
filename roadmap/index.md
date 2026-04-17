@@ -8,4 +8,4 @@ See `docs/ROADMAP.md` for the process and file conventions.
 
 ## Epics
 
-_No epics yet. Use the `roadmap-feature` skill to add one._
+1. `planned` — [Menubar usage metrics display](menubar-usage-metrics.md) — show the active Claude account's session and weekly usage percentages plus reset delays in the macOS menubar.
