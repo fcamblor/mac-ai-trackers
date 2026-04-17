@@ -1,0 +1,40 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "4bc6b10bb448",
+  "session_id": "5c037b1a-a301-4969-a742-dbdc26da543c",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T22:16:45.588302Z",
+  "branch": "archon/task-feat-usage-details-popover",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/App/Views/GaugeBar.swift",
+    "AIUsagesTrackers/Sources/App/Views/TimeWindowMetricRow.swift",
+    "AIUsagesTrackers/Sources/App/Views/PayAsYouGoMetricRow.swift",
+    "AIUsagesTrackers/Sources/App/Views/AccountCardView.swift",
+    "AIUsagesTrackers/Sources/App/Views/UsageDetailsView.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "2bd66c473385",
+  "checkpoint_transcript_start": 37,
+  "transcript_lines_at_start": 37,
+  "token_usage": {
+    "input_tokens": 22,
+    "cache_creation_tokens": 11835,
+    "cache_read_tokens": 1016066,
+    "output_tokens": 7258,
+    "api_call_count": 20
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T22:16:45.427456Z",
+    "agent_lines": 304,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 304,
+    "total_lines_changed": 304,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}
