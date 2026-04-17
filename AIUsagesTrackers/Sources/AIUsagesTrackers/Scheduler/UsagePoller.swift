@@ -41,12 +41,25 @@ public actor UsagePoller {
         logger.log(.info, "Poller stopped")
     }
 
-    public func pollOnce() async {
+    public func pollOnce(now: Date = Date()) async {
         logger.log(.debug, "Poll tick — fetching from \(connectors.count) connector(s)")
 
+        let existingFile = await fileManager.read()
+        let intervalSeconds = Double(interval.components.seconds)
+        var skippedCount = 0
         let log = self.logger
+
         let entries: [VendorUsageEntry] = await withTaskGroup(of: [VendorUsageEntry].self) { group in
             for connector in connectors {
+                if let account = connector.resolveActiveAccount(),
+                   let cached = existingFile.usages.first(where: { $0.vendor == connector.vendor && $0.account == account }),
+                   let acquiredDate = cached.lastAcquiredOn?.date,
+                   now.timeIntervalSince(acquiredDate) < intervalSeconds {
+                    let age = Int(now.timeIntervalSince(acquiredDate))
+                    logger.log(.debug, "Skipping \(connector.vendor)/\(account) — fresh (age \(age)s < \(Int(intervalSeconds))s)")
+                    skippedCount += 1
+                    continue
+                }
                 group.addTask {
                     do {
                         return try await connector.fetchUsages()
@@ -64,7 +77,11 @@ public actor UsagePoller {
         }
 
         guard !entries.isEmpty else {
-            logger.log(.warning, "No entries returned from any connector")
+            if skippedCount == connectors.count {
+                logger.log(.debug, "All \(connectors.count) connector(s) up-to-date — skipping file write")
+            } else {
+                logger.log(.warning, "No entries returned from any connector")
+            }
             return
         }
 
