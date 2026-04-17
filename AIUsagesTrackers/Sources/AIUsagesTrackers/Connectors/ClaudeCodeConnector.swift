@@ -9,6 +9,8 @@ public actor ClaudeCodeConnector: UsageConnector {
     private let keychainServiceName: String
     private let tokenProvider: (@Sendable () async throws -> String)?
 
+    private var lastKnownMetrics: [UsageMetric] = []
+
     nonisolated(unsafe) private static let isoFormatter = ISO8601DateFormatter()
 
     public init(
@@ -83,6 +85,12 @@ public actor ClaudeCodeConnector: UsageConnector {
         let httpCode = (response as? HTTPURLResponse)?.statusCode ?? -1
         logger.log(.info, "API response: HTTP \(httpCode)")
 
+        if httpCode == 429 {
+            let body = String(data: data, encoding: .utf8) ?? "<non-UTF8 body, \(data.count) bytes>"
+            logger.log(.warning, "API rate-limited (HTTP 429): \(body)")
+            return [errorEntry(account: account, type: "http_429", preservedMetrics: lastKnownMetrics)]
+        }
+
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             logger.log(.error, "API returned HTTP \(httpCode)")
             return [errorEntry(account: account, type: "http_\(httpCode)")]
@@ -94,27 +102,29 @@ public actor ClaudeCodeConnector: UsageConnector {
             let usage = try parseAPIResponse(data)
             let now = Self.isoFormatter.string(from: Date())
             logger.log(.info, "Fetched successfully: session=\(usage.sessionPercent)% weekly=\(usage.weeklyPercent)%")
+            // Window durations are not in the API response — they're fixed by Claude's rate-limit policy
+            let metrics: [UsageMetric] = [
+                .timeWindow(
+                    name: "session",
+                    resetAt: usage.sessionResetAt,
+                    windowDurationMinutes: 300,  // 5 hours
+                    usagePercent: usage.sessionPercent
+                ),
+                .timeWindow(
+                    name: "weekly",
+                    resetAt: usage.weeklyResetAt,
+                    windowDurationMinutes: 10080,  // 7 days
+                    usagePercent: usage.weeklyPercent
+                ),
+            ]
+            lastKnownMetrics = metrics
             return [VendorUsageEntry(
                 vendor: vendor,
                 account: account,
                 isActive: true,
                 lastAcquiredOn: now,
                 lastError: nil,
-                metrics: [
-                    // Window durations are not in the API response — they're fixed by Claude's rate-limit policy
-                    .timeWindow(
-                        name: "session",
-                        resetAt: usage.sessionResetAt,
-                        windowDurationMinutes: 300,  // 5 hours
-                        usagePercent: usage.sessionPercent
-                    ),
-                    .timeWindow(
-                        name: "weekly",
-                        resetAt: usage.weeklyResetAt,
-                        windowDurationMinutes: 10080,  // 7 days
-                        usagePercent: usage.weeklyPercent
-                    ),
-                ]
+                metrics: metrics
             )]
         } catch {
             logger.log(.error, "Response parse failed: \(error)")
@@ -244,7 +254,7 @@ public actor ClaudeCodeConnector: UsageConnector {
 
     // MARK: - Helpers
 
-    private func errorEntry(account: String, type: String) -> VendorUsageEntry {
+    private func errorEntry(account: String, type: String, preservedMetrics: [UsageMetric] = []) -> VendorUsageEntry {
         let now = Self.isoFormatter.string(from: Date())
         return VendorUsageEntry(
             vendor: vendor,
@@ -252,7 +262,7 @@ public actor ClaudeCodeConnector: UsageConnector {
             isActive: true,
             lastAcquiredOn: nil,
             lastError: UsageError(timestamp: now, type: type),
-            metrics: []
+            metrics: preservedMetrics
         )
     }
 }

@@ -158,6 +158,37 @@ struct ClaudeCodeConnectorFetchTests {
         #expect(entries[0].lastError?.type == "http_401")
     }
 
+    @Test("HTTP 429 preserves previous metrics and sets rate-limit error")
+    func rateLimited() async throws {
+        let dir = makeTempDir()
+        let connector = makeConnector(dir: dir) { "fake-token" }
+
+        // First call succeeds — seeds lastKnownMetrics
+        MockURLProtocol.handler = { _ in
+            let data = """
+            {"five_hour":{"utilization":0.5,"resets_at":"2025-01-01T00:00:00Z"},
+             "seven_day":{"utilization":0.3,"resets_at":"2025-01-07T00:00:00Z"}}
+            """.data(using: .utf8)!
+            let resp = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (data, resp)
+        }
+        let firstEntries = try await connector.fetchUsages()
+        #expect(firstEntries[0].metrics.count == 2)
+
+        // Second call returns 429 — metrics must be preserved
+        MockURLProtocol.handler = { _ in
+            let body = #"{"error":"rate limited"}"#.data(using: .utf8)!
+            let resp = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!, statusCode: 429, httpVersion: nil, headerFields: nil)!
+            return (body, resp)
+        }
+        let rateLimitedEntries = try await connector.fetchUsages()
+
+        #expect(rateLimitedEntries.count == 1)
+        #expect(rateLimitedEntries[0].lastError?.type == "http_429")
+        #expect(rateLimitedEntries[0].metrics.count == 2)
+        #expect(rateLimitedEntries[0].metrics == firstEntries[0].metrics)
+    }
+
     @Test("malformed API response returns parse error entry")
     func parseError() async throws {
         let dir = makeTempDir()
