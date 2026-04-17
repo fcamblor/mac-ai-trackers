@@ -1,0 +1,26 @@
+j'aimerais qu'on design ensemble le contenu d'un répertoire roadmap/ qui va contenir les différents steps à dérouler/implémenter sur l'app
+
+Le formalisme:
+- un fichier markdown par feature à implémenter
+- un fichier index.md qui ordonne les features en fonction de leurs dépendances/ordre d'implémentation
+
+il faudrait documenter ce process dans la doc du projet
+
+---
+
+1/ statut centralisé dans index.md
+2/ une feature = un epic
+3/ faire une commande ou un skill pour créer une nouvelle feature
+4/ oui
+
+---
+
+il y a de la redite entre ROADMAP.md et le SKILL.md
+
+---
+
+utilise le skill improve-ai-harness pour trouver des solutions pour éviter ce type de problème a l'avenir
+
+---
+
+ok faisons ça
