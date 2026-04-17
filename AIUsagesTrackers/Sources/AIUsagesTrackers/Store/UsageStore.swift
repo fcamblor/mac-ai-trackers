@@ -21,11 +21,7 @@ public struct SystemClock: ClockProvider {
 @Observable
 @MainActor
 public final class UsageStore {
-    // MARK: Published state
-
     public private(set) var menuBarText: String = "--"
-
-    // MARK: Dependencies
 
     private let fileWatcher: FileWatching
     private let clock: ClockProvider
@@ -39,12 +35,8 @@ public final class UsageStore {
     // Latest decoded file kept for countdown refresh without re-reading disk
     private var lastFile: UsagesFile?
 
-    // MARK: Tasks
-
     private var watchTask: Task<Void, Never>?
     private var countdownTask: Task<Void, Never>?
-
-    // MARK: Init
 
     public init(
         fileWatcher: FileWatching,
