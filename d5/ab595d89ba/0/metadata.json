@@ -1,0 +1,37 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "d5ab595d89ba",
+  "session_id": "82b094cf-3f50-4dd7-a38f-627a8665b770",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T19:51:35.31162Z",
+  "branch": "archon/task-feat-menubar-usage-metrics",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "tech-debt/20260417_medium_M_usage-display-test-coverage/debt.md",
+    "tech-debt/20260417_low_XS_usage-display-minor-nits/debt.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "eed16953fcc3",
+  "checkpoint_transcript_start": 122,
+  "transcript_lines_at_start": 122,
+  "token_usage": {
+    "input_tokens": 11,
+    "cache_creation_tokens": 8726,
+    "cache_read_tokens": 890863,
+    "output_tokens": 3586,
+    "api_call_count": 11
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T19:51:35.05575Z",
+    "agent_lines": 99,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 99,
+    "total_lines_changed": 99,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}
