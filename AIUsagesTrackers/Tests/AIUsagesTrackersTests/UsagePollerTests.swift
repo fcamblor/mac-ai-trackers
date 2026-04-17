@@ -51,7 +51,7 @@ struct UsagePollerTests {
 
         await poller.pollOnce()
 
-        let result = fm.read()
+        let result = await fm.read()
         #expect(result.usages.count == 1)
         #expect(result.usages[0].account == "a@b.com")
     }
@@ -70,7 +70,7 @@ struct UsagePollerTests {
 
         await poller.pollOnce()
 
-        let result = fm.read()
+        let result = await fm.read()
         #expect(result.usages.count == 1)
         #expect(result.usages[0].vendor == "claude")
     }
@@ -86,7 +86,7 @@ struct UsagePollerTests {
 
         await poller.pollOnce()
 
-        let result = fm.read()
+        let result = await fm.read()
         #expect(result.usages.isEmpty)
     }
 
@@ -106,7 +106,7 @@ struct UsagePollerTests {
 
         await poller.pollOnce()
 
-        let result = fm.read()
+        let result = await fm.read()
         #expect(result.usages.count == 2)
     }
 

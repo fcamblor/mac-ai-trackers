@@ -11,7 +11,7 @@ public actor UsagePoller {
     public init(
         connectors: [any UsageConnector],
         interval: Duration = .seconds(180),
-        fileManager: UsagesFileManager = UsagesFileManager(),
+        fileManager: UsagesFileManager = UsagesFileManager.shared,
         logger: FileLogger = Loggers.app
     ) {
         self.connectors = connectors
@@ -68,7 +68,7 @@ public actor UsagePoller {
             return
         }
 
-        fileManager.update(with: entries)
+        await fileManager.update(with: entries)
         logger.log(.info, "Merged \(entries.count) entry/entries into usages file")
     }
 }

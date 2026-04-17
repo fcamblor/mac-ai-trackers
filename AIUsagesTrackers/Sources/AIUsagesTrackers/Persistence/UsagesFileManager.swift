@@ -1,17 +1,19 @@
 import Foundation
 
-public final class UsagesFileManager: Sendable {
-    public let filePath: String
-    public let lockPath: String
+public actor UsagesFileManager {
+    // Internal init so tests can create isolated instances via @testable import.
+    // Production code must use `UsagesFileManager.shared`.
+    public static let shared = UsagesFileManager()
+
+    nonisolated public let filePath: String
     private let logger: FileLogger
 
-    public init(
+    init(
         filePath: String? = nil,
         logger: FileLogger = Loggers.app
     ) {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         self.filePath = filePath ?? "\(home)/.cache/ai-usages-tracker/usages.json"
-        self.lockPath = self.filePath + ".lock"
         self.logger = logger
 
         let dir = (self.filePath as NSString).deletingLastPathComponent
@@ -25,19 +27,30 @@ public final class UsagesFileManager: Sendable {
     // MARK: - Public
 
     public func read() -> UsagesFile {
-        withFlockShared {
-            readUnsafe()
-        } ?? UsagesFile()
+        readUnsafe()
     }
 
     public func update(with entries: [VendorUsageEntry]) {
-        let success = withFlockExclusive {
-            var file = readUnsafe()
-            file = merge(existing: file, incoming: entries)
-            writeUnsafe(file)
+        var file = readUnsafe()
+        file = merge(existing: file, incoming: entries)
+        writeUnsafe(file)
+    }
+
+    // MARK: - Active-account update
+
+    public func updateIsActive(vendor: String, activeAccount: String?) {
+        var file = readUnsafe()
+        var changed = false
+        for i in file.usages.indices {
+            guard file.usages[i].vendor == vendor else { continue }
+            let newActive = file.usages[i].account == activeAccount
+            if file.usages[i].isActive != newActive {
+                file.usages[i].isActive = newActive
+                changed = true
+            }
         }
-        if !success {
-            logger.log(.error, "update(with:) skipped — failed to acquire exclusive flock")
+        if changed {
+            writeUnsafe(file)
         }
     }
 
@@ -61,15 +74,14 @@ public final class UsagesFileManager: Sendable {
         return UsagesFile(usages: usages)
     }
 
-    // MARK: - Unsafe (caller holds lock)
+    // MARK: - Unsafe (actor-isolated, no external lock needed)
 
     private func readUnsafe() -> UsagesFile {
         guard let data = FileManager.default.contents(atPath: filePath) else {
             return UsagesFile()
         }
         do {
-            let decoder = JSONDecoder()
-            return try decoder.decode(UsagesFile.self, from: data)
+            return try JSONDecoder().decode(UsagesFile.self, from: data)
         } catch {
             logger.log(.error, "Failed to decode \(filePath): \(error)")
             return UsagesFile()
@@ -90,36 +102,5 @@ public final class UsagesFileManager: Sendable {
             return
         }
         logger.log(.debug, "Wrote usages file to \(filePath)")
-    }
-
-    // MARK: - POSIX flock
-
-    private func withFlockShared<T>(_ body: () -> T) -> T? {
-        withFlock(operation: LOCK_SH, body)
-    }
-
-    @discardableResult
-    private func withFlockExclusive(_ body: () -> Void) -> Bool {
-        withFlock(operation: LOCK_EX, body) != nil
-    }
-
-    private func withFlock<T>(operation: Int32, _ body: () -> T) -> T? {
-        let fd = open(lockPath, O_RDWR | O_CREAT, 0o644)
-        guard fd >= 0 else {
-            logger.log(.error, "Cannot open lock file \(lockPath)")
-            return nil
-        }
-        defer {
-            flock(fd, LOCK_UN)
-            close(fd)
-        }
-
-        guard flock(fd, operation) == 0 else {
-            logger.log(.error, "flock failed on \(lockPath)")
-            return nil
-        }
-
-        logger.log(.debug, "Acquired flock(\(operation == LOCK_SH ? "SH" : "EX")) on \(lockPath)")
-        return body()
     }
 }

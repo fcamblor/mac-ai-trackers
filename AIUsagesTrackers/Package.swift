@@ -7,8 +7,7 @@ let package = Package(
     targets: [
         .target(
             name: "AIUsagesTrackersLib",
-            path: "Sources/AIUsagesTrackers",
-            exclude: ["AIUsagesTrackersApp.swift"]
+            path: "Sources/AIUsagesTrackers"
         ),
         .executableTarget(
             name: "AIUsagesTrackers",
