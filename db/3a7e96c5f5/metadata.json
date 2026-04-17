@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "db3a7e96c5f5",
+  "strategy": "manual-commit",
+  "branch": "chore/resolve-all-tech-debts",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/db/3a7e96c5f5/0/metadata.json",
+      "transcript": "/db/3a7e96c5f5/0/full.jsonl",
+      "content_hash": "/db/3a7e96c5f5/0/content_hash.txt",
+      "prompt": "/db/3a7e96c5f5/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 141,
+    "cache_creation_tokens": 146403,
+    "cache_read_tokens": 7260223,
+    "output_tokens": 29430,
+    "api_call_count": 101
+  }
+}
