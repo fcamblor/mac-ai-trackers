@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "ae133c8d6aa8",
+  "strategy": "manual-commit",
+  "branch": "archon/task-feat-menubar-usage-metrics",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "plan-menubar-usage-metrics.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ae/133c8d6aa8/0/metadata.json",
+      "transcript": "/ae/133c8d6aa8/0/full.jsonl",
+      "content_hash": "/ae/133c8d6aa8/0/content_hash.txt",
+      "prompt": "/ae/133c8d6aa8/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 22,
+    "cache_creation_tokens": 83651,
+    "cache_read_tokens": 522638,
+    "output_tokens": 10389,
+    "api_call_count": 19
+  }
+}

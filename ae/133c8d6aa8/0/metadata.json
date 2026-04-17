@@ -1,0 +1,43 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "ae133c8d6aa8",
+  "session_id": "7a52b30b-cacd-4914-b30d-4a4cf2bb7ae3",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T16:39:17.724192Z",
+  "branch": "archon/task-feat-menubar-usage-metrics",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "plan-menubar-usage-metrics.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "b24ac31bfa4f",
+  "token_usage": {
+    "input_tokens": 22,
+    "cache_creation_tokens": 83651,
+    "cache_read_tokens": 522638,
+    "output_tokens": 10389,
+    "api_call_count": 19
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T16:39:17.584439Z",
+    "agent_lines": 112,
+    "agent_removed": 1,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 112,
+    "total_lines_changed": 113,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
