@@ -27,3 +27,9 @@ None
 - When `~/.cache/ai-usages-tracker/usages.json` exists and contains an active Claude account, the menubar shows its session and weekly percentages alongside the remaining delay to each window's reset.
 - A manual edit of `~/.cache/ai-usages-tracker/usages.json` is reflected in the menubar within at most 30 seconds, with no user interaction.
 - When the file is missing, empty, or malformed, the menubar degrades gracefully (no crash; a clear fallback state).
+
+## Delivered
+
+Feature shipped as scoped. The display refresh uses a hybrid file-watcher/polling
+strategy rather than poll-only, and the countdown timer interval is configurable
+(not hard-coded). All acceptance criteria from the original scope were met.
