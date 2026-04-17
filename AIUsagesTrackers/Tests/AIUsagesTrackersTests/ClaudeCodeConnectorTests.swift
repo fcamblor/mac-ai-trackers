@@ -109,8 +109,8 @@ struct ClaudeCodeConnectorFetchTests {
     func successPath() async throws {
         let dir = makeTempDir()
         let apiJSON = """
-        {"five_hour":{"utilization":0.42,"resets_at":"2026-04-17T15:00:00+00:00"},
-         "seven_day":{"utilization":0.08,"resets_at":"2026-04-23T21:00:00+00:00"}}
+        {"five_hour":{"utilization":42,"resets_at":"2026-04-17T15:00:00+00:00"},
+         "seven_day":{"utilization":8,"resets_at":"2026-04-23T21:00:00+00:00"}}
         """
         MockURLProtocol.handler = { _ in
             let data = apiJSON.data(using: .utf8)!
@@ -124,7 +124,7 @@ struct ClaudeCodeConnectorFetchTests {
         #expect(entries[0].account == "user@example.com")
         #expect(entries[0].lastError == nil)
         #expect(entries[0].metrics.count == 2)
-        // Verify utilization conversion: 0.42 → 42%
+        // Verify utilization: API returns integer percentage directly (42 → 42%)
         if case .timeWindow(let name, _, _, let pct) = entries[0].metrics[0] {
             #expect(name == "session")
             #expect(pct == 42)

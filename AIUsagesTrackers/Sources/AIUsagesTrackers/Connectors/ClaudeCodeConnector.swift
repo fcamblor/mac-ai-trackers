@@ -200,9 +200,9 @@ public actor ClaudeCodeConnector: UsageConnector {
             throw ConnectorError.unexpectedAPIFormat
         }
         return ParsedUsage(
-            sessionPercent: Int((sessionUtil * 100).rounded()),
+            sessionPercent: Int(sessionUtil.rounded()),
             sessionResetAt: sessionReset,
-            weeklyPercent: Int((weeklyUtil * 100).rounded()),
+            weeklyPercent: Int(weeklyUtil.rounded()),
             weeklyResetAt: weeklyReset
         )
     }
