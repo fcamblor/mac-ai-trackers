@@ -6,11 +6,20 @@ import Testing
 
 final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var handler: ((URLRequest) -> (Data, HTTPURLResponse))?
+    // Captured by startLoading before handler runs; safe because the suite is .serialized
+    nonisolated(unsafe) static var capturedRequest: URLRequest?
+    // When set, startLoading fails with this error instead of invoking handler
+    nonisolated(unsafe) static var errorToThrow: Error?
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
+        Self.capturedRequest = request
+        if let error = Self.errorToThrow {
+            client?.urlProtocol(self, didFailWithError: error)
+            return
+        }
         guard let handler = Self.handler else {
             client?.urlProtocolDidFinishLoading(self)
             return
