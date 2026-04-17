@@ -1,0 +1,46 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "5cf1e77f3c7f",
+  "session_id": "732996a6-1666-43f0-aea8-83567ef5ea7a",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T22:30:10.678325Z",
+  "branch": "archon/task-td-usage-display-test-coverage",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Store/UsageStore.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "59caad437bb2",
+  "token_usage": {
+    "input_tokens": 18,
+    "cache_creation_tokens": 59567,
+    "cache_read_tokens": 657630,
+    "output_tokens": 23612,
+    "api_call_count": 14
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T22:30:10.545573Z",
+    "agent_lines": 4,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 4,
+    "total_lines_changed": 4,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 2,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".serena/.gitignore": 2
+      }
+    }
+  ]
+}
