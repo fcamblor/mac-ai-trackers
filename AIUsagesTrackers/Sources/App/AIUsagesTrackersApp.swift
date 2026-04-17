@@ -15,9 +15,16 @@ struct AIUsagesTrackersApp: App {
         let guard_ = AppPidGuard(cacheDir: "\(home)/.cache/ai-usages-tracker")
         do {
             try guard_.acquire()
+        } catch AppPidGuardError.alreadyRunning(let pid, _) {
+            let alert = NSAlert()
+            alert.messageText = "AI Usages Tracker is already running"
+            alert.informativeText = "Another instance is active (PID \(pid)). Use the menu bar icon to quit it before launching a new one."
+            alert.runModal()
+            NSApplication.shared.terminate(nil)
+            fatalError("terminate() did not exit")
         } catch {
             let alert = NSAlert()
-            alert.messageText = "Already running"
+            alert.messageText = "Failed to start AI Usages Tracker"
             alert.informativeText = error.localizedDescription
             alert.runModal()
             NSApplication.shared.terminate(nil)
