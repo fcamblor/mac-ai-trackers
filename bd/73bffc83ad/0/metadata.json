@@ -1,0 +1,97 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "bd73bffc83ad",
+  "session_id": "92ca1fe9-f16f-4b80-b321-7f1177c885f7",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-17T23:16:57.177893Z",
+  "branch": "archon/task-feat-usage-details-popover",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/App/Views/AccountCardView.swift",
+    "AIUsagesTrackers/Sources/App/Views/GaugeBar.swift",
+    "AIUsagesTrackers/Sources/App/Views/TimeWindowMetricRow.swift",
+    "AIUsagesTrackers/Sources/App/Views/UsageDetailsView.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-4-6",
+  "turn_id": "a3299e1d72ca",
+  "token_usage": {
+    "input_tokens": 60,
+    "cache_creation_tokens": 116349,
+    "cache_read_tokens": 703833,
+    "output_tokens": 11316,
+    "api_call_count": 18
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-17T23:16:57.088736Z",
+    "agent_lines": 9,
+    "agent_removed": 2,
+    "human_added": 0,
+    "human_modified": 5,
+    "human_removed": 0,
+    "total_committed": 12,
+    "total_lines_changed": 16,
+    "agent_percentage": 68.75,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 12,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10,
+        ".serena/.gitignore": 2
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 64,
+      "user_lines_removed": 1,
+      "agent_lines_added": 11,
+      "agent_lines_removed": 5,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10,
+        ".idea/codeStyles/codeStyleConfig.xml": 5,
+        ".idea/copilot.data.migration.agent.xml": 6,
+        ".idea/go.imports.xml": 11,
+        ".idea/misc.xml": 6,
+        ".idea/modules.xml": 8,
+        ".idea/task-feat-usage-details-popover.iml": 9,
+        ".idea/vcs.xml": 6,
+        ".serena/.gitignore": 2,
+        "AIUsagesTrackers/Sources/App/Views/AccountCardView.swift": 1
+      },
+      "user_removed_per_file": {
+        "AIUsagesTrackers/Sources/App/Views/AccountCardView.swift": 1
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 65,
+      "user_lines_removed": 2,
+      "agent_lines_added": 15,
+      "agent_lines_removed": 5,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10,
+        ".idea/codeStyles/codeStyleConfig.xml": 5,
+        ".idea/copilot.data.migration.agent.xml": 6,
+        ".idea/go.imports.xml": 11,
+        ".idea/misc.xml": 6,
+        ".idea/modules.xml": 8,
+        ".idea/task-feat-usage-details-popover.iml": 9,
+        ".idea/vcs.xml": 6,
+        ".serena/.gitignore": 2,
+        "AIUsagesTrackers/Sources/App/Views/AccountCardView.swift": 2
+      },
+      "user_removed_per_file": {
+        "AIUsagesTrackers/Sources/App/Views/AccountCardView.swift": 2
+      }
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+quelques remarques sur la popover:
+- il faudrait utiliser un background un peu different sur les cards des accounts actifs (en plus de mettre le tag "active")
+- la font color utilisée pour la reset date et la durée avant reset n'est pas judicieuse par rapport au background gris des cards account: le contraste est pas super
+- le contraste entre le background des cards et le background de la popover n'est pas fou non plus
+- le marqueur de la consommation théorique ne se voir pas tres bien sur les progress bar ... il faudrait le rendre plus épais
+
+---
+
+pour le contraste popover/cards, je pense qu'il faudrait commencer par mettre un border sur les cards
