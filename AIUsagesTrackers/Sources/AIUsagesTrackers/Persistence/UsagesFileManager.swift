@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 public actor UsagesFileManager {
     // Internal init so tests can create isolated instances via @testable import.
@@ -6,15 +7,20 @@ public actor UsagesFileManager {
     public static let shared = UsagesFileManager()
 
     nonisolated public let filePath: String
+    nonisolated public let lockPath: String
     private let logger: FileLogger
+    private let lockTimeoutSeconds: TimeInterval
 
     init(
         filePath: String? = nil,
-        logger: FileLogger = Loggers.app
+        logger: FileLogger = Loggers.app,
+        lockTimeoutSeconds: TimeInterval = 5.0
     ) {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         self.filePath = filePath ?? "\(home)/.cache/ai-usages-tracker/usages.json"
         self.logger = logger
+        self.lockPath = self.filePath + ".lock"
+        self.lockTimeoutSeconds = lockTimeoutSeconds
 
         let dir = (self.filePath as NSString).deletingLastPathComponent
         do {
@@ -26,31 +32,48 @@ public actor UsagesFileManager {
 
     // MARK: - Public
 
-    public func read() -> UsagesFile {
-        readUnsafe()
+    public func read() async -> UsagesFile {
+        do {
+            return try await withFileLock(mode: LOCK_SH) { readUnsafe() }
+        } catch {
+            logger.log(.warning, "flock read failed — returning empty file: \(error)")
+            return UsagesFile()
+        }
     }
 
-    public func update(with entries: [VendorUsageEntry]) {
-        var file = readUnsafe()
-        file = merge(existing: file, incoming: entries)
-        writeUnsafe(file)
+    public func update(with entries: [VendorUsageEntry]) async {
+        do {
+            try await withFileLock(mode: LOCK_EX) {
+                var file = readUnsafe()
+                file = merge(existing: file, incoming: entries)
+                writeUnsafe(file)
+            }
+        } catch {
+            logger.log(.warning, "flock update failed — skipping write: \(error)")
+        }
     }
 
     // MARK: - Active-account update
 
-    public func updateIsActive(vendor: Vendor, activeAccount: AccountEmail?) {
-        var file = readUnsafe()
-        var changed = false
-        for i in file.usages.indices {
-            guard file.usages[i].vendor == vendor else { continue }
-            let newActive = file.usages[i].account == activeAccount
-            if file.usages[i].isActive != newActive {
-                file.usages[i].isActive = newActive
-                changed = true
+    public func updateIsActive(vendor: Vendor, activeAccount: AccountEmail?) async {
+        do {
+            try await withFileLock(mode: LOCK_EX) {
+                var file = readUnsafe()
+                var changed = false
+                for i in file.usages.indices {
+                    guard file.usages[i].vendor == vendor else { continue }
+                    let newActive = file.usages[i].account == activeAccount
+                    if file.usages[i].isActive != newActive {
+                        file.usages[i].isActive = newActive
+                        changed = true
+                    }
+                }
+                if changed {
+                    writeUnsafe(file)
+                }
             }
-        }
-        if changed {
-            writeUnsafe(file)
+        } catch {
+            logger.log(.warning, "flock updateIsActive failed — skipping: \(error)")
         }
     }
 
@@ -86,6 +109,28 @@ public actor UsagesFileManager {
         return UsagesFile(usages: usages)
     }
 
+    // MARK: - Lock
+
+    /// Acquires an advisory flock on the dedicated lock file, runs `body`, then releases.
+    /// Uses a separate lock file because atomic writes replace the JSON inode, making
+    /// flock on the data file itself ineffective for protecting external readers.
+    private func withFileLock<T>(mode: Int32, body: () throws -> T) async throws -> T {
+        let fd = Darwin.open(lockPath, O_CREAT | O_RDWR, 0o644)
+        guard fd >= 0 else { throw FileManagerError.cannotOpenLockFile(path: lockPath) }
+        defer { Darwin.close(fd) }
+
+        let deadline = Date().addingTimeInterval(lockTimeoutSeconds)
+        while flock(fd, mode | LOCK_NB) != 0 {
+            guard Date() < deadline else {
+                throw FileManagerError.lockTimeout(path: lockPath, timeoutSeconds: lockTimeoutSeconds)
+            }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        defer { flock(fd, LOCK_UN) }
+
+        return try body()
+    }
+
     // MARK: - Unsafe (actor-isolated, no external lock needed)
 
     private func readUnsafe() -> UsagesFile {
@@ -114,5 +159,19 @@ public actor UsagesFileManager {
             return
         }
         logger.log(.debug, "Wrote usages file to \(filePath)")
+    }
+}
+
+enum FileManagerError: Error, CustomStringConvertible {
+    case cannotOpenLockFile(path: String)
+    case lockTimeout(path: String, timeoutSeconds: Double)
+
+    var description: String {
+        switch self {
+        case let .cannotOpenLockFile(path):
+            "Cannot open lock file at \(path)"
+        case let .lockTimeout(path, secs):
+            "Could not acquire flock on \(path) within \(secs)s"
+        }
     }
 }
