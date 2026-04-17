@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(swift run *)"
+      "Bash(swift run *)",
+      "Bash(swift test *)",
+      "mcp__plugin_serena_serena__get_symbols_overview",
+      "mcp__plugin_serena_serena__activate_project",
+      "mcp__plugin_serena_serena__read_file",
+      "mcp__plugin_serena_serena__list_dir",
+      "mcp__plugin_serena_serena__find_symbol",
+      "mcp__plugin_serena_serena__search_for_pattern"
     ],
     "deny": [
       "Read(./.entire/metadata/**)"
