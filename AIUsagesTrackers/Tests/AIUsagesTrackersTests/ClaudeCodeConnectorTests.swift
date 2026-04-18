@@ -304,3 +304,195 @@ struct ClaudeCodeConnectorFetchTests {
         #expect(entries[0].lastError?.type == "account_unknown")
     }
 }
+
+// MARK: - Per-model weekly metrics tests
+
+@Suite("ClaudeCodeConnector — per-model weekly metrics", .serialized)
+struct ClaudeCodeConnectorPerModelTests {
+    private static let weeklyWindowMinutes = DurationMinutes(rawValue: 10080)
+
+    private func makeTempDir() -> String {
+        let dir = NSTemporaryDirectory() + "ai-tracker-claude-model-\(UUID().uuidString)"
+        try! FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    private func makeConnector(dir: String) -> ClaudeCodeConnector {
+        let configPath = "\(dir)/claude.json"
+        let json = #"{"oauthAccount":{"emailAddress":"user@example.com"}}"#
+        try! json.write(toFile: configPath, atomically: true, encoding: .utf8)
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        return ClaudeCodeConnector(
+            claudeConfigPath: configPath,
+            logger: logger,
+            session: mockSession(),
+            tokenProvider: { "fake-token" }
+        )
+    }
+
+    private func mockHTTP200(json: String) {
+        MockURLProtocol.errorToThrow = nil
+        MockURLProtocol.handler = { _ in
+            let data = json.data(using: .utf8)!
+            let resp = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (data, resp)
+        }
+    }
+
+    // MARK: Both per-model keys present
+
+    @Test("both seven_day_sonnet and seven_day_opus present emits 4 metrics")
+    func bothModelKeysPresent() async throws {
+        let dir = makeTempDir()
+        mockHTTP200(json: """
+        {"five_hour":{"utilization":42,"resets_at":"2026-04-17T15:00:00Z"},
+         "seven_day":{"utilization":8,"resets_at":"2026-04-23T21:00:00Z"},
+         "seven_day_sonnet":{"utilization":15,"resets_at":"2026-04-23T21:00:00Z"},
+         "seven_day_opus":{"utilization":3,"resets_at":"2026-04-23T21:00:00Z"}}
+        """)
+        let connector = makeConnector(dir: dir)
+        let entries = try await connector.fetchUsages()
+
+        #expect(entries.count == 1)
+        #expect(entries[0].lastError == nil)
+        #expect(entries[0].metrics.count == 4)
+
+        if case .timeWindow(let name, _, _, let pct) = entries[0].metrics[2] {
+            #expect(name == "Weekly Sonnet")
+            #expect(pct == 15)
+        } else {
+            Issue.record("Expected timeWindow metric for Weekly Sonnet")
+        }
+        if case .timeWindow(let name, _, let dur, let pct) = entries[0].metrics[3] {
+            #expect(name == "Weekly Opus")
+            #expect(pct == 3)
+            #expect(dur == Self.weeklyWindowMinutes)
+        } else {
+            Issue.record("Expected timeWindow metric for Weekly Opus")
+        }
+    }
+
+    // MARK: Only sonnet present
+
+    @Test("only seven_day_sonnet present emits 3 metrics")
+    func onlySonnetPresent() async throws {
+        let dir = makeTempDir()
+        mockHTTP200(json: """
+        {"five_hour":{"utilization":42,"resets_at":"2026-04-17T15:00:00Z"},
+         "seven_day":{"utilization":8,"resets_at":"2026-04-23T21:00:00Z"},
+         "seven_day_sonnet":{"utilization":15,"resets_at":"2026-04-23T21:00:00Z"}}
+        """)
+        let connector = makeConnector(dir: dir)
+        let entries = try await connector.fetchUsages()
+
+        #expect(entries[0].metrics.count == 3)
+        if case .timeWindow(let name, _, _, _) = entries[0].metrics[2] {
+            #expect(name == "Weekly Sonnet")
+        } else {
+            Issue.record("Expected third metric to be Weekly Sonnet")
+        }
+    }
+
+    // MARK: Only opus present
+
+    @Test("only seven_day_opus present emits 3 metrics")
+    func onlyOpusPresent() async throws {
+        let dir = makeTempDir()
+        mockHTTP200(json: """
+        {"five_hour":{"utilization":42,"resets_at":"2026-04-17T15:00:00Z"},
+         "seven_day":{"utilization":8,"resets_at":"2026-04-23T21:00:00Z"},
+         "seven_day_opus":{"utilization":3,"resets_at":"2026-04-23T21:00:00Z"}}
+        """)
+        let connector = makeConnector(dir: dir)
+        let entries = try await connector.fetchUsages()
+
+        #expect(entries[0].metrics.count == 3)
+        if case .timeWindow(let name, _, _, _) = entries[0].metrics[2] {
+            #expect(name == "Weekly Opus")
+        } else {
+            Issue.record("Expected third metric to be Weekly Opus")
+        }
+    }
+
+    // MARK: Both absent — existing behavior unchanged
+
+    @Test("no per-model keys emits only 2 metrics (session + weekly)")
+    func bothModelKeysAbsent() async throws {
+        let dir = makeTempDir()
+        mockHTTP200(json: """
+        {"five_hour":{"utilization":42,"resets_at":"2026-04-17T15:00:00Z"},
+         "seven_day":{"utilization":8,"resets_at":"2026-04-23T21:00:00Z"}}
+        """)
+        let connector = makeConnector(dir: dir)
+        let entries = try await connector.fetchUsages()
+
+        #expect(entries[0].metrics.count == 2)
+    }
+
+    // MARK: resets_at null on one key
+
+    @Test("seven_day_sonnet with null resets_at is silently skipped")
+    func sonnetNullResetsAt() async throws {
+        let dir = makeTempDir()
+        mockHTTP200(json: """
+        {"five_hour":{"utilization":42,"resets_at":"2026-04-17T15:00:00Z"},
+         "seven_day":{"utilization":8,"resets_at":"2026-04-23T21:00:00Z"},
+         "seven_day_sonnet":{"utilization":15,"resets_at":null},
+         "seven_day_opus":{"utilization":3,"resets_at":"2026-04-23T21:00:00Z"}}
+        """)
+        let connector = makeConnector(dir: dir)
+        let entries = try await connector.fetchUsages()
+
+        #expect(entries[0].lastError == nil)
+        #expect(entries[0].metrics.count == 3)
+        if case .timeWindow(let name, _, _, _) = entries[0].metrics[2] {
+            #expect(name == "Weekly Opus")
+        } else {
+            Issue.record("Expected third metric to be Weekly Opus (sonnet skipped)")
+        }
+    }
+
+    // MARK: Per-model metrics preserved on HTTP 429
+
+    @Test("HTTP 429 preserves all 4 per-model metrics from previous successful fetch")
+    func perModelMetricsPreservedOn429() async throws {
+        let dir = makeTempDir()
+        let connector = makeConnector(dir: dir)
+
+        mockHTTP200(json: """
+        {"five_hour":{"utilization":42,"resets_at":"2026-04-17T15:00:00Z"},
+         "seven_day":{"utilization":8,"resets_at":"2026-04-23T21:00:00Z"},
+         "seven_day_sonnet":{"utilization":15,"resets_at":"2026-04-23T21:00:00Z"},
+         "seven_day_opus":{"utilization":3,"resets_at":"2026-04-23T21:00:00Z"}}
+        """)
+        let firstEntries = try await connector.fetchUsages()
+        #expect(firstEntries[0].metrics.count == 4)
+
+        MockURLProtocol.handler = { _ in
+            let body = #"{"error":"rate limited"}"#.data(using: .utf8)!
+            let resp = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!, statusCode: 429, httpVersion: nil, headerFields: nil)!
+            return (body, resp)
+        }
+        let rateLimitedEntries = try await connector.fetchUsages()
+
+        #expect(rateLimitedEntries[0].lastError?.type == "http_429")
+        #expect(rateLimitedEntries[0].metrics.count == 4)
+        #expect(rateLimitedEntries[0].metrics == firstEntries[0].metrics)
+    }
+
+    // MARK: Debug log on HTTP 200
+
+    @Test("debug log is emitted on HTTP 200 with masked payload")
+    func debugLogOnSuccess() async throws {
+        let dir = makeTempDir()
+        mockHTTP200(json: """
+        {"five_hour":{"utilization":42,"resets_at":"2026-04-17T15:00:00Z"},
+         "seven_day":{"utilization":8,"resets_at":"2026-04-23T21:00:00Z"}}
+        """)
+        let connector = makeConnector(dir: dir)
+        _ = try await connector.fetchUsages()
+
+        let logContent = try String(contentsOfFile: "\(dir)/test.log", encoding: .utf8)
+        #expect(logContent.contains("API payload:"))
+    }
+}
