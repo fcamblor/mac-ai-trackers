@@ -15,3 +15,4 @@ When writing or modifying Swift code, you **must** load and follow all five Swif
 - `docs/SWIFT-IO-ROBUSTNESS.md` — atomic writes, flock with timeout, O(n+m) merges
 - `docs/SWIFT-TESTABILITY.md` — dependency injection, test coverage, force-unwrap, comments, magic numbers
 - `docs/SWIFT-VALUE-OBJECTS.md` — value objects for domain fields, struct vs enum, ExpressibleByXxx, Codable
+- `docs/SWIFT-MENUBAR.md` — menu bar UI: why we use `NSStatusItem` (not `MenuBarExtra`), non-template `NSImage`, menu bar appearance detection

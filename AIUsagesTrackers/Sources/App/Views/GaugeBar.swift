@@ -1,10 +1,12 @@
 import SwiftUI
+import AIUsagesTrackersLib
 
 /// A horizontal progress bar with an actual fill and a theoretical consumption marker.
 /// The theoretical marker is a thin vertical tick showing expected consumption based on elapsed time.
 struct GaugeBar: View {
     let actual: Double
     let theoretical: Double
+    var tier: ConsumptionTier?
 
     private static let barHeight: CGFloat = 6
     private static let markerWidth: CGFloat = 2.5
@@ -35,9 +37,7 @@ struct GaugeBar: View {
     }
 
     private var fillColor: Color {
-        let clamped = clamp(actual)
-        if clamped >= 0.9 { return .red }
-        if clamped >= 0.75 { return .orange }
+        if let tier { return tier.color }
         return .accentColor
     }
 

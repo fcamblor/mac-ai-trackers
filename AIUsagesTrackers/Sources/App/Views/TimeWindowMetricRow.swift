@@ -15,6 +15,9 @@ struct TimeWindowMetricRow: View {
 
     var body: some View {
         let now = Date()
+        let theoretical = theoreticalFraction(resetAt: resetAt, windowDuration: windowDuration, now: now)
+        let tier = consumptionRatio(actualPercent: usagePercent, theoreticalFraction: theoretical)
+            .map(consumptionTier(ratio:))
 
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -28,7 +31,8 @@ struct TimeWindowMetricRow: View {
 
             GaugeBar(
                 actual: actualFraction,
-                theoretical: theoreticalFraction(resetAt: resetAt, windowDuration: windowDuration, now: now)
+                theoretical: theoretical,
+                tier: tier
             )
 
             HStack {

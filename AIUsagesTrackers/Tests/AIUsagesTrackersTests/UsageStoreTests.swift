@@ -464,7 +464,7 @@ struct UsageStoreRemainingTimeTests {
     }
 
     @MainActor
-    @Test("invalid ISO8601 resetAt shows 0m")
+    @Test("invalid ISO8601 resetAt shows -- for remaining time")
     func invalidResetAt() async throws {
         let watcher = MockFileWatcher()
         let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
@@ -474,8 +474,9 @@ struct UsageStoreRemainingTimeTests {
             timeWindowMetric(name: "session", resetAt: "not-a-date", usagePercent: 50),
         ])
         watcher.send(data)
+        // Store's formatRemainingTime returns "--" for unparseable dates (with a warning log)
         try await eventually { store.menuBarText != "--" }
-        #expect(store.menuBarText == "S 50% 0m")
+        #expect(store.menuBarText == "S 50% --")
         store.stop()
     }
 
@@ -768,6 +769,247 @@ struct UsageStoreEntriesTests {
         try await eventually { store.entries.count == 1 }
         #expect(store.entries.count == 1)
 
+        store.stop()
+    }
+}
+
+// MARK: - menuBarSegments tests
+
+@Suite("UsageStore menuBarSegments")
+struct UsageStoreMenuBarSegmentsTests {
+
+    @MainActor
+    @Test("default menuBarSegments is empty")
+    func defaultIsEmpty() {
+        let watcher = MockFileWatcher()
+        let store = UsageStore(fileWatcher: watcher)
+        #expect(store.menuBarSegments.isEmpty)
+    }
+
+    @MainActor
+    @Test("single metric produces one segment with text and tier")
+    func singleSegment() async throws {
+        let watcher = MockFileWatcher()
+        // Session: 300 min, reset 15:00, now 12:30 → 50% elapsed, 48% usage → ratio 0.96 → approaching
+        let clock = FixedClock(ISO8601DateFormatter().date(from: "2026-04-17T12:30:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
+        store.start()
+
+        let data = try makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 48),
+        ])
+        watcher.send(data)
+        try await eventually { store.menuBarSegments.count == 1 }
+
+        #expect(store.menuBarSegments.count == 1)
+        #expect(store.menuBarSegments[0].text == "S 48% 2h 30m")
+        #expect(store.menuBarSegments[0].tier == .approaching)
+        store.stop()
+    }
+
+    @MainActor
+    @Test("multiple metrics produce one segment per metric in order")
+    func multipleSegments() async throws {
+        let watcher = MockFileWatcher()
+        let clock = FixedClock(ISO8601DateFormatter().date(from: "2026-04-17T12:30:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
+        store.start()
+
+        let data = try makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 10),
+            timeWindowMetric(name: "weekly",  resetAt: "2026-04-23T21:00:00Z", windowDurationMinutes: 10080, usagePercent: 80),
+        ])
+        watcher.send(data)
+        try await eventually { store.menuBarSegments.count == 2 }
+
+        #expect(store.menuBarSegments[0].text.hasPrefix("S "))
+        #expect(store.menuBarSegments[1].text.hasPrefix("W "))
+        store.stop()
+    }
+
+    @MainActor
+    @Test("segment tier is nil when theoretical fraction is zero")
+    func nilTierAtWindowStart() async throws {
+        let watcher = MockFileWatcher()
+        // Now is exactly at window start → 0% elapsed → tier nil
+        let clock = FixedClock(ISO8601DateFormatter().date(from: "2026-04-17T10:00:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
+        store.start()
+
+        let data = try makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 50),
+        ])
+        watcher.send(data)
+        try await eventually { store.menuBarSegments.count == 1 }
+
+        #expect(store.menuBarSegments[0].tier == nil)
+        store.stop()
+    }
+
+    @MainActor
+    @Test("segments cleared on decode error")
+    func segmentsClearedOnError() async throws {
+        let watcher = MockFileWatcher()
+        let clock = FixedClock(ISO8601DateFormatter().date(from: "2026-04-17T12:30:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
+        store.start()
+
+        let data = try makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 48),
+        ])
+        watcher.send(data)
+        try await eventually { store.menuBarSegments.count == 1 }
+
+        watcher.send("bad".data(using: .utf8)!)
+        try await eventually { store.menuBarSegments.isEmpty }
+        #expect(store.menuBarSegments.isEmpty)
+        store.stop()
+    }
+}
+
+// MARK: - menuBarTier tests
+
+@Suite("UsageStore menuBarTier")
+struct UsageStoreMenuBarTierTests {
+
+    @MainActor
+    @Test("exhausted tier when usage far exceeds theoretical pace")
+    func exhaustedTier() async throws {
+        let watcher = MockFileWatcher()
+        // Session: 300 min window, resets at 15:00, now at 12:30 → 50% elapsed
+        // 80% usage at 50% elapsed → ratio 1.6 → exhausted
+        let clock = FixedClock(ISO8601DateFormatter().date(from: "2026-04-17T12:30:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
+        store.start()
+
+        let data = try makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 80),
+        ])
+        watcher.send(data)
+        try await eventually { store.menuBarText != "--" }
+        #expect(store.menuBarTier == .exhausted)
+        store.stop()
+    }
+
+    @MainActor
+    @Test("comfortable tier when usage is well below pace")
+    func comfortableTier() async throws {
+        let watcher = MockFileWatcher()
+        // Session: 300 min window, resets at 15:00, now at 12:30 → 50% elapsed
+        // 10% usage at 50% elapsed → ratio 0.2 → comfortable
+        let clock = FixedClock(ISO8601DateFormatter().date(from: "2026-04-17T12:30:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
+        store.start()
+
+        let data = try makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 10),
+        ])
+        watcher.send(data)
+        try await eventually { store.menuBarText != "--" }
+        #expect(store.menuBarTier == .comfortable)
+        store.stop()
+    }
+
+    @MainActor
+    @Test("worst tier wins when multiple metrics displayed")
+    func worstTierWins() async throws {
+        let watcher = MockFileWatcher()
+        // Session: 300 min, reset 15:00, now 12:30 → 50% elapsed, 10% usage → ratio 0.2 → comfortable
+        // Weekly: 10080 min, reset Apr 23 21:00, now Apr 17 12:30 → ~89% elapsed, 80% usage → ratio ~0.9 → approaching
+        let clock = FixedClock(ISO8601DateFormatter().date(from: "2026-04-17T12:30:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
+        store.start()
+
+        let data = try makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 10),
+            timeWindowMetric(name: "weekly", resetAt: "2026-04-23T21:00:00Z", windowDurationMinutes: 10080, usagePercent: 80),
+        ])
+        watcher.send(data)
+        try await eventually { store.menuBarText.contains("|") }
+        // Weekly tier is worse than session tier → menuBarTier reflects weekly
+        #expect(store.menuBarTier != nil)
+        #expect(store.menuBarTier! > .comfortable)
+        store.stop()
+    }
+
+    @MainActor
+    @Test("nil tier at window start (theoretical ≈ 0)")
+    func nilTierAtWindowStart() async throws {
+        let watcher = MockFileWatcher()
+        // Session: 300 min window, resets at 15:00, now is well before window start (10:00)
+        // Window start = 15:00 - 300min = 10:00. Now at 10:00 exactly → 0% elapsed → nil tier
+        let clock = FixedClock(ISO8601DateFormatter().date(from: "2026-04-17T10:00:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
+        store.start()
+
+        let data = try makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 50),
+        ])
+        watcher.send(data)
+        try await eventually { store.menuBarText != "--" }
+        // theoreticalFraction is 0 at window start → ratio nil → tier nil
+        #expect(store.menuBarTier == nil)
+        store.stop()
+    }
+
+    @MainActor
+    @Test("nil tier when only pay-as-you-go metrics")
+    func nilTierForPayAsYouGo() async throws {
+        let watcher = MockFileWatcher()
+        let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
+        store.start()
+
+        let data = try makeUsagesJSON(metrics: [payAsYouGoMetric()])
+        watcher.send(data)
+        try await eventually { store.dataProcessedCount == 1 }
+        #expect(store.menuBarTier == nil)
+        store.stop()
+    }
+
+    @MainActor
+    @Test("decode error resets menuBarTier to nil")
+    func decodeErrorResetsTier() async throws {
+        let watcher = MockFileWatcher()
+        let clock = FixedClock(ISO8601DateFormatter().date(from: "2026-04-17T12:30:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
+        store.start()
+
+        // First: valid data that sets a tier
+        let data = try makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 80),
+        ])
+        watcher.send(data)
+        try await eventually { store.menuBarTier != nil }
+        #expect(store.menuBarTier != nil)
+
+        // Then: malformed data
+        watcher.send("bad".data(using: .utf8)!)
+        try await eventually { store.dataProcessedCount == 2 }
+        #expect(store.menuBarTier == nil)
+        store.stop()
+    }
+
+    @MainActor
+    @Test("countdown refresh updates menuBarTier as time passes")
+    func countdownUpdatesTier() async throws {
+        let watcher = MockFileWatcher()
+        let clock = MutableClock(ISO8601DateFormatter().date(from: "2026-04-17T10:01:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 1)
+        store.start()
+
+        // Session: 300 min, reset 15:00, window start 10:00. At 10:01 → ~0.3% elapsed
+        // 50% usage at 0.3% elapsed → very high ratio → exhausted
+        let data = try makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 50),
+        ])
+        watcher.send(data)
+        try await eventually { store.menuBarTier == .exhausted }
+        #expect(store.menuBarTier == .exhausted)
+
+        // Advance to 14:00 → 80% elapsed. 50% usage at 80% → ratio 0.625 → comfortable
+        clock.date = ISO8601DateFormatter().date(from: "2026-04-17T14:00:00Z")!
+        try await eventually(timeout: 3.0) { store.menuBarTier == .comfortable }
+        #expect(store.menuBarTier == .comfortable)
         store.stop()
     }
 }
