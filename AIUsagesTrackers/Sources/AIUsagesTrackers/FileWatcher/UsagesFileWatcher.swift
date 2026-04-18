@@ -119,9 +119,19 @@ public final class UsagesFileWatcher: FileWatching, Sendable {
 
                     emitIfChanged()
 
-                    // Re-establish FS watcher if fd went stale (file was replaced)
-                    let fileExists = FileManager.default.fileExists(atPath: path)
-                    let fdValid = fileDescriptor >= 0 && fcntl(fileDescriptor, F_GETFD) != -1
+                    // Re-establish FS watcher if fd went stale (file was replaced).
+                    // fcntl(F_GETFD) only checks the fd is open, not that it still refers to
+                    // the file at `path`. After an atomic rename the old fd stays open (valid)
+                    // but points to the displaced inode, so FS events for the new file are
+                    // missed until the next poll. Inode comparison catches this case.
+                    // FileManager is used for the path inode to avoid Darwin.stat() ambiguity.
+                    let pathAttrs = try? FileManager.default.attributesOfItem(atPath: path)
+                    let pathInode = pathAttrs.flatMap { $0[.systemFileNumber] as? Int }.map(UInt64.init)
+                    var fdStatBuf = stat()
+                    let fdInode: UInt64? = (fileDescriptor >= 0 && fstat(fileDescriptor, &fdStatBuf) == 0)
+                        ? fdStatBuf.st_ino : nil
+                    let fileExists = pathInode != nil
+                    let fdValid = fileExists && fdInode == pathInode
                     if fileExists && !fdValid {
                         dispatchSource?.cancel()
                         if let (src, fd) = openSource() {
