@@ -346,8 +346,8 @@ struct UsageStoreLifecycleTests {
         store.stop() // second call should be no-op
         watcher.send(try makeUsagesJSON(metrics: [timeWindowMetric()]))
         // watchTask is cancelled; no data processing will happen.
-        // Fixed sleep confirms absence of an event — no reactive condition to poll for.
-        try await Task.sleep(nanoseconds: 100_000_000)
+        // swiftlint:disable:next w3_task_sleep_literal_in_tests — absence confirmation: no reactive signal to poll after stop()
+        try await Task.sleep(for: absenceConfirmationDelay)
         #expect(store.dataProcessedCount == 0)
         #expect(store.menuBarText == "--")
     }
@@ -726,7 +726,7 @@ struct UsageStoreEntriesTests {
         let data = try! JSONSerialization.data(withJSONObject: root)
 
         watcher.send(data)
-        try await Task.sleep(nanoseconds: 50_000_000)
+        try await eventually { store.entries.count == 2 }
 
         #expect(store.entries.count == 2)
         #expect(store.entries.contains { $0.isActive && $0.account == AccountEmail(rawValue: "a@b.com") })

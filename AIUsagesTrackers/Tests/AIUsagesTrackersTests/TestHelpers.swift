@@ -21,6 +21,21 @@ func eventually(
     }
 }
 
+/// Non-isolated overload for tests that need `await` inside the condition
+/// (e.g. reading actor-isolated properties).
+func eventually(
+    timeout: TimeInterval = 2.0,
+    interval: TimeInterval = 0.01,
+    _ condition: @escaping @Sendable () async -> Bool
+) async throws {
+    let deadline = Date(timeIntervalSinceNow: timeout)
+    while true {
+        if await condition() { return }
+        guard Date() < deadline else { throw EventuallyTimeoutError() }
+        try await Task.sleep(for: .seconds(interval))
+    }
+}
+
 // MARK: - Absence-confirmation delay
 
 /// Named constant for tests that confirm the absence of an event.

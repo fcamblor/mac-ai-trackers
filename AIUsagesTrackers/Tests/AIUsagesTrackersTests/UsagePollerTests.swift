@@ -124,7 +124,7 @@ struct UsagePollerTests {
     }
 
     @Test("start is idempotent — calling twice does not double-poll")
-    func startIdempotent() async {
+    func startIdempotent() async throws {
         let dir = makeTempDir()
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
@@ -140,7 +140,7 @@ struct UsagePollerTests {
 
         await poller.start()
         await poller.start() // second call should be no-op
-        try? await Task.sleep(for: .milliseconds(200))
+        try await eventually { await connector.fetchCount >= 2 }
         await poller.stop()
 
         // If start were not idempotent, fetchCount would roughly double
@@ -242,7 +242,7 @@ struct UsagePollerTests {
     }
 
     @Test("start/stop lifecycle")
-    func startStop() async {
+    func startStop() async throws {
         let dir = makeTempDir()
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
@@ -257,7 +257,7 @@ struct UsagePollerTests {
         )
 
         await poller.start()
-        try? await Task.sleep(for: .milliseconds(200))
+        try await eventually { await connector.fetchCount >= 2 }
         await poller.stop()
 
         let count = await connector.fetchCount

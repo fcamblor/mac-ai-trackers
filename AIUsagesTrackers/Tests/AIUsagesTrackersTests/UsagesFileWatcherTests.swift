@@ -30,7 +30,7 @@ struct UsagesFileWatcherTests {
         }
 
         // CancellationError swallowed intentionally; timeout guard only
-        try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+        try? await Task.sleep(for: .seconds(timeout))
         collectTask.cancel()
 
         return await collector.items
@@ -84,8 +84,8 @@ struct UsagesFileWatcherTests {
 
         // Start collecting in the background, then write the file
         async let results = collect(from: watcher, maxCount: 1)
-        // Brief pause to let the watcher reach its first poll before we write
-        try await Task.sleep(nanoseconds: 50_000_000)
+        // swiftlint:disable:next w3_task_sleep_literal_in_tests — sequencing: let watcher start its first poll before we write
+        try await Task.sleep(for: .milliseconds(50))
 
         let expected = #"{"usages":[]}"#
         try write(expected, to: url)
@@ -109,9 +109,8 @@ struct UsagesFileWatcherTests {
         // Collect up to 2 items; if dedup works we should only receive 1
         let results = await collect(from: watcher, maxCount: 2, timeout: 0.5)
 
-        // Wait for at least one additional poll tick beyond the initial emit to confirm dedup
-        // Fixed sleep is appropriate — absence of a second event has no reactive signal.
-        try await Task.sleep(nanoseconds: 300_000_000)
+        // swiftlint:disable:next w3_task_sleep_literal_in_tests — absence confirmation: no reactive signal for a non-emitted event
+        try await Task.sleep(for: .milliseconds(300))
 
         #expect(results.count == 1, "Unchanged modDate must suppress duplicate emits")
     }
