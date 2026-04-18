@@ -1,0 +1,1 @@
+occupes toi de rebase la branche courante (task-feat-usage-details-popover) sur origin/main, en fixant les conflits engendrés par les refactos faits sur la branche chore/resolve-all-tech-debts
