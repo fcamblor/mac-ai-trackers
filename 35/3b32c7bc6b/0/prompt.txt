@@ -1,0 +1,12 @@
+est-ce que la cli entire gère correctement les commit fixup qui sont rebased ?
+
+  J'entends par là que le commit --fixup doit avoir une référence vers un checkpoint entire, mais que lorsqu'on le fusionne pendant le rebase, la référence va etre perdue
+  Est-ce que le checkpoint cible peut tout de meme etre "enrichi" d'une maniere ou d'une autre avec le contexte qui avait ete utilisé sur le fixup ?
+
+---
+
+la cli entire est dispo ici: https://docs.entire.io/introduction tu l'as utilisée pour repondre ?
+
+---
+
+tu pourrais regarder s'il existe pas deja une issue sur le repo et le cas echeant te mettre en ordre de marche pour en creer une ?
