@@ -21,7 +21,7 @@ struct TimeWindowMetricRow: View {
 
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(name.capitalized)
+                Text(name)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
                 Spacer()

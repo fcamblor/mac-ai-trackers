@@ -126,13 +126,13 @@ public actor ClaudeCodeConnector: UsageConnector {
             logger.log(.info, "Fetched successfully: session=\(usage.sessionPercent)% weekly=\(usage.weeklyPercent)% sonnet=\(usage.sonnetWeekly.map { "\($0.percent)%" } ?? "nil") opus=\(usage.opusWeekly.map { "\($0.percent)%" } ?? "nil")")
             var metrics: [UsageMetric] = [
                 .timeWindow(
-                    name: "session",
+                    name: "5h sessions (all models)",
                     resetAt: usage.sessionResetAt,
                     windowDuration: Self.sessionWindowMinutes,
                     usagePercent: UsagePercent(rawValue: usage.sessionPercent)
                 ),
                 .timeWindow(
-                    name: "weekly",
+                    name: "Weekly (all models)",
                     resetAt: usage.weeklyResetAt,
                     windowDuration: Self.weeklyWindowMinutes,
                     usagePercent: UsagePercent(rawValue: usage.weeklyPercent)
