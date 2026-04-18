@@ -1,0 +1,3 @@
+j'aimerais faire en sorte que le "name" du fichier json change pour:
+- "session" => "5h sessions (all models)"
+- "weekly" => "Weekly (all models)"

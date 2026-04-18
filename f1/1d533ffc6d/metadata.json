@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "f11d533ffc6d",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/ClaudeCodeConnector.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Store/UsageStore.swift",
+    "AIUsagesTrackers/Sources/App/Views/TimeWindowMetricRow.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/f1/1d533ffc6d/0/metadata.json",
+      "transcript": "/f1/1d533ffc6d/0/full.jsonl",
+      "content_hash": "/f1/1d533ffc6d/0/content_hash.txt",
+      "prompt": "/f1/1d533ffc6d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 36,
+    "cache_creation_tokens": 97392,
+    "cache_read_tokens": 444550,
+    "output_tokens": 4804,
+    "api_call_count": 14
+  }
+}
