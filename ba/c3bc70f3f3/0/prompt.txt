@@ -1,0 +1,3 @@
+j'aimerais ajouter une feature à la roadmap: faire en sorte de capturer, à intervalles réguliers (toutes les minutes ?), dans un fichier jsonl une "photo" des differents pourcentages pour chaque metrique/account
+
+Ca permettra d'afficher des grpahiques de progression de la consommation dans le temps
