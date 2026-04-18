@@ -1,0 +1,465 @@
+# resolve-tech-debt — Agrégation des reviews & application
+
+## Reviews sources
+- Qualité de code : # Review — Qualité de code
+
+Aucun problème significatif.
+
+Les changements sont mécaniques et bien ciblés : suppression du `nonisolated(unsafe)`, promotion de `eventually()` en helper partagé, remplacement des `Task.sleep` littéraux, annotations `swiftlint:disable` justifiées, et commentaires reformulés sans durées numériques. Le tout est propre et cohérent.
+- Gestion d'erreurs : # Review — Gestion d'erreurs
+
+Diff analysé : `origin/main...HEAD` (9 fichiers, 269+/49−). Le changement porte principalement sur la résolution de violations SwiftLint (W1, W3, W4, W5) dans les tests et le logger. Peu de logique métier touchée.
+
+---
+
+1. **`TestHelpers.swift:5`** — `EventuallyTimeoutError` est un struct vide sans associated values. Quand un test échoue par timeout, le message d'erreur ne dira pas *quel* condition a échoué ni combien de temps il a attendu. Ajouter au minimum le `timeout` et une description de la condition :
+   ```swift
+   struct EventuallyTimeoutError: Error, CustomStringConvertible {
+       let timeout: TimeInterval
+       var description: String { "Condition not met within \(timeout)s" }
+   }
+   ```
+
+2. **`TestHelpers.swift:17-20` / `33-34`** — Le `try await Task.sleep(for:)` à l'intérieur de `eventually()` peut lancer une `CancellationError` qui remontera au test appelant. C'est correct, mais si un test cancel la task parente, l'erreur qui remontera sera `CancellationError` et non `EventuallyTimeoutError` — aucun problème en soi, mais le contrat n'est pas documenté. Mineur.
+
+3. **`UsagesFileWatcherTests.swift:33`** — `try? await Task.sleep(for: .seconds(timeout))` — Le `try?` avale silencieusement une `CancellationError`. Le commentaire explique que c'est intentionnel (ligne 32 : "CancellationError swallowed intentionally"). **Acceptable** dans ce contexte (timeout de collecte), mais la forme a changé de `nanoseconds:` à `for:` sans que le `try?` soit questionné. Pas de régression, ok.
+
+4. **`UsagesFileWatcherTests.swift:88`** — `try await Task.sleep(for: .milliseconds(50))` — Ce sleep sert de séquençage ("let watcher start its first poll before we write"). Si la machine CI est lente, 50ms peut ne pas suffire. Ce n'est pas un bug d'error handling à proprement parler, mais un cas limite de timing qui pourrait provoquer un faux négatif silencieux plutôt qu'un échec explicite. Considérer un `eventually()` sur un signal "watcher is polling" si possible.
+
+5. **`UsagePollerTests.swift:127,245`** — Les signatures passent de `async` à `async throws` (ajout de `throws`). C'est correct puisque `eventually()` lance `EventuallyTimeoutError`. **Pas de problème**, mais vérifier que le test runner (Swift Testing) gère bien les erreurs thrown comme des échecs de test (c'est le cas avec `@Test`).
+
+6. **`UsageStoreTests.swift:349`** — `try await Task.sleep(for: absenceConfirmationDelay)` — Passage de `Task.sleep(nanoseconds: 100_000_000)` à un `Duration` nommé. Le `try` (non `try?`) est correct ici : si le sleep est annulé, le test échouera plutôt que de continuer silencieusement. **Bon changement** par rapport à l'ancien `try?`.
+
+7. **`Logger.swift:59-61`** — Remplacement du formatter `nonisolated(unsafe) static` par une allocation per-call dans `queue.async`. Thread-safe et correct. Pas de risque d'erreur silent.
+
+---
+
+**Verdict** : Aucun problème bloquant d'error handling. La seule amélioration actionnable est le point **1** — enrichir `EventuallyTimeoutError` avec du contexte diagnostique, conformément à `docs/SWIFT-ERROR-HANDLING.md` §"Error types must carry diagnostic context". Les autres points sont mineurs ou informationnels.
+- Couverture de tests : Now let me look at the production source files that were changed to understand what needs test coverage.Now let me check the commit history more carefully for the non-lint commits (the actual production fixes).Now I have a complete picture. Here's the review:
+
+# Review — Couverture de tests
+
+## Changement production : `Logger.swift` (remplacement `nonisolated(unsafe)` → allocation par appel)
+
+1. **LoggerTests.swift : pas de test dédié à la thread-safety du formatter** — Le test de concurrence existant (`concurrentWritesDoNotCrash`) lance 20 écritures parallèles mais ne vérifie que l'absence de crash, pas le format du timestamp. Avec le changement de `nonisolated(unsafe) static let isoFormatter` vers `ISO8601DateFormatter()` par appel, un test devrait vérifier que les entrées de log produites sous contention concurrent ont toutes un **timestamp ISO8601 valide** (pas de corruption partielle). Le test existant passe mais n'asserte pas le contenu.
+
+## Nouveau code partagé : `TestHelpers.swift`
+
+2. **TestHelpers.swift : `eventually()` n'a aucun test unitaire** — C'est un helper de test, donc moins critique, mais deux comportements mériteraient une couverture :
+   - `eventually()` lève bien `EventuallyTimeoutError` quand le timeout expire sans que la condition soit satisfaite.
+   - `eventually()` retourne immédiatement si la condition est vraie dès le premier appel.
+   - La surcharge non-isolée (`async` condition) fonctionne correctement avec un accès actor-isolé.
+
+3. **TestHelpers.swift:45 — `absenceConfirmationDelay` à 100ms est fragile** — Ce n'est pas un test manquant mais un risque de flakiness. Sur CI chargé, 100ms peut ne pas suffire pour un cycle de processing complet. Pas de test validant que cette constante est suffisante.
+
+## Changements de tests : remplacement `Task.sleep` → `eventually()`
+
+4. **UsagePollerTests.swift:143 — le remplacement `try?` → `try` est bon, mais masque un scénario** — Avant, `try? await Task.sleep` ignorait silencieusement `CancellationError`. Maintenant `try await eventually { ... }` propage l'erreur. **Il manque un test explicite vérifiant le comportement quand le poller est stoppé pendant le polling** (cancellation path).
+
+5. **UsagePollerTests.swift — pas de test pour double-stop** — `startIdempotent` teste le double-start, mais il n'y a pas de test symétrique vérifiant que `stop()` appelé deux fois est idempotent (pas de crash, pas de double-cancel).
+
+6. **UsageStoreTests.swift:349 — `absenceConfirmationDelay` après `stop()` est le bon pattern**, mais **il manque un test vérifiant que `start()` après `stop()` reprend correctement le traitement** avec la nouvelle version du `eventually()` partagé. L'ancien `eventually()` local utilisait `Task.sleep(nanoseconds:)` ; le nouveau utilise `Task.sleep(for:)` — les deux overloads de `eventually()` devraient être exercés.
+
+7. **UsagesFileWatcherTests.swift:88 — le `Task.sleep(for: .milliseconds(50))` avec disable inline est un sleep de séquençage** qui reste une source de flakiness. **Il manquerait un test vérifiant que le watcher détecte une écriture qui arrive *avant* le premier poll** (race condition inversée).
+
+## Tests absents pour des comportements existants touchés par le diff
+
+8. **UsageStoreTests.swift — pas de test pour le cas `entries.count == 2` avec des comptes différents + erreur** — Le test `multiAccountKeepAll` (ligne ~725) utilise `try!` (force-unwrap sur `JSONSerialization`) et ne teste pas le cas où le JSON est malformé pour un seul des deux comptes.
+
+9. **ClaudeCodeConnectorTests.swift:7 — `MockURLProtocol` marqué `@unchecked Sendable`** — Le commentaire justifie la sérialisation via `@Suite(.serialized)`, mais **aucun test ne vérifie que l'exécution non-sérialisée produirait effectivement un data-race** (ce serait un test défensif confirmant que la justification est toujours nécessaire).
+
+## Résumé quantitatif
+
+| Catégorie | Couvert | Manquant / Fragile |
+|---|---|---|
+| Logger thread-safety (contenu) | partiel (crash only) | assertion sur format timestamp |
+| `eventually()` helpers | aucun test | timeout, immédiateté, surcharge async |
+| Poller cancellation / double-stop | non testé | 2 cas |
+| FileWatcher race (écriture avant poll) | non testé | 1 cas |
+| Multi-account JSON partiel malformé | non testé | 1 cas |
+- Qualité des commentaires : # Review — Qualité des commentaires
+
+---
+
+**1. `TestHelpers.swift:8-9` — supprimer**
+
+```swift
+/// Uses `Task.sleep(for:)` with a Duration parameter to avoid embedding numeric literals
+/// in the sleep call (which would trigger SwiftLint W3).
+```
+
+Documente un contournement d'outil, pas le comportement de la fonction. Un lecteur qui utilise `eventually()` n'a aucun besoin de savoir que W3 existe. Le WHY réel (polling robuste vs. sleep fixe sous charge CI) n'est pas énoncé ici non plus — il est dans les règles projet. Supprimer ces deux lignes entièrement.
+
+---
+
+**2. `TestHelpers.swift:98` — réécrire**
+
+```swift
+/// Named constant for tests that confirm the absence of an event.
+```
+
+Dit QUOI (c'est une constante nommée). Réécrire en WHY :
+
+```swift
+/// Absence-confirmation tests have no observable state to poll, so they wait a
+/// fixed duration. A shared constant avoids repeating the rationale at each call site.
+```
+
+---
+
+**3. `UsagesFileWatcherTests.swift:112-113` — enrichir**
+
+```swift
+// swiftlint:disable:next w3_task_sleep_literal_in_tests — absence confirmation: no reactive signal for a non-emitted event
+try await Task.sleep(for: .milliseconds(300))
+```
+
+Le commentaire original portait deux informations : *pourquoi un sleep* (pas de signal réactif) et *pourquoi cette magnitude* ("at least one additional poll tick beyond the initial emit"). Le nouveau commentaire perd la seconde. Les 300 ms deviennent magiques. Compléter :
+
+```swift
+// swiftlint:disable:next w3_task_sleep_literal_in_tests — absence confirmation: no reactive
+// signal for a non-emitted event; 300 ms > one poll interval, ensuring dedup had time to fire
+```
+- Impact doc : Now I have a complete picture. Here is the doc impact review:
+
+---
+
+# Review — Impact doc
+
+## 1. `.claude/rules/swift-quality.md` — stale baseline section (lines 51–59)
+
+The paragraph starting *"Violations already present when the rules were introduced are recorded in `AIUsagesTrackers/.swiftlint.baseline`…"* and the regeneration command block are now misleading: the baseline file has been deleted and the `baseline:` key removed from `.swiftlint.yml`. A future agent reading this will infer a baseline mechanism that no longer exists.
+
+**What to update:** remove the three-sentence paragraph and the fenced command block (lines 51–59). If the regeneration command is still useful in edge cases, a one-liner like *"To capture new legacy exceptions: `swift package plugin --allow-writing-to-package-directory swiftlint lint --write-baseline .swiftlint.baseline` then restore the `baseline:` key."* can replace it, but only if you expect the pattern to recur.
+
+---
+
+## 2. `CLAUDE.md` — same stale baseline sentence
+
+The paragraph under *"Automated check via SwiftLint"* contains:
+
+> Violations already present when the rules were introduced are recorded in `AIUsagesTrackers/.swiftlint.baseline` and do not fail the build; new violations matching the same rules do. When a finding fires on a file you did not author, fix it under the same change rather than leaving drift behind, and regenerate the baseline with: …
+
+Same issue as above — the baseline is gone. That paragraph (and the regeneration command) should be removed or replaced with a positive statement: *"All rules are now fully enforced with no baseline exceptions; every new violation fails the build."*
+
+---
+
+## 3. `tech-debt/REDACTED/debt.md` — acceptance criteria unchecked
+
+All four `- [ ]` acceptance criteria have been met by this branch (empty baseline removed, zero warnings, `eventually()` replaces fragile sleeps, `@unchecked Sendable` justified). The checkboxes remain unticked. Mark them `- [x]`.
+
+---
+
+No other docs (`docs/DEVELOPMENT.md`, `roadmap/index.md`, `docs/SWIFT-*.md`) are affected — none of them reference the baseline mechanism directly.
+
+**Dernier message utilisateur** :
+
+---
+
+## Principe non-négociable — discipline des commits
+
+Tu commites AVANT de présenter le résultat. L'approbation finale
+viendra ensuite (apply more / re-run / ship it).
+
+**LANGUE — règle absolue : messages de commit intégralement en anglais.**
+
+**FIXUP — règle absolue :** chaque application d'une recommandation
+produit des commits `--fixup` rattachés au commit source, PAS des
+commits `review(axe):` indépendants. Procédure par bloc :
+```bash
+git log --oneline origin/main..HEAD -- <fichiers>
+SOURCE_HASH=<hash du commit source>
+git add <fichiers>
+git commit --fixup=$SOURCE_HASH
+```
+Si un bloc touche plusieurs commits sources, crée **un fixup par
+source** (staging séparé). L'historique doit être squashable proprement
+avec `git rebase --autosquash`.
+
+## Outillage
+
+Privilégie **Serena** si disponible.
+
+---
+
+## Première itération ( vide)
+
+1. Consolide les 5 reviews en un plan d'action numéroté unique
+   (dédupe entre axes, priorité CRITICAL > HIGH > MED > LOW).
+   Format :
+   ```
+   N. [priorité] [axe] [fichier:ligne] <recommandation>
+   ```
+2. Présente-le. Demande : `all` / `none` / `1,3,5` / texte libre.
+3. N'émets **PAS** le signal.
+
+## Itérations suivantes
+
+### "none" / "skip" / "ship it" / "finaliser"
+→ Émets : <promise>REVIEWS_DONE</promise>
+
+### Sélection (`all`, `1,3,5`, etc.)
+1. Applique chaque reco sélectionnée. Sois chirurgical.
+2. Commit par bloc logique AVEC `--fixup` (voir section ci-dessus).
+3. Lance le gate partagé :
+   ```bash
+   bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
+   ```
+   Si échec (exit non-zero), corrige AVANT de présenter. NE présente
+   PAS "apply done" tant que le gate n'est pas vert.
+4. Rapporte : appliqué / restant / diff stat.
+5. Demande : "apply more / re-run reviews / ship it ?" — n'émets PAS
+   le signal.
+
+### "re-run reviews"
+Le re-run tourne **sur l'état courant** (les fixups sont inclus dans
+le diff).
+
+C'est câblé — tu as accès à Task / Agent. Lance **5 Tasks en parallèle**
+dans UN SEUL message (tool `Agent` avec `subagent_type: general-purpose`),
+chaque prompt commençant par `git diff origin/main...HEAD`
+puis appliquant l'axe correspondant (voir les axes définis phase 4).
+Réponse format strict `[fichier:ligne] recommandation`.
+
+Ré-agrège, re-priorise (CRITICAL > HIGH > MED > LOW), présente,
+repose la question "apply more / re-run / ship it ?". N'émets PAS
+le signal.
+
+### CRITIQUE — discipline du signal
+Émets `<promise>REVIEWS_DONE</promise>` **uniquement** sur un signal
+explicite de clôture. Les questions et demandes d'application NE SONT
+PAS des approbations.
+
+---
+
+# resolve-tech-debt — Agrégation des reviews & application
+
+## Reviews sources
+- Qualité de code : # Review — Qualité de code
+
+Aucun problème significatif.
+
+Les changements sont mécaniques et bien ciblés : suppression du `nonisolated(unsafe)`, promotion de `eventually()` en helper partagé, remplacement des `Task.sleep` littéraux, annotations `swiftlint:disable` justifiées, et commentaires reformulés sans durées numériques. Le tout est propre et cohérent.
+- Gestion d'erreurs : # Review — Gestion d'erreurs
+
+Diff analysé : `origin/main...HEAD` (9 fichiers, 269+/49−). Le changement porte principalement sur la résolution de violations SwiftLint (W1, W3, W4, W5) dans les tests et le logger. Peu de logique métier touchée.
+
+---
+
+1. **`TestHelpers.swift:5`** — `EventuallyTimeoutError` est un struct vide sans associated values. Quand un test échoue par timeout, le message d'erreur ne dira pas *quel* condition a échoué ni combien de temps il a attendu. Ajouter au minimum le `timeout` et une description de la condition :
+   ```swift
+   struct EventuallyTimeoutError: Error, CustomStringConvertible {
+       let timeout: TimeInterval
+       var description: String { "Condition not met within \(timeout)s" }
+   }
+   ```
+
+2. **`TestHelpers.swift:17-20` / `33-34`** — Le `try await Task.sleep(for:)` à l'intérieur de `eventually()` peut lancer une `CancellationError` qui remontera au test appelant. C'est correct, mais si un test cancel la task parente, l'erreur qui remontera sera `CancellationError` et non `EventuallyTimeoutError` — aucun problème en soi, mais le contrat n'est pas documenté. Mineur.
+
+3. **`UsagesFileWatcherTests.swift:33`** — `try? await Task.sleep(for: .seconds(timeout))` — Le `try?` avale silencieusement une `CancellationError`. Le commentaire explique que c'est intentionnel (ligne 32 : "CancellationError swallowed intentionally"). **Acceptable** dans ce contexte (timeout de collecte), mais la forme a changé de `nanoseconds:` à `for:` sans que le `try?` soit questionné. Pas de régression, ok.
+
+4. **`UsagesFileWatcherTests.swift:88`** — `try await Task.sleep(for: .milliseconds(50))` — Ce sleep sert de séquençage ("let watcher start its first poll before we write"). Si la machine CI est lente, 50ms peut ne pas suffire. Ce n'est pas un bug d'error handling à proprement parler, mais un cas limite de timing qui pourrait provoquer un faux négatif silencieux plutôt qu'un échec explicite. Considérer un `eventually()` sur un signal "watcher is polling" si possible.
+
+5. **`UsagePollerTests.swift:127,245`** — Les signatures passent de `async` à `async throws` (ajout de `throws`). C'est correct puisque `eventually()` lance `EventuallyTimeoutError`. **Pas de problème**, mais vérifier que le test runner (Swift Testing) gère bien les erreurs thrown comme des échecs de test (c'est le cas avec `@Test`).
+
+6. **`UsageStoreTests.swift:349`** — `try await Task.sleep(for: absenceConfirmationDelay)` — Passage de `Task.sleep(nanoseconds: 100_000_000)` à un `Duration` nommé. Le `try` (non `try?`) est correct ici : si le sleep est annulé, le test échouera plutôt que de continuer silencieusement. **Bon changement** par rapport à l'ancien `try?`.
+
+7. **`Logger.swift:59-61`** — Remplacement du formatter `nonisolated(unsafe) static` par une allocation per-call dans `queue.async`. Thread-safe et correct. Pas de risque d'erreur silent.
+
+---
+
+**Verdict** : Aucun problème bloquant d'error handling. La seule amélioration actionnable est le point **1** — enrichir `EventuallyTimeoutError` avec du contexte diagnostique, conformément à `docs/SWIFT-ERROR-HANDLING.md` §"Error types must carry diagnostic context". Les autres points sont mineurs ou informationnels.
+- Couverture de tests : Now let me look at the production source files that were changed to understand what needs test coverage.Now let me check the commit history more carefully for the non-lint commits (the actual production fixes).Now I have a complete picture. Here's the review:
+
+# Review — Couverture de tests
+
+## Changement production : `Logger.swift` (remplacement `nonisolated(unsafe)` → allocation par appel)
+
+1. **LoggerTests.swift : pas de test dédié à la thread-safety du formatter** — Le test de concurrence existant (`concurrentWritesDoNotCrash`) lance 20 écritures parallèles mais ne vérifie que l'absence de crash, pas le format du timestamp. Avec le changement de `nonisolated(unsafe) static let isoFormatter` vers `ISO8601DateFormatter()` par appel, un test devrait vérifier que les entrées de log produites sous contention concurrent ont toutes un **timestamp ISO8601 valide** (pas de corruption partielle). Le test existant passe mais n'asserte pas le contenu.
+
+## Nouveau code partagé : `TestHelpers.swift`
+
+2. **TestHelpers.swift : `eventually()` n'a aucun test unitaire** — C'est un helper de test, donc moins critique, mais deux comportements mériteraient une couverture :
+   - `eventually()` lève bien `EventuallyTimeoutError` quand le timeout expire sans que la condition soit satisfaite.
+   - `eventually()` retourne immédiatement si la condition est vraie dès le premier appel.
+   - La surcharge non-isolée (`async` condition) fonctionne correctement avec un accès actor-isolé.
+
+3. **TestHelpers.swift:45 — `absenceConfirmationDelay` à 100ms est fragile** — Ce n'est pas un test manquant mais un risque de flakiness. Sur CI chargé, 100ms peut ne pas suffire pour un cycle de processing complet. Pas de test validant que cette constante est suffisante.
+
+## Changements de tests : remplacement `Task.sleep` → `eventually()`
+
+4. **UsagePollerTests.swift:143 — le remplacement `try?` → `try` est bon, mais masque un scénario** — Avant, `try? await Task.sleep` ignorait silencieusement `CancellationError`. Maintenant `try await eventually { ... }` propage l'erreur. **Il manque un test explicite vérifiant le comportement quand le poller est stoppé pendant le polling** (cancellation path).
+
+5. **UsagePollerTests.swift — pas de test pour double-stop** — `startIdempotent` teste le double-start, mais il n'y a pas de test symétrique vérifiant que `stop()` appelé deux fois est idempotent (pas de crash, pas de double-cancel).
+
+6. **UsageStoreTests.swift:349 — `absenceConfirmationDelay` après `stop()` est le bon pattern**, mais **il manque un test vérifiant que `start()` après `stop()` reprend correctement le traitement** avec la nouvelle version du `eventually()` partagé. L'ancien `eventually()` local utilisait `Task.sleep(nanoseconds:)` ; le nouveau utilise `Task.sleep(for:)` — les deux overloads de `eventually()` devraient être exercés.
+
+7. **UsagesFileWatcherTests.swift:88 — le `Task.sleep(for: .milliseconds(50))` avec disable inline est un sleep de séquençage** qui reste une source de flakiness. **Il manquerait un test vérifiant que le watcher détecte une écriture qui arrive *avant* le premier poll** (race condition inversée).
+
+## Tests absents pour des comportements existants touchés par le diff
+
+8. **UsageStoreTests.swift — pas de test pour le cas `entries.count == 2` avec des comptes différents + erreur** — Le test `multiAccountKeepAll` (ligne ~725) utilise `try!` (force-unwrap sur `JSONSerialization`) et ne teste pas le cas où le JSON est malformé pour un seul des deux comptes.
+
+9. **ClaudeCodeConnectorTests.swift:7 — `MockURLProtocol` marqué `@unchecked Sendable`** — Le commentaire justifie la sérialisation via `@Suite(.serialized)`, mais **aucun test ne vérifie que l'exécution non-sérialisée produirait effectivement un data-race** (ce serait un test défensif confirmant que la justification est toujours nécessaire).
+
+## Résumé quantitatif
+
+| Catégorie | Couvert | Manquant / Fragile |
+|---|---|---|
+| Logger thread-safety (contenu) | partiel (crash only) | assertion sur format timestamp |
+| `eventually()` helpers | aucun test | timeout, immédiateté, surcharge async |
+| Poller cancellation / double-stop | non testé | 2 cas |
+| FileWatcher race (écriture avant poll) | non testé | 1 cas |
+| Multi-account JSON partiel malformé | non testé | 1 cas |
+- Qualité des commentaires : # Review — Qualité des commentaires
+
+---
+
+**1. `TestHelpers.swift:8-9` — supprimer**
+
+```swift
+/// Uses `Task.sleep(for:)` with a Duration parameter to avoid embedding numeric literals
+/// in the sleep call (which would trigger SwiftLint W3).
+```
+
+Documente un contournement d'outil, pas le comportement de la fonction. Un lecteur qui utilise `eventually()` n'a aucun besoin de savoir que W3 existe. Le WHY réel (polling robuste vs. sleep fixe sous charge CI) n'est pas énoncé ici non plus — il est dans les règles projet. Supprimer ces deux lignes entièrement.
+
+---
+
+**2. `TestHelpers.swift:98` — réécrire**
+
+```swift
+/// Named constant for tests that confirm the absence of an event.
+```
+
+Dit QUOI (c'est une constante nommée). Réécrire en WHY :
+
+```swift
+/// Absence-confirmation tests have no observable state to poll, so they wait a
+/// fixed duration. A shared constant avoids repeating the rationale at each call site.
+```
+
+---
+
+**3. `UsagesFileWatcherTests.swift:112-113` — enrichir**
+
+```swift
+// swiftlint:disable:next w3_task_sleep_literal_in_tests — absence confirmation: no reactive signal for a non-emitted event
+try await Task.sleep(for: .milliseconds(300))
+```
+
+Le commentaire original portait deux informations : *pourquoi un sleep* (pas de signal réactif) et *pourquoi cette magnitude* ("at least one additional poll tick beyond the initial emit"). Le nouveau commentaire perd la seconde. Les 300 ms deviennent magiques. Compléter :
+
+```swift
+// swiftlint:disable:next w3_task_sleep_literal_in_tests — absence confirmation: no reactive
+// signal for a non-emitted event; 300 ms > one poll interval, ensuring dedup had time to fire
+```
+- Impact doc : Now I have a complete picture. Here is the doc impact review:
+
+---
+
+# Review — Impact doc
+
+## 1. `.claude/rules/swift-quality.md` — stale baseline section (lines 51–59)
+
+The paragraph starting *"Violations already present when the rules were introduced are recorded in `AIUsagesTrackers/.swiftlint.baseline`…"* and the regeneration command block are now misleading: the baseline file has been deleted and the `baseline:` key removed from `.swiftlint.yml`. A future agent reading this will infer a baseline mechanism that no longer exists.
+
+**What to update:** remove the three-sentence paragraph and the fenced command block (lines 51–59). If the regeneration command is still useful in edge cases, a one-liner like *"To capture new legacy exceptions: `swift package plugin --allow-writing-to-package-directory swiftlint lint --write-baseline .swiftlint.baseline` then restore the `baseline:` key."* can replace it, but only if you expect the pattern to recur.
+
+---
+
+## 2. `CLAUDE.md` — same stale baseline sentence
+
+The paragraph under *"Automated check via SwiftLint"* contains:
+
+> Violations already present when the rules were introduced are recorded in `AIUsagesTrackers/.swiftlint.baseline` and do not fail the build; new violations matching the same rules do. When a finding fires on a file you did not author, fix it under the same change rather than leaving drift behind, and regenerate the baseline with: …
+
+Same issue as above — the baseline is gone. That paragraph (and the regeneration command) should be removed or replaced with a positive statement: *"All rules are now fully enforced with no baseline exceptions; every new violation fails the build."*
+
+---
+
+## 3. `tech-debt/REDACTED/debt.md` — acceptance criteria unchecked
+
+All four `- [ ]` acceptance criteria have been met by this branch (empty baseline removed, zero warnings, `eventually()` replaces fragile sleeps, `@unchecked Sendable` justified). The checkboxes remain unticked. Mark them `- [x]`.
+
+---
+
+No other docs (`docs/DEVELOPMENT.md`, `roadmap/index.md`, `docs/SWIFT-*.md`) are affected — none of them reference the baseline mechanism directly.
+
+**Dernier message utilisateur** : all — traite tous les points 1 à 16. Assure-toi que SwiftLint fonctionne toujours bien après avoir retiré la baseline (zero violations, swift build et swift test passent).
+
+---
+
+## Principe non-négociable — discipline des commits
+
+Tu commites AVANT de présenter le résultat. L'approbation finale
+viendra ensuite (apply more / re-run / ship it).
+
+**LANGUE — règle absolue : messages de commit intégralement en anglais.**
+
+**FIXUP — règle absolue :** chaque application d'une recommandation
+produit des commits `--fixup` rattachés au commit source, PAS des
+commits `review(axe):` indépendants. Procédure par bloc :
+```bash
+git log --oneline origin/main..HEAD -- <fichiers>
+SOURCE_HASH=<hash du commit source>
+git add <fichiers>
+git commit --fixup=$SOURCE_HASH
+```
+Si un bloc touche plusieurs commits sources, crée **un fixup par
+source** (staging séparé). L'historique doit être squashable proprement
+avec `git rebase --autosquash`.
+
+## Outillage
+
+Privilégie **Serena** si disponible.
+
+---
+
+## Première itération (all — traite tous les points 1 à 16. Assure-toi que SwiftLint fonctionne toujours bien après avoir retiré la baseline (zero violations, swift build et swift test passent). vide)
+
+1. Consolide les 5 reviews en un plan d'action numéroté unique
+   (dédupe entre axes, priorité CRITICAL > HIGH > MED > LOW).
+   Format :
+   ```
+   N. [priorité] [axe] [fichier:ligne] <recommandation>
+   ```
+2. Présente-le. Demande : `all` / `none` / `1,3,5` / texte libre.
+3. N'émets **PAS** le signal.
+
+## Itérations suivantes
+
+### "none" / "skip" / "ship it" / "finaliser"
+→ Émets : <promise>REVIEWS_DONE</promise>
+
+### Sélection (`all`, `1,3,5`, etc.)
+1. Applique chaque reco sélectionnée. Sois chirurgical.
+2. Commit par bloc logique AVEC `--fixup` (voir section ci-dessus).
+3. Lance le gate partagé :
+   ```bash
+   bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
+   ```
+   Si échec (exit non-zero), corrige AVANT de présenter. NE présente
+   PAS "apply done" tant que le gate n'est pas vert.
+4. Rapporte : appliqué / restant / diff stat.
+5. Demande : "apply more / re-run reviews / ship it ?" — n'émets PAS
+   le signal.
+
+### "re-run reviews"
+Le re-run tourne **sur l'état courant** (les fixups sont inclus dans
+le diff).
+
+C'est câblé — tu as accès à Task / Agent. Lance **5 Tasks en parallèle**
+dans UN SEUL message (tool `Agent` avec `subagent_type: general-purpose`),
+chaque prompt commençant par `git diff origin/main...HEAD`
+puis appliquant l'axe correspondant (voir les axes définis phase 4).
+Réponse format strict `[fichier:ligne] recommandation`.
+
+Ré-agrège, re-priorise (CRITICAL > HIGH > MED > LOW), présente,
+repose la question "apply more / re-run / ship it ?". N'émets PAS
+le signal.
+
+### CRITIQUE — discipline du signal
+Émets `<promise>REVIEWS_DONE</promise>` **uniquement** sur un signal
+explicite de clôture. Les questions et demandes d'application NE SONT
+PAS des approbations.
