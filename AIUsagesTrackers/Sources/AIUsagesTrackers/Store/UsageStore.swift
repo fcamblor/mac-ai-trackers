@@ -22,6 +22,7 @@ public struct SystemClock: ClockProvider {
 @MainActor
 public final class UsageStore {
     public private(set) var menuBarText: String = "--"
+    public private(set) var menuBarTier: ConsumptionTier?
     /// Incremented each time handleNewData is called, whether the data is valid or malformed.
     /// Tests use this as a reliable signal that the store has consumed the latest yielded item.
     public private(set) var dataProcessedCount: Int = 0
@@ -104,32 +105,59 @@ public final class UsageStore {
             let file = try JSONDecoder().decode(UsagesFile.self, from: data)
             lastFile = file
             entries = file.usages
-            menuBarText = format(file: file)
+            let result = format(file: file)
+            menuBarText = result.text
+            menuBarTier = result.tier
         } catch {
             logger.log(.error, "UsageStore: JSON decode failed: \(error)")
             lastFile = nil
             entries = []
             menuBarText = Self.fallbackText
+            menuBarTier = nil
         }
     }
 
     private func refreshMenuBarText() {
         guard let file = lastFile else { return }
-        menuBarText = format(file: file)
+        let result = format(file: file)
+        menuBarText = result.text
+        menuBarTier = result.tier
     }
 
     // MARK: - Formatting
 
-    private func format(file: UsagesFile) -> String {
+    private struct FormatResult {
+        let text: String
+        let tier: ConsumptionTier?
+    }
+
+    private func format(file: UsagesFile) -> FormatResult {
         guard let entry = file.usages.first(where: {
             $0.vendor == Self.targetVendor && $0.isActive
         }) else {
-            return Self.fallbackText
+            return FormatResult(text: Self.fallbackText, tier: nil)
         }
 
-        let segments = entry.metrics.compactMap(formatTimeWindowSegment)
+        let now = clock.now()
+        var segments: [String] = []
+        var worstTier: ConsumptionTier?
 
-        return segments.isEmpty ? Self.fallbackText : segments.joined(separator: " | ")
+        for metric in entry.metrics {
+            guard let segment = formatTimeWindowSegment(metric) else { continue }
+            segments.append(segment)
+
+            // Compute tier for this metric to track the worst across all displayed metrics
+            if case let .timeWindow(_, resetAt, windowDuration, usagePercent) = metric {
+                let theoretical = theoreticalFraction(resetAt: resetAt, windowDuration: windowDuration, now: now)
+                if let ratio = consumptionRatio(actualPercent: usagePercent, theoreticalFraction: theoretical) {
+                    let tier = consumptionTier(ratio: ratio)
+                    worstTier = worstTier.map { max($0, tier) } ?? tier
+                }
+            }
+        }
+
+        let text = segments.isEmpty ? Self.fallbackText : segments.joined(separator: " | ")
+        return FormatResult(text: text, tier: segments.isEmpty ? nil : worstTier)
     }
 
     private func formatTimeWindowSegment(_ metric: UsageMetric) -> String? {
