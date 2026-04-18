@@ -94,7 +94,21 @@ public actor UsagesFileManager {
         for entry in incoming {
             let key = "\(entry.vendor.rawValue)|\(entry.account.rawValue)"
             if let idx = indexByKey[key] {
-                usages[idx] = entry
+                if entry.lastError != nil {
+                    // Errors must not erase previously acquired data: the file may hold good
+                    // metrics from a prior successful fetch while the connector's in-memory
+                    // lastKnownMetrics is empty (e.g. after an app restart).
+                    var merged = entry
+                    if merged.metrics.isEmpty {
+                        merged.metrics = usages[idx].metrics
+                    }
+                    if merged.lastAcquiredOn == nil {
+                        merged.lastAcquiredOn = usages[idx].lastAcquiredOn
+                    }
+                    usages[idx] = merged
+                } else {
+                    usages[idx] = entry
+                }
             } else {
                 indexByKey[key] = usages.count
                 usages.append(entry)

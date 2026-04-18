@@ -53,9 +53,7 @@ struct AIUsagesTrackersApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            Text("AI Usages Tracker")
-            Divider()
-            Button("Quit") {
+            UsageDetailsView(store: usageStore) {
                 Task {
                     await poller.stop()
                     await accountMonitor.stop()
@@ -64,9 +62,9 @@ struct AIUsagesTrackersApp: App {
                 pidGuard.release()
                 NSApplication.shared.terminate(nil)
             }
-            .keyboardShortcut("q")
         } label: {
             Text(usageStore.menuBarText)
         }
+        .menuBarExtraStyle(.window)
     }
 }

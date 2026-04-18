@@ -12,7 +12,9 @@ public struct UsagesFile: Codable, Equatable, Sendable {
 
 // MARK: - Entry
 
-public struct VendorUsageEntry: Codable, Equatable, Sendable {
+public struct VendorUsageEntry: Codable, Equatable, Sendable, Identifiable {
+    public var id: String { "\(vendor.rawValue):\(account.rawValue)" }
+
     public let vendor: Vendor
     public let account: AccountEmail
     public var isActive: Bool
