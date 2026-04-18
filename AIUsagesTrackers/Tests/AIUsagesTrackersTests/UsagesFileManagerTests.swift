@@ -191,6 +191,93 @@ struct UsagesFileManagerTests {
         #expect(entryA?.lastError == nil)
     }
 
+    // MARK: - metrics preservation on error
+
+    @Test("merge preserves existing metrics when error entry has empty metrics")
+    func mergePreservesMetricsOnError() async {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+        let existingMetrics: [UsageMetric] = [
+            .timeWindow(name: "session", resetAt: "2026-04-17T15:00:00+00:00",
+                        windowDuration: 300, usagePercent: 42),
+            .timeWindow(name: "weekly", resetAt: "2026-04-23T19:00:00+00:00",
+                        windowDuration: 10080, usagePercent: 20),
+        ]
+        await mgr.update(with: [VendorUsageEntry(
+            vendor: "claude", account: "a@b.com", isActive: true,
+            lastAcquiredOn: "2026-04-17T14:00:00+00:00",
+            metrics: existingMetrics
+        )])
+
+        // Simulate a 429 after restart: connector's lastKnownMetrics is empty
+        let errorEntry = VendorUsageEntry(
+            vendor: "claude", account: "a@b.com", isActive: true,
+            lastError: UsageError(timestamp: "2026-04-17T15:00:00+00:00", type: "http_429"),
+            metrics: []
+        )
+        await mgr.update(with: [errorEntry])
+
+        let result = await mgr.read()
+        #expect(result.usages.count == 1)
+        #expect(result.usages[0].lastError?.type == "http_429")
+        #expect(result.usages[0].metrics == existingMetrics)
+    }
+
+    @Test("merge preserves lastAcquiredOn when error entry has nil lastAcquiredOn")
+    func mergePreservesLastAcquiredOnOnError() async {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+        let acquiredOn: ISODate = "2026-04-17T14:00:00+00:00"
+        await mgr.update(with: [VendorUsageEntry(
+            vendor: "claude", account: "a@b.com", isActive: true,
+            lastAcquiredOn: acquiredOn,
+            metrics: []
+        )])
+
+        let errorEntry = VendorUsageEntry(
+            vendor: "claude", account: "a@b.com", isActive: true,
+            lastAcquiredOn: nil,
+            lastError: UsageError(timestamp: "2026-04-17T15:00:00+00:00", type: "http_429"),
+            metrics: []
+        )
+        await mgr.update(with: [errorEntry])
+
+        let result = await mgr.read()
+        #expect(result.usages[0].lastAcquiredOn == acquiredOn)
+        #expect(result.usages[0].lastError?.type == "http_429")
+    }
+
+    @Test("merge uses incoming metrics from error entry when connector provides them (lastKnownMetrics populated)")
+    func mergeUsesIncomingMetricsFromErrorWhenPresent() async {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+        let oldMetrics: [UsageMetric] = [
+            .timeWindow(name: "session", resetAt: "2026-04-17T12:00:00+00:00",
+                        windowDuration: 300, usagePercent: 10),
+        ]
+        await mgr.update(with: [VendorUsageEntry(
+            vendor: "claude", account: "a@b.com", isActive: true,
+            lastAcquiredOn: "2026-04-17T11:00:00+00:00",
+            metrics: oldMetrics
+        )])
+
+        // Connector had a successful fetch earlier in the same session: lastKnownMetrics is set
+        let freshMetrics: [UsageMetric] = [
+            .timeWindow(name: "session", resetAt: "2026-04-17T15:00:00+00:00",
+                        windowDuration: 300, usagePercent: 55),
+        ]
+        let errorEntryWithMetrics = VendorUsageEntry(
+            vendor: "claude", account: "a@b.com", isActive: true,
+            lastError: UsageError(timestamp: "2026-04-17T16:00:00+00:00", type: "http_429"),
+            metrics: freshMetrics
+        )
+        await mgr.update(with: [errorEntryWithMetrics])
+
+        let result = await mgr.read()
+        #expect(result.usages[0].metrics == freshMetrics)
+        #expect(result.usages[0].lastError?.type == "http_429")
+    }
+
     @Test("read handles corrupt JSON gracefully")
     func readCorruptJSON() async {
         let dir = makeTempDir()
