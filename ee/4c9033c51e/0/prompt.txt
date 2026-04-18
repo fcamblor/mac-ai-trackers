@@ -1,0 +1,12 @@
+je viens d'essayer de fetcher les données pour mon nouveau compte fcamblor@gmail.com et j'ai l'erreur suivante:
+[2026-04-18T20:10:22Z] [INFO] Fetching usages for account=fcamblor@gmail.com
+[2026-04-18T20:10:23Z] [INFO] API response: HTTP 200
+[2026-04-18T20:10:23Z] [ERROR] Response parse failed: API response does not match expected format — top-level keys: ["seven_day_oauth_apps", "omelette_promotional", "seven_day_sonnet", "seven_day_cowork", "seven_day_opus", "seven_day_omelette", "five_hour", "iguana_necktie", "seven_day", "extra_usage"]
+
+
+Une idée ?
+On ne logge pas la payload brute dans le claude-usages-connector.log, c'est dommage car ca serait utile pour comprendre le problème
+
+---
+
+quand je change de compte (par exemple de frederic.camblor@4sh.fr à fcamblor@gmail.com) les metriques de l'ancien compte (frederic.camblor@4sh.fr) ne sont pas conservés dans le usages json alors qu'il faudrait le faire
