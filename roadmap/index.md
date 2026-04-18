@@ -17,6 +17,7 @@ graph TD
     codex-connector["Codex connector"]
     vendor-status-monitor --> codex-connector
     settings-window --> codex-connector
+    usage-history-snapshots["Usage history snapshots"]
 ```
 
 ## Epics
@@ -26,3 +27,4 @@ graph TD
 3. `planned` — [Settings window](settings-window.md) — open a native macOS settings window via a cog button in the popover for app-wide configuration.
 4. `planned` — [Buy me a coffee](buy-me-a-coffee.md) — add a discreet donation button in the popover footer that opens the developer's donation page in the browser.
 5. `planned` — [Codex connector](codex-connector.md) — add OpenAI Codex CLI as a second tracked vendor alongside Claude.
+6. `planned` — [Usage history snapshots](usage-history-snapshots.md) — periodically record metric values to a JSONL file for future consumption graph views.
