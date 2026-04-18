@@ -1,0 +1,449 @@
+# implement-roadmap-feature — Agrégation des reviews & application
+
+## Reviews sources
+- Qualité de code : Let me read the full connector file for context.```
+# Review — Qualité de code
+
+1. [ClaudeCodeConnector.swift:141-156] Duplication entre les blocs sonnet et opus — seul le nom et le champ source changent. Une boucle sur un tableau de tuples `[(key: \sonnetWeekly…, name: "Weekly Sonnet"), …]` ou une petite closure locale éliminerait la répétition et rendrait l'ajout d'un futur modèle (Haiku ?) trivial au lieu de copier-coller un troisième bloc.
+
+2. [ClaudeCodeConnector.swift:275-284] `ParsedUsage` couple percent et resetAt en deux optionnels indépendants alors qu'ils ne sont valides qu'ensemble (comme le prouve le `if let pct …, let reset …` à l'usage). Un seul champ `Optional<(percent: Int, resetAt: ISODate)>` (ou un mini struct dédié) rendrait l'invariant « les deux ou aucun » impossible à violer au lieu de le vérifier au site d'appel.
+
+3. [ClaudeCodeConnector.swift:143] Incohérence de nommage : les métriques existantes utilisent des noms lowercase sans préfixe (`"session"`, `"weekly"`) alors que les nouvelles utilisent title-case avec préfixe (`"Weekly Sonnet"`, `"Weekly Opus"`). Si ces noms sont affichés ou utilisés comme clés, l'hétérogénéité est confuse ; s'ils sont uniquement internes, harmoniser en lowercase (`"weekly_sonnet"`) serait plus cohérent.
+
+4. [ClaudeCodeConnectorTests.swift:336-348] Les assertions par index (`metrics[2]`, `metrics[3]`) sont fragiles — si l'ordre d'insertion change, les tests cassent sans que le comportement soit erroné. Chercher la métrique par nom (`metrics.first(where: { … })`) serait plus robuste et plus lisible.
+
+5. [ClaudeCodeConnectorTests.swift:311-317] `mockHTTP200` utilise `json.data(using: .utf8)!` — le force-unwrap est acceptable en test, mais cette helper duplique la logique mock déjà présente dans les tests existants (le handler 200 est configuré manuellement dans les anciens tests). Vérifier si les anciens tests pourraient aussi utiliser `mockHTTP200` pour réduire la duplication globale du fichier.
+```
+- Gestion d'erreurs : Let me read the full `extractOptionalModelMetric` area and the `fetchUsages` error paths more closely.Let me check `normalizeISO8601` for silent failures.# Review — Gestion d'erreurs
+
+1. **`ClaudeCodeConnector.swift:318-325`** — `extractOptionalModelMetric` avale silencieusement les cas où le bloc existe (dict valide) mais que `utilization` n'est pas un `Double` (ex: `"utilization": "high"`). C'est un changement de format API qui passerait inaperçu. Ajouter un `logger.log(.debug, ...)` dans le `else` du `guard` quand `json[key]` est un dictionnaire mais que l'extraction échoue, pour distinguer « clé absente » (normal) de « format inattendu » (anomalie à investiguer).
+
+2. **`ClaudeCodeConnector.swift:275-284`** — `ParsedUsage` modélise `sonnetWeeklyPercent` et `sonnetWeeklyResetAt` comme deux optionnels indépendants, alors qu'ils sont structurellement couplés (les deux proviennent du même tuple). Un état `percent != nil && resetAt == nil` est impossible à construire aujourd'hui, mais la struct ne l'interdit pas. Remplacer par un seul optional tuple `sonnetWeekly: (percent: Int, resetAt: ISODate)?` éliminerait cet état invalide à la compilation et simplifierait les `if let` en aval (lignes 141-155).
+
+3. **`ClaudeCodeConnector.swift:126`** — Le log info `"Fetched successfully: session=…% weekly=…%"` n'inclut pas les métriques per-model. En cas de dérive serveur (sonnet/opus toujours absents alors qu'attendus), l'opérateur ne verra rien d'anormal. Étendre le log avec les valeurs optionnelles (ex: `sonnet=15% opus=nil`) améliore l'observabilité sans coût.
+
+4. **`ClaudeCodeConnector.swift:300-302`** — Le commentaire dit « silently skipped » ce qui est cohérent avec le design additive-only, mais il n'y a aucun log même au niveau `.debug`. C'est acceptable si les blocs sont simplement absents, mais si un bloc est présent avec un format cassé (point 1), le silence complet rend le diagnostic difficile en production. Un log `.debug` conditionnel (bloc présent mais extraction `nil`) suffirait.
+
+5. **Tests : pas de couverture du cas `utilization` non-numérique.** Les tests couvrent `resets_at: null` (`sonnetNullResetsAt`) mais pas `"utilization": "bogus"` ni `"seven_day_sonnet": "not_a_dict"`. Ce sont les cas limites où le swallowing silencieux (point 1) pourrait masquer une régression API.
+
+---
+
+**Résumé** : Pas de bug bloquant. Les points 1 et 4 sont les plus actionnables — un log `.debug` dans le `else` de `extractOptionalModelMetric` quand le bloc existe mais que l'extraction échoue couvrirait les deux. Le point 2 est un renforcement structurel qui évite un état invalide représentable.
+- Couverture de tests : Let me read the full source files to understand the complete context.Now let me check `extractOptionalModelMetric` and the production code around the metric-building logic more closely.# Review — Couverture de tests
+
+La suite existante est bien structurée : 7 tests pour les per-model metrics couvrant les combinaisons présence/absence et la préservation sur 429. Voici les lacunes et améliorations identifiées :
+
+## Cas de test manquants
+
+1. **ClaudeCodeConnectorTests.swift** — `extractOptionalModelMetric` quand le bloc existe mais `utilization` est absent ou n'est pas un `Double`. Le test `sonnetNullResetsAt` couvre `resets_at: null`, mais pas `utilization` absent/invalide.
+   - Ajouter : `seven_day_sonnet: {"resets_at":"2026-04-23T21:00:00Z"}` (pas de clé `utilization`) → doit être ignoré silencieusement.
+   - Ajouter : `seven_day_opus: {"utilization":"not_a_number","resets_at":"2026-04-23T21:00:00Z"}` → `utilization` est un `String`, pas `Double` → doit être ignoré.
+
+2. **ClaudeCodeConnectorTests.swift** — bloc per-model qui n'est pas un dictionnaire. Ex : `"seven_day_sonnet": 42` ou `"seven_day_sonnet": null`. `extractOptionalModelMetric` le gère via `json[key] as? [String: Any]`, mais aucun test ne le prouve.
+
+3. **ClaudeCodeConnectorTests.swift** — `utilization` fractionnaire avec arrondi. Le code fait `Int(util.rounded())`. Aucun test ne vérifie que `{"utilization": 15.6, ...}` donne `16` et `{"utilization": 15.4, ...}` donne `15`. Les tests existants n'utilisent que des entiers (`15`, `3`, `42`).
+
+4. **ClaudeCodeConnectorTests.swift:126** — le log `info` ne mentionne pas les métriques per-model. Le message est `"session=\(...)% weekly=\(...)%"`. Pas de test vérifiant que les pourcentages per-model sont loggés (en revanche c'est aussi un défaut du code de production, pas seulement des tests).
+
+5. **ClaudeCodeConnectorTests.swift** — pas de test pour `resets_at` avec sub-second precision sur les blocs per-model (ex : `"2026-04-23T21:00:00.123Z"`). La normalisation `normalizeISO8601` est appelée, mais aucun test per-model ne vérifie que la date retournée est bien tronquée. Le test `bothModelKeysPresent` utilise des dates sans fractional seconds.
+
+6. **ClaudeCodeConnectorTests.swift:336-348** — les assertions sur les métriques per-model dans `bothModelKeysPresent` ne vérifient pas `resetAt`. Seuls `name`, `pct` (et `dur` pour opus) sont assertés. L'`ISODate` du `resetAt` n'est validée dans aucun test per-model.
+
+## Qualité des assertions
+
+7. **ClaudeCodeConnectorTests.swift:336-348** — les `if case` pattern-matches échouent silencieusement si l'ordre des métriques change. Le test suppose `metrics[2]` = Sonnet et `metrics[3]` = Opus. Si l'implémentation change l'ordre d'append, le test passe faussement en tombant dans le `else` + `Issue.record` qui ne fait *pas* échouer le test de manière hard (c'est un soft failure). Préférer une extraction par nom avec un `first(where:)` ou au minimum un `#expect(false)` au lieu de `Issue.record`.
+
+8. **ClaudeCodeConnectorTests.swift:362-367, 381-386** — les tests `onlySonnetPresent` et `onlyOpusPresent` ne vérifient pas que les 2 premières métriques (session + weekly) sont toujours correctes. Ils assertent uniquement le count et le nom de la 3e métrique.
+
+9. **ClaudeCodeConnectorTests.swift:389-400** — `bothModelKeysAbsent` ne vérifie que le count. Pas d'assertion sur les noms/valeurs des 2 métriques restantes. C'est le test le plus faible de la suite — un bug qui altérerait les valeurs des métriques session/weekly passerait inaperçu ici.
+
+## Résumé
+
+| Catégorie | Count |
+|---|---|
+| Cas limites manquants (branches non couvertes) | 3 (#1, #2, #3) |
+| Données de test incomplètes (champs non assertés) | 3 (#5, #6, #8) |
+| Assertions fragiles / couplage à l'implémentation | 1 (#7) |
+| Logging non testé | 1 (#4) |
+| Assertions trop faibles (count-only) | 1 (#9) |
+
+Les points les plus impactants à traiter en priorité : **#1** (branche `utilization` manquante), **#7** (assertions positionnelles fragiles), et **#6** (resetAt jamais vérifié).
+- Qualité des commentaires : Now let me look at the actual source file for full context around the comments:# Review — Qualité des commentaires
+
+**Verdict global : bon niveau.** Les commentaires ajoutés expliquent tous un WHY non-trivial. Voici l'analyse détaillée :
+
+---
+
+## Commentaires nouveaux — OK
+
+**`ClaudeCodeConnector.swift:280`**
+```swift
+// Per-model weekly metrics — present only when the API includes them with valid resets_at
+```
+Correct : explique la contrainte métier (présence conditionnelle + resets_at non-null). Utile car le contraste avec les champs obligatoires au-dessus n'est pas évident à première lecture.
+
+**`ClaudeCodeConnector.swift:300`**
+```swift
+// Per-model weekly metrics are purely additive — absent keys are silently skipped
+```
+Correct : documente le choix de design (pas d'erreur levée), ce qui n'est pas déductible du code seul.
+
+**`ClaudeCodeConnector.swift:316-317` (doc comment `extractOptionalModelMetric`)**
+```swift
+/// Extracts utilization percent and resets_at from an optional per-model block.
+/// Returns nil if the key is missing, not a dict, or resets_at is absent/null.
+```
+Première ligne = QUOI. La deuxième ajoute les cas de nil qui justifient l'existence de la méthode. **Réécrire pour supprimer le QUOI :**
+```swift
+/// Returns nil instead of throwing because per-model keys are optional in the API —
+/// a missing or malformed block must not fail the whole fetch.
+```
+
+**`ClaudeCodeConnectorTests.swift:467`**
+```swift
+// Logger writes asynchronously on a serial queue — drain it before reading
+```
+Correct : WHY pur — sans ce commentaire, `waitForPendingWrites()` semblerait superflu.
+
+---
+
+## Problème identifié
+
+**`ClaudeCodeConnector.swift:316`** — La première ligne du doc comment de `extractOptionalModelMetric` décrit ce que fait la méthode (QUOI), alors que la signature et le nom l'expriment déjà. Seule la deuxième ligne apporte de la valeur (WHY).
+
+**Suggestion :**
+```swift
+/// Per-model keys are optional in the API contract — a missing or malformed block
+/// must be silently skipped, not propagate an error through the whole fetch.
+private static func extractOptionalModelMetric(...)
+```
+
+---
+
+## Commentaires dans `roadmap/` — hors scope code
+
+Le plan `.plan.md` est de la documentation de roadmap, pas du code Swift — la règle WHY/WHAT ne s'y applique pas.
+
+---
+
+**Bilan : 1 retouche suggérée** (`ClaudeCodeConnector.swift:316-317`), 3 commentaires nouveaux corrects, 0 commentaire périmé ou trompeur.
+- Impact doc : # Review — Impact doc
+
+**1. `docs/ARCHITECTURE.md` — Usage-fetching pipeline section**
+
+The "Usage-fetching pipeline" section currently describes connectors as emitting unspecified "usage data". It says nothing about the shape of metrics. The "Display pipeline" section explicitly names only "session and weekly time-window metrics" as what gets stored and consumed — which is now incomplete: the connector conditionally emits two additional `timeWindow` entries (`"Weekly Sonnet"`, `"Weekly Opus"`) when the API provides them.
+
+The sentence to update is in the "Display pipeline" paragraph:
+
+> "formats the session and weekly time-window metrics into the menubar label"
+
+And the "Display pipeline" card description:
+
+> "Each card shows time-window metrics (gauge bar, theoretical pace marker, remaining time, next reset date) and pay-as-you-go metrics"
+
+A reader of the architecture doc today would have no idea that per-model weekly metrics exist in the data layer and flow through to the persisted JSON, even if the UI doesn't render them yet. The usage-fetching pipeline section should note that individual connectors may emit optional per-model `timeWindow` metrics alongside the mandatory session and aggregate-weekly entries, when the upstream API provides them.
+
+**Suggested addition** in the "Usage-fetching pipeline" section (after "fetches usage data asynchronously"):
+
+> A connector may also emit additional optional per-model `timeWindow` entries when the upstream API includes them — these travel through the same persistence and display pipeline as the mandatory session and weekly aggregates, and are silently omitted when the API does not provide them.
+
+No other docs (`docs/DEVELOPMENT.md`, `docs/ROADMAP.md`, Swift guideline docs) require updates — they are unaffected by this change. The roadmap files are exempt per the instructions.
+
+**Dernier message utilisateur** :
+
+---
+
+## Principe non-négociable — discipline des commits
+
+Tu commites AVANT de présenter le résultat.
+
+**LANGUE — règle absolue : messages de commit intégralement en anglais.**
+
+**FIXUP — règle absolue :** chaque application d'une recommandation
+produit des commits `--fixup` rattachés au commit source, PAS des
+commits `review(axe):` indépendants.
+```bash
+git log --oneline origin/main..HEAD -- <fichiers>
+SOURCE_HASH=<hash du commit source>
+git add <fichiers>
+git commit --fixup=$SOURCE_HASH
+```
+Si un bloc touche plusieurs commits sources, un fixup par source.
+L'historique doit être squashable avec `git rebase --autosquash`.
+
+## Outillage
+
+Privilégie **Serena** si disponible.
+
+---
+
+## Première itération ( vide)
+
+1. Consolide les 5 reviews en un plan d'action numéroté unique
+   (dédupe entre axes, priorité CRITICAL > HIGH > MED > LOW).
+   Format :
+   ```
+   N. [priorité] [axe] [fichier:ligne] <recommandation>
+   ```
+2. Présente-le. Demande : `all` / `none` / `1,3,5` / texte libre.
+3. N'émets **PAS** le signal.
+
+## Itérations suivantes
+
+### "none" / "skip" / "ship it" / "finaliser"
+→ Émets : <promise>REVIEWS_DONE</promise>
+
+### Sélection (`all`, `1,3,5`, etc.)
+1. Applique chaque reco. Sois chirurgical.
+2. Commit par bloc logique AVEC `--fixup`.
+3. Lance le gate partagé :
+   ```bash
+   bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
+   ```
+   Si échec, corrige AVANT de présenter. NE présente PAS "apply done"
+   tant que le gate n'est pas vert.
+4. Rapporte : appliqué / restant / diff stat.
+5. Demande : "apply more / re-run reviews / ship it ?" — n'émets PAS
+   le signal.
+
+### "re-run reviews"
+Le re-run tourne **sur l'état courant** (fixups inclus).
+
+Lance **5 Tasks en parallèle** dans UN SEUL message (tool `Agent`
+avec `subagent_type: general-purpose`), chaque prompt commençant par
+`git diff origin/main...HEAD` puis appliquant l'axe
+correspondant (voir phase 4). Réponse format strict
+`[fichier:ligne] recommandation`.
+
+Ré-agrège, re-priorise, présente, repose la question
+"apply more / re-run / ship it ?". N'émets PAS le signal.
+
+### CRITIQUE — discipline du signal
+Émets `<promise>REVIEWS_DONE</promise>` **uniquement** sur un signal
+explicite de clôture.
+
+---
+
+# implement-roadmap-feature — Agrégation des reviews & application
+
+## Reviews sources
+- Qualité de code : Let me read the full connector file for context.```
+# Review — Qualité de code
+
+1. [ClaudeCodeConnector.swift:141-156] Duplication entre les blocs sonnet et opus — seul le nom et le champ source changent. Une boucle sur un tableau de tuples `[(key: \sonnetWeekly…, name: "Weekly Sonnet"), …]` ou une petite closure locale éliminerait la répétition et rendrait l'ajout d'un futur modèle (Haiku ?) trivial au lieu de copier-coller un troisième bloc.
+
+2. [ClaudeCodeConnector.swift:275-284] `ParsedUsage` couple percent et resetAt en deux optionnels indépendants alors qu'ils ne sont valides qu'ensemble (comme le prouve le `if let pct …, let reset …` à l'usage). Un seul champ `Optional<(percent: Int, resetAt: ISODate)>` (ou un mini struct dédié) rendrait l'invariant « les deux ou aucun » impossible à violer au lieu de le vérifier au site d'appel.
+
+3. [ClaudeCodeConnector.swift:143] Incohérence de nommage : les métriques existantes utilisent des noms lowercase sans préfixe (`"session"`, `"weekly"`) alors que les nouvelles utilisent title-case avec préfixe (`"Weekly Sonnet"`, `"Weekly Opus"`). Si ces noms sont affichés ou utilisés comme clés, l'hétérogénéité est confuse ; s'ils sont uniquement internes, harmoniser en lowercase (`"weekly_sonnet"`) serait plus cohérent.
+
+4. [ClaudeCodeConnectorTests.swift:336-348] Les assertions par index (`metrics[2]`, `metrics[3]`) sont fragiles — si l'ordre d'insertion change, les tests cassent sans que le comportement soit erroné. Chercher la métrique par nom (`metrics.first(where: { … })`) serait plus robuste et plus lisible.
+
+5. [ClaudeCodeConnectorTests.swift:311-317] `mockHTTP200` utilise `json.data(using: .utf8)!` — le force-unwrap est acceptable en test, mais cette helper duplique la logique mock déjà présente dans les tests existants (le handler 200 est configuré manuellement dans les anciens tests). Vérifier si les anciens tests pourraient aussi utiliser `mockHTTP200` pour réduire la duplication globale du fichier.
+```
+- Gestion d'erreurs : Let me read the full `extractOptionalModelMetric` area and the `fetchUsages` error paths more closely.Let me check `normalizeISO8601` for silent failures.# Review — Gestion d'erreurs
+
+1. **`ClaudeCodeConnector.swift:318-325`** — `extractOptionalModelMetric` avale silencieusement les cas où le bloc existe (dict valide) mais que `utilization` n'est pas un `Double` (ex: `"utilization": "high"`). C'est un changement de format API qui passerait inaperçu. Ajouter un `logger.log(.debug, ...)` dans le `else` du `guard` quand `json[key]` est un dictionnaire mais que l'extraction échoue, pour distinguer « clé absente » (normal) de « format inattendu » (anomalie à investiguer).
+
+2. **`ClaudeCodeConnector.swift:275-284`** — `ParsedUsage` modélise `sonnetWeeklyPercent` et `sonnetWeeklyResetAt` comme deux optionnels indépendants, alors qu'ils sont structurellement couplés (les deux proviennent du même tuple). Un état `percent != nil && resetAt == nil` est impossible à construire aujourd'hui, mais la struct ne l'interdit pas. Remplacer par un seul optional tuple `sonnetWeekly: (percent: Int, resetAt: ISODate)?` éliminerait cet état invalide à la compilation et simplifierait les `if let` en aval (lignes 141-155).
+
+3. **`ClaudeCodeConnector.swift:126`** — Le log info `"Fetched successfully: session=…% weekly=…%"` n'inclut pas les métriques per-model. En cas de dérive serveur (sonnet/opus toujours absents alors qu'attendus), l'opérateur ne verra rien d'anormal. Étendre le log avec les valeurs optionnelles (ex: `sonnet=15% opus=nil`) améliore l'observabilité sans coût.
+
+4. **`ClaudeCodeConnector.swift:300-302`** — Le commentaire dit « silently skipped » ce qui est cohérent avec le design additive-only, mais il n'y a aucun log même au niveau `.debug`. C'est acceptable si les blocs sont simplement absents, mais si un bloc est présent avec un format cassé (point 1), le silence complet rend le diagnostic difficile en production. Un log `.debug` conditionnel (bloc présent mais extraction `nil`) suffirait.
+
+5. **Tests : pas de couverture du cas `utilization` non-numérique.** Les tests couvrent `resets_at: null` (`sonnetNullResetsAt`) mais pas `"utilization": "bogus"` ni `"seven_day_sonnet": "not_a_dict"`. Ce sont les cas limites où le swallowing silencieux (point 1) pourrait masquer une régression API.
+
+---
+
+**Résumé** : Pas de bug bloquant. Les points 1 et 4 sont les plus actionnables — un log `.debug` dans le `else` de `extractOptionalModelMetric` quand le bloc existe mais que l'extraction échoue couvrirait les deux. Le point 2 est un renforcement structurel qui évite un état invalide représentable.
+- Couverture de tests : Let me read the full source files to understand the complete context.Now let me check `extractOptionalModelMetric` and the production code around the metric-building logic more closely.# Review — Couverture de tests
+
+La suite existante est bien structurée : 7 tests pour les per-model metrics couvrant les combinaisons présence/absence et la préservation sur 429. Voici les lacunes et améliorations identifiées :
+
+## Cas de test manquants
+
+1. **ClaudeCodeConnectorTests.swift** — `extractOptionalModelMetric` quand le bloc existe mais `utilization` est absent ou n'est pas un `Double`. Le test `sonnetNullResetsAt` couvre `resets_at: null`, mais pas `utilization` absent/invalide.
+   - Ajouter : `seven_day_sonnet: {"resets_at":"2026-04-23T21:00:00Z"}` (pas de clé `utilization`) → doit être ignoré silencieusement.
+   - Ajouter : `seven_day_opus: {"utilization":"not_a_number","resets_at":"2026-04-23T21:00:00Z"}` → `utilization` est un `String`, pas `Double` → doit être ignoré.
+
+2. **ClaudeCodeConnectorTests.swift** — bloc per-model qui n'est pas un dictionnaire. Ex : `"seven_day_sonnet": 42` ou `"seven_day_sonnet": null`. `extractOptionalModelMetric` le gère via `json[key] as? [String: Any]`, mais aucun test ne le prouve.
+
+3. **ClaudeCodeConnectorTests.swift** — `utilization` fractionnaire avec arrondi. Le code fait `Int(util.rounded())`. Aucun test ne vérifie que `{"utilization": 15.6, ...}` donne `16` et `{"utilization": 15.4, ...}` donne `15`. Les tests existants n'utilisent que des entiers (`15`, `3`, `42`).
+
+4. **ClaudeCodeConnectorTests.swift:126** — le log `info` ne mentionne pas les métriques per-model. Le message est `"session=\(...)% weekly=\(...)%"`. Pas de test vérifiant que les pourcentages per-model sont loggés (en revanche c'est aussi un défaut du code de production, pas seulement des tests).
+
+5. **ClaudeCodeConnectorTests.swift** — pas de test pour `resets_at` avec sub-second precision sur les blocs per-model (ex : `"2026-04-23T21:00:00.123Z"`). La normalisation `normalizeISO8601` est appelée, mais aucun test per-model ne vérifie que la date retournée est bien tronquée. Le test `bothModelKeysPresent` utilise des dates sans fractional seconds.
+
+6. **ClaudeCodeConnectorTests.swift:336-348** — les assertions sur les métriques per-model dans `bothModelKeysPresent` ne vérifient pas `resetAt`. Seuls `name`, `pct` (et `dur` pour opus) sont assertés. L'`ISODate` du `resetAt` n'est validée dans aucun test per-model.
+
+## Qualité des assertions
+
+7. **ClaudeCodeConnectorTests.swift:336-348** — les `if case` pattern-matches échouent silencieusement si l'ordre des métriques change. Le test suppose `metrics[2]` = Sonnet et `metrics[3]` = Opus. Si l'implémentation change l'ordre d'append, le test passe faussement en tombant dans le `else` + `Issue.record` qui ne fait *pas* échouer le test de manière hard (c'est un soft failure). Préférer une extraction par nom avec un `first(where:)` ou au minimum un `#expect(false)` au lieu de `Issue.record`.
+
+8. **ClaudeCodeConnectorTests.swift:362-367, 381-386** — les tests `onlySonnetPresent` et `onlyOpusPresent` ne vérifient pas que les 2 premières métriques (session + weekly) sont toujours correctes. Ils assertent uniquement le count et le nom de la 3e métrique.
+
+9. **ClaudeCodeConnectorTests.swift:389-400** — `bothModelKeysAbsent` ne vérifie que le count. Pas d'assertion sur les noms/valeurs des 2 métriques restantes. C'est le test le plus faible de la suite — un bug qui altérerait les valeurs des métriques session/weekly passerait inaperçu ici.
+
+## Résumé
+
+| Catégorie | Count |
+|---|---|
+| Cas limites manquants (branches non couvertes) | 3 (#1, #2, #3) |
+| Données de test incomplètes (champs non assertés) | 3 (#5, #6, #8) |
+| Assertions fragiles / couplage à l'implémentation | 1 (#7) |
+| Logging non testé | 1 (#4) |
+| Assertions trop faibles (count-only) | 1 (#9) |
+
+Les points les plus impactants à traiter en priorité : **#1** (branche `utilization` manquante), **#7** (assertions positionnelles fragiles), et **#6** (resetAt jamais vérifié).
+- Qualité des commentaires : Now let me look at the actual source file for full context around the comments:# Review — Qualité des commentaires
+
+**Verdict global : bon niveau.** Les commentaires ajoutés expliquent tous un WHY non-trivial. Voici l'analyse détaillée :
+
+---
+
+## Commentaires nouveaux — OK
+
+**`ClaudeCodeConnector.swift:280`**
+```swift
+// Per-model weekly metrics — present only when the API includes them with valid resets_at
+```
+Correct : explique la contrainte métier (présence conditionnelle + resets_at non-null). Utile car le contraste avec les champs obligatoires au-dessus n'est pas évident à première lecture.
+
+**`ClaudeCodeConnector.swift:300`**
+```swift
+// Per-model weekly metrics are purely additive — absent keys are silently skipped
+```
+Correct : documente le choix de design (pas d'erreur levée), ce qui n'est pas déductible du code seul.
+
+**`ClaudeCodeConnector.swift:316-317` (doc comment `extractOptionalModelMetric`)**
+```swift
+/// Extracts utilization percent and resets_at from an optional per-model block.
+/// Returns nil if the key is missing, not a dict, or resets_at is absent/null.
+```
+Première ligne = QUOI. La deuxième ajoute les cas de nil qui justifient l'existence de la méthode. **Réécrire pour supprimer le QUOI :**
+```swift
+/// Returns nil instead of throwing because per-model keys are optional in the API —
+/// a missing or malformed block must not fail the whole fetch.
+```
+
+**`ClaudeCodeConnectorTests.swift:467`**
+```swift
+// Logger writes asynchronously on a serial queue — drain it before reading
+```
+Correct : WHY pur — sans ce commentaire, `waitForPendingWrites()` semblerait superflu.
+
+---
+
+## Problème identifié
+
+**`ClaudeCodeConnector.swift:316`** — La première ligne du doc comment de `extractOptionalModelMetric` décrit ce que fait la méthode (QUOI), alors que la signature et le nom l'expriment déjà. Seule la deuxième ligne apporte de la valeur (WHY).
+
+**Suggestion :**
+```swift
+/// Per-model keys are optional in the API contract — a missing or malformed block
+/// must be silently skipped, not propagate an error through the whole fetch.
+private static func extractOptionalModelMetric(...)
+```
+
+---
+
+## Commentaires dans `roadmap/` — hors scope code
+
+Le plan `.plan.md` est de la documentation de roadmap, pas du code Swift — la règle WHY/WHAT ne s'y applique pas.
+
+---
+
+**Bilan : 1 retouche suggérée** (`ClaudeCodeConnector.swift:316-317`), 3 commentaires nouveaux corrects, 0 commentaire périmé ou trompeur.
+- Impact doc : # Review — Impact doc
+
+**1. `docs/ARCHITECTURE.md` — Usage-fetching pipeline section**
+
+The "Usage-fetching pipeline" section currently describes connectors as emitting unspecified "usage data". It says nothing about the shape of metrics. The "Display pipeline" section explicitly names only "session and weekly time-window metrics" as what gets stored and consumed — which is now incomplete: the connector conditionally emits two additional `timeWindow` entries (`"Weekly Sonnet"`, `"Weekly Opus"`) when the API provides them.
+
+The sentence to update is in the "Display pipeline" paragraph:
+
+> "formats the session and weekly time-window metrics into the menubar label"
+
+And the "Display pipeline" card description:
+
+> "Each card shows time-window metrics (gauge bar, theoretical pace marker, remaining time, next reset date) and pay-as-you-go metrics"
+
+A reader of the architecture doc today would have no idea that per-model weekly metrics exist in the data layer and flow through to the persisted JSON, even if the UI doesn't render them yet. The usage-fetching pipeline section should note that individual connectors may emit optional per-model `timeWindow` metrics alongside the mandatory session and aggregate-weekly entries, when the upstream API provides them.
+
+**Suggested addition** in the "Usage-fetching pipeline" section (after "fetches usage data asynchronously"):
+
+> A connector may also emit additional optional per-model `timeWindow` entries when the upstream API includes them — these travel through the same persistence and display pipeline as the mandatory session and weekly aggregates, and are silently omitted when the API does not provide them.
+
+No other docs (`docs/DEVELOPMENT.md`, `docs/ROADMAP.md`, Swift guideline docs) require updates — they are unaffected by this change. The roadmap files are exempt per the instructions.
+
+**Dernier message utilisateur** : all
+
+---
+
+## Principe non-négociable — discipline des commits
+
+Tu commites AVANT de présenter le résultat.
+
+**LANGUE — règle absolue : messages de commit intégralement en anglais.**
+
+**FIXUP — règle absolue :** chaque application d'une recommandation
+produit des commits `--fixup` rattachés au commit source, PAS des
+commits `review(axe):` indépendants.
+```bash
+git log --oneline origin/main..HEAD -- <fichiers>
+SOURCE_HASH=<hash du commit source>
+git add <fichiers>
+git commit --fixup=$SOURCE_HASH
+```
+Si un bloc touche plusieurs commits sources, un fixup par source.
+L'historique doit être squashable avec `git rebase --autosquash`.
+
+## Outillage
+
+Privilégie **Serena** si disponible.
+
+---
+
+## Première itération (all vide)
+
+1. Consolide les 5 reviews en un plan d'action numéroté unique
+   (dédupe entre axes, priorité CRITICAL > HIGH > MED > LOW).
+   Format :
+   ```
+   N. [priorité] [axe] [fichier:ligne] <recommandation>
+   ```
+2. Présente-le. Demande : `all` / `none` / `1,3,5` / texte libre.
+3. N'émets **PAS** le signal.
+
+## Itérations suivantes
+
+### "none" / "skip" / "ship it" / "finaliser"
+→ Émets : <promise>REVIEWS_DONE</promise>
+
+### Sélection (`all`, `1,3,5`, etc.)
+1. Applique chaque reco. Sois chirurgical.
+2. Commit par bloc logique AVEC `--fixup`.
+3. Lance le gate partagé :
+   ```bash
+   bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
+   ```
+   Si échec, corrige AVANT de présenter. NE présente PAS "apply done"
+   tant que le gate n'est pas vert.
+4. Rapporte : appliqué / restant / diff stat.
+5. Demande : "apply more / re-run reviews / ship it ?" — n'émets PAS
+   le signal.
+
+### "re-run reviews"
+Le re-run tourne **sur l'état courant** (fixups inclus).
+
+Lance **5 Tasks en parallèle** dans UN SEUL message (tool `Agent`
+avec `subagent_type: general-purpose`), chaque prompt commençant par
+`git diff origin/main...HEAD` puis appliquant l'axe
+correspondant (voir phase 4). Réponse format strict
+`[fichier:ligne] recommandation`.
+
+Ré-agrège, re-priorise, présente, repose la question
+"apply more / re-run / ship it ?". N'émets PAS le signal.
+
+### CRITIQUE — discipline du signal
+Émets `<promise>REVIEWS_DONE</promise>` **uniquement** sur un signal
+explicite de clôture.
