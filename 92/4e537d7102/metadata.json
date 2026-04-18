@@ -3,7 +3,7 @@
   "checkpoint_id": "924e537d7102",
   "strategy": "manual-commit",
   "branch": "archon/task-feat-consumption-color-indicators",
-  "checkpoints_count": 0,
+  "checkpoints_count": 1,
   "files_touched": [
     ".claude/rules/swift-quality.md",
     "CLAUDE.md",
@@ -22,13 +22,19 @@
       "transcript": "/92/4e537d7102/1/full.jsonl",
       "content_hash": "/92/4e537d7102/1/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/92/4e537d7102/2/metadata.json",
+      "transcript": "/92/4e537d7102/2/full.jsonl",
+      "content_hash": "/92/4e537d7102/2/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
-    "input_tokens": 0,
-    "cache_creation_tokens": 0,
-    "cache_read_tokens": 0,
-    "output_tokens": 0,
-    "api_call_count": 0
+    "input_tokens": 30,
+    "cache_creation_tokens": 27536,
+    "cache_read_tokens": 898398,
+    "output_tokens": 4588,
+    "api_call_count": 29
   }
 }
