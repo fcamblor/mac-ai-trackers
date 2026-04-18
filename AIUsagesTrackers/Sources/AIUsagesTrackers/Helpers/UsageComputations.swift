@@ -75,6 +75,48 @@ private enum ResetDateFormatting {
     }()
 }
 
+// MARK: - Consumption tier
+
+/// Severity tiers for consumption ratio (actual / theoretical pace).
+/// Ordered by severity so `Comparable` yields the worst tier via `max()`.
+public enum ConsumptionTier: Int, Comparable, Sendable, CaseIterable {
+    case comfortable  // < 0.7
+    case onTrack      // [0.7, 0.9)
+    case approaching  // [0.9, 1.0)
+    case over         // [1.0, 1.2)
+    case critical     // [1.2, 1.6)
+    case exhausted    // >= 1.6
+
+    public static func < (lhs: ConsumptionTier, rhs: ConsumptionTier) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+
+    private static let comfortableUpperBound = 0.7
+    private static let onTrackUpperBound = 0.9
+    private static let approachingUpperBound = 1.0
+    private static let overUpperBound = 1.2
+    private static let criticalUpperBound = 1.6
+}
+
+/// Maps a consumption ratio to the appropriate severity tier.
+public func consumptionTier(ratio: Double) -> ConsumptionTier {
+    switch ratio {
+    case ..<0.7:       return .comfortable
+    case ..<0.9:       return .onTrack
+    case ..<1.0:       return .approaching
+    case ..<1.2:       return .over
+    case ..<1.6:       return .critical
+    default:           return .exhausted
+    }
+}
+
+/// Computes the consumption ratio: how fast actual usage is relative to theoretical pace.
+/// Returns `nil` when `theoreticalFraction` is zero or negative (window not started).
+public func consumptionRatio(actualPercent: UsagePercent, theoreticalFraction: Double) -> Double? {
+    guard theoreticalFraction > 0 else { return nil }
+    return Double(actualPercent.rawValue) / (theoreticalFraction * 100.0)
+}
+
 // MARK: - Entry sorting
 
 extension Array where Element == VendorUsageEntry {
