@@ -64,6 +64,7 @@ struct AIUsagesTrackersApp: App {
             }
         } label: {
             Text(usageStore.menuBarText)
+                .foregroundStyle(usageStore.menuBarTier?.color ?? .primary)
         }
         .menuBarExtraStyle(.window)
     }
