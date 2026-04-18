@@ -1,0 +1,13 @@
+j'aimerais que tu crées une feature dans la roadmap visant à prendre en compte les clefs "seven_day_sonnet" et "seven_day_opus", lorsqu'elle existe + est non null + possede un resets_at non null, dans la payload d'api usage claude
+Il s'agit de metriques time-window de 7j dont le libellé sera respectivement "Weekly Sonnet" et "Weekly opus"
+
+Ca serait bien de logger la full payload de retour dans les logs
+
+
+
+Autre feature à noter: il faudrait faire en sorte de nettoyer les logs: au démarrage de l'app, il faudrait ouvrir toutes les logs et supprimer les entrées qui sont antérieures à 7j dans le passé.
+Ce cleanup devrait également être déclenché une fois par jour en plus du démarrage de l'app
+
+---
+
+reprends la ou tu en etais
