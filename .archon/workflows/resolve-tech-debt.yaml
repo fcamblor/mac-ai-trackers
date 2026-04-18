@@ -1,51 +1,50 @@
 name: resolve-tech-debt
 description: |
-  À utiliser : quand l'utilisateur veut résoudre une entrée de dette technique
-  formalisée dans `tech-debt/`, avec planification, implémentation gatée,
-  PR draft + revue multi-axes, validation des acceptance criteria, puis
-  clôture auditable (suppression du répertoire de dette + mise à jour de
-  la roadmap si l'item y est référencé).
-  Déclencheurs : "resolve tech debt", "résoudre dette", "tackle tech debt",
-                 "résoudre une dette", "resolve-tech-debt".
-  NE PAS utiliser pour : créer une entrée de dette (skill `tech-debt`),
-                         bug fix hors `tech-debt/` (archon-fix-github-issue),
-                         développement de feature (fcr-dev).
+  Use when: the user wants to resolve a tech-debt entry formalized in
+  `tech-debt/`, with planning, gated implementation, draft PR + multi-axis
+  review, acceptance criteria validation, then auditable closure (deletion
+  of the debt directory + roadmap update if the item is referenced there).
+  Triggers: "resolve tech debt", "résoudre dette", "tackle tech debt",
+            "résoudre une dette", "resolve-tech-debt".
+  DO NOT use for: creating a debt entry (skill `tech-debt`),
+                  bug fix outside `tech-debt/` (archon-fix-github-issue),
+                  feature development (fcr-dev).
 
-  Flux :
-    1. CHOOSE — sélectionne l'entrée à résoudre (interactive si ambigu),
-       lit `debt.md`, explore l'état courant du code, détecte la dérive
-    2. PLAN (loop interactive) — écrit `tech-debt/<dirname>/plan.md` et
-       commite chaque version acceptée avec un message centré sur le POURQUOI
-    3. IMPLEMENT (loop, contexte frais, gate déterministe build+test)
-       avec un commit par bloc logique portant le POURQUOI dans le body
-    4. CREATE-PR (draft) — corps synthétisé depuis `debt.md` + `plan.md`
-       + log des commits
-    5. REVIEWS (5 axes parallèles : qualité de code, gestion d'erreurs,
-       couverture de tests, qualité des commentaires, impact doc)
-    6. AGGREGATE-APPLY (loop interactive) — cherry-pick HITL, fixup commits,
-       re-gate après chaque bloc appliqué
-    7. VALIDATE — vérifie point par point les acceptance criteria de `debt.md`,
-       PASS/FAIL explicite
-    8. CLOSE — supprime `tech-debt/<dirname>/` (debt résolue = répertoire
-       supprimé), met à jour `roadmap/index.md` si l'item y est lié
-    9. FINALIZE — push, bascule la PR en ready, affiche l'URL
+  Flow:
+    1. CHOOSE — selects the entry to resolve (interactive if ambiguous),
+       reads `debt.md`, explores current code state, detects drift
+    2. PLAN (interactive loop) — writes `tech-debt/<dirname>/plan.md` and
+       commits each accepted version with a message focused on the WHY
+    3. IMPLEMENT (loop, fresh context, deterministic build+test gate)
+       with one commit per logical block carrying the WHY in the body
+    4. CREATE-PR (draft) — body synthesized from `debt.md` + `plan.md`
+       + commit log
+    5. REVIEWS (5 parallel axes: code quality, error handling,
+       test coverage, comment quality, doc impact)
+    6. AGGREGATE-APPLY (interactive loop) — HITL cherry-pick, fixup commits,
+       re-gate after each applied block
+    7. VALIDATE — checks acceptance criteria from `debt.md` one by one,
+       explicit PASS/FAIL
+    8. CLOSE — deletes `tech-debt/<dirname>/` (resolved debt = deleted directory),
+       updates `roadmap/index.md` if the item is linked there
+    9. FINALIZE — push, marks PR as ready, displays URL
 
-  Entrée ($ARGUMENTS) : nom du répertoire de dette OU mot-clé du résumé
-                        OU vide (choix interactif).
+  Input ($ARGUMENTS): debt directory name OR summary keyword
+                      OR empty (interactive choice).
 
 provider: claude
 interactive: true
 
-# Les loop nodes ignorent le `model:` par-node — seul le workflow-level est
-# hérité. On met un défaut puissant ici (opus 1M) pour la loop `implement`
-# sur gros codebase ; les nodes non-loop peuvent overrider si utile.
+# Loop nodes ignore per-node `model:` — only the workflow-level is inherited.
+# Using a powerful default here (opus 1M) for the `implement` loop on large
+# codebases; non-loop nodes can override if useful.
 model: claude-opus-4-6[1m]
 
 nodes:
   # ═══════════════════════════════════════════════════════════════════════════
-  # PHASE 1 — PLAN (loop interactive)
-  # Fait d'un coup : choix de la dette, lecture de debt.md, détection de la
-  # dérive, rédaction du plan de résolution, commit à chaque itération acceptée.
+  # PHASE 1 — PLAN (interactive loop)
+  # Done in one pass: debt selection, debt.md reading, drift detection,
+  # resolution plan writing, commit at each accepted iteration.
   # ═══════════════════════════════════════════════════════════════════════════
 
   - id: plan
@@ -54,86 +53,86 @@ nodes:
       prompt: |
         # resolve-tech-debt — PLAN
 
-        Tu es un senior engineering partner. Ton job : produire un
-        `tech-debt/<dirname>/plan.md` précis (assez pour qu'un agent autonome
-        l'exécute) pour résoudre une entrée de dette technique existante.
+        You are a senior engineering partner. Your job: produce a precise
+        `tech-debt/<dirname>/plan.md` (precise enough for an autonomous agent
+        to execute) to resolve an existing tech-debt entry.
 
-        **Requête initiale (première itération)** : $ARGUMENTS
-        **Dernier feedback utilisateur (itérations suivantes)** : $LOOP_USER_INPUT
+        **Initial request (first iteration)**: $ARGUMENTS
+        **Last user feedback (subsequent iterations)**: $LOOP_USER_INPUT
 
         ---
 
-        ## Principe non-négociable — discipline des commits
+        ## Non-negotiable principle — commit discipline
 
-        **Tous les commits sont faits AVANT de présenter le contenu à
-        l'utilisateur — JAMAIS après son approbation.** Le commit matérialise
-        ce que l'IA vient de produire ; l'approbation qui suit porte sur un
-        contenu déjà committé.
+        **All commits are made BEFORE presenting the content to the
+        user — NEVER after approval.** The commit materializes what the AI
+        just produced; the subsequent approval applies to already-committed
+        content.
 
-        **LANGUE — règle absolue : tous les messages de commit (sujet ET body)
-        sont rédigés en anglais, sans exception. Le contenu du plan.md aussi
+        **LANGUAGE — absolute rule: all commit messages (subject AND body)
+        are written in English, without exception. The plan.md content too
         (rule `.claude/rules/markdown-authoring.md`).**
 
-        ## Outillage d'exploration préféré
+        ## Preferred exploration tooling
 
-        Privilégie **Serena** (`mcp__serena__find_symbol`,
+        Prefer **Serena** (`mcp__serena__find_symbol`,
         `mcp__serena__search_for_pattern`, `mcp__serena__get_symbols_overview`,
         `mcp__serena__find_referencing_symbols`, `mcp__serena__read_file`)
-        si disponible. Fallback : `Grep` / `Glob` / `Read`.
+        if available. Fallback: `Grep` / `Glob` / `Read`.
 
-        ## Résolution du répertoire de dette cible
+        ## Resolving the target debt directory
 
         ```bash
-        # Détection d'un plan déjà existant (itérations suivantes)
+        # Detect an already existing plan (subsequent iterations)
         EXISTING_PLAN=$(ls tech-debt/*/plan.md 2>/dev/null | head -1)
-        echo "Plan existant : ${EXISTING_PLAN:-<aucun>}"
-        ls tech-debt/ 2>/dev/null || echo "(dossier tech-debt/ absent)"
+        echo "Existing plan: ${EXISTING_PLAN:-<none>}"
+        ls tech-debt/ 2>/dev/null || echo "(tech-debt/ folder missing)"
         ```
 
-        - Si `tech-debt/` est vide ou inexistant → arrête avec un message clair.
-          **N'émets PAS** le signal — la loop doit se terminer sur erreur
-          utilisateur (l'utilisateur saura qu'il faut d'abord créer une dette
-          via le skill `tech-debt`).
-        - Si `EXISTING_PLAN` est non vide (itération > 1 ou reprise) →
-          `DEBT_DIR=$(dirname "$EXISTING_PLAN")` et continue sur cette dette.
-        - Sinon (première itération, pas de plan en cours) → sélection :
-          - Si `$ARGUMENTS` matche exactement un nom de répertoire sous
+        - If `tech-debt/` is empty or missing → stop with a clear message.
+          Do **NOT** emit the signal — the loop must end on user error
+          (the user will know they need to first create a debt entry
+          via the `tech-debt` skill).
+        - If `EXISTING_PLAN` is non-empty (iteration > 1 or resume) →
+          `DEBT_DIR=$(dirname "$EXISTING_PLAN")` and continue on this debt.
+        - Otherwise (first iteration, no plan in progress) → selection:
+          - If `$ARGUMENTS` exactly matches a directory name under
             `tech-debt/` → `DEBT_DIR=tech-debt/<match>`
-          - Sinon si `$ARGUMENTS` matche un mot-clé du résumé → propose le
-            candidat à l'utilisateur et attends confirmation (sans émettre
-            le signal)
-          - Sinon → liste toutes les entrées sous forme de tableau
-            (# | Date | Criticality | Size | Summary), demande le choix
-            (sans émettre le signal). S'il n'y a qu'une seule entrée,
-            confirme-la plutôt que de la demander.
+          - If `$ARGUMENTS` matches a summary keyword → propose the
+            candidate to the user and wait for confirmation (without
+            emitting the signal)
+          - Otherwise → list all entries as a table
+            (# | Date | Criticality | Size | Summary), ask for choice
+            (without emitting the signal). If there is only one entry,
+            confirm it rather than asking.
 
-        ## Lecture de la dette + détection de dérive
+        ## Reading the debt + drift detection
 
-        Une fois `DEBT_DIR` fixé :
+        Once `DEBT_DIR` is set:
 
-        1. Lis `$DEBT_DIR/debt.md` intégralement.
-        2. Pour chaque fichier / zone mentionné·e dans "Affected files / areas",
-           ouvre-le et compare l'état courant à la description de la dette.
-        3. Utilise Grep/Glob (ou Serena) pour vérifier si les patterns décrits
-           existent encore. Note :
-           - **Still valid** : parties de la description toujours exactes
-           - **Drifted** : ce qui a changé depuis que la dette a été enregistrée
-             (fix partiel, nouvelles occurrences, refactor déjà amorcé)
-           - **Scope adjustment** : si les refactoring paths proposés sont
-             toujours pertinents ou doivent être ajustés
-        4. Lis `CLAUDE.md` si présent pour les conventions projet. Si la dette
-           concerne du code Swift, lis aussi les guidelines obligatoires
-           listées dans `CLAUDE.md` sous "Swift code quality".
+        1. Read `$DEBT_DIR/debt.md` in full.
+        2. For each file / area mentioned in "Affected files / areas",
+           open it and compare the current state to the debt description.
+        3. Use Grep/Glob (or Serena) to verify whether the described patterns
+           still exist. Note:
+           - **Still valid**: parts of the description still accurate
+           - **Drifted**: what has changed since the debt was recorded
+             (partial fix, new occurrences, already started refactor)
+           - **Scope adjustment**: whether the proposed refactoring paths
+             are still relevant or need adjustment
+        4. Read `CLAUDE.md` if present for project conventions. If the debt
+           involves Swift code, also read the mandatory guidelines
+           listed in `CLAUDE.md` under "Swift code quality".
 
-        ## Écriture du plan
+        ## Writing the plan
 
-        Si `$DEBT_DIR/plan.md` existe déjà, **n'écrase pas silencieusement** :
-        mentionne-le à l'utilisateur et demande si on amende ou si on réécrit.
+        If `$DEBT_DIR/plan.md` already exists, **do not silently overwrite**:
+        mention it to the user and ask whether to amend or rewrite.
 
-        Le plan doit être **auto-contenu** — assez précis pour qu'un agent
-        autonome l'exécute sans contexte additionnel.
+        The plan must be **self-contained** — precise enough for an
+        autonomous agent to execute without additional context.
 
-        Structure (progressive disclosure : large → précis) :
+        Structure (progressive disclosure: broad → precise):
 
         ```markdown
         ---
@@ -176,60 +175,60 @@ nodes:
          in `debt.md`.>
         ```
 
-        ## Comportement par itération
+        ## Behavior per iteration
 
-        ### Première itération ($LOOP_USER_INPUT vide)
-        1. Résous `DEBT_DIR` (voir section dédiée).
-        2. Lis `debt.md` + explore la dérive.
-        3. Écris `$DEBT_DIR/plan.md`.
-        4. Commit AVANT de présenter :
+        ### First iteration ($LOOP_USER_INPUT empty)
+        1. Resolve `DEBT_DIR` (see dedicated section).
+        2. Read `debt.md` + explore drift.
+        3. Write `$DEBT_DIR/plan.md`.
+        4. Commit BEFORE presenting:
            ```bash
            git add "$DEBT_DIR/plan.md"
            git commit -m "plan(tech-debt): add resolution plan for <summary>" \
              -m "<WHY the chosen approach — drift observed, alternatives rejected, risk trade-offs>"
            ```
-        5. Présente : drift détecté + overall approach + phases, puis demande
-           validation ou feedback. **N'émets PAS** le signal.
+        5. Present: detected drift + overall approach + phases, then ask
+           for validation or feedback. Do **NOT** emit the signal.
 
-        ### L'utilisateur donne du feedback / demande un raffinement
-        - Réécris `plan.md` en incorporant le feedback (état propre, pas de
-          changelog — l'historique vit dans git).
-        - Commit AVANT de re-présenter :
-          - Raffinement mineur : `git add` + `git commit --fixup=HEAD --no-edit`
-          - Rework significatif : nouveau commit avec un message qui explique
-            *pourquoi* la structure a changé (quel point l'utilisateur a
-            soulevé, quel trade-off a été revisité)
-        - N'émets PAS le signal.
+        ### User gives feedback / requests a refinement
+        - Rewrite `plan.md` incorporating the feedback (clean state, no
+          changelog — history lives in git).
+        - Commit BEFORE re-presenting:
+          - Minor refinement: `git add` + `git commit --fixup=HEAD --no-edit`
+          - Significant rework: new commit with a message explaining
+            *why* the structure changed (what point the user raised,
+            what trade-off was revisited)
+        - Do NOT emit the signal.
 
-        ### L'utilisateur veut démarrer l'implémentation
-        Signaux EXPLICITES : "aller impl", "ok impl", "ship it", "go implement",
+        ### User wants to start implementation
+        EXPLICIT signals: "aller impl", "ok impl", "ship it", "go implement",
         "let's go", "ready for impl", "démarrer l'implémentation".
-        → Émets : <promise>PLAN_READY</promise>
+        → Emit: <promise>PLAN_READY</promise>
 
-        ### L'utilisateur valide sans signal clair
-        Signaux ambigus : "ok", "validé", "nickel", 👍, "super".
-        **NE PRODUIS PAS** de suite de ton propre chef, **n'émets PAS** le
-        signal. Pose UNE question courte et binaire :
+        ### User validates without a clear signal
+        Ambiguous signals: "ok", "validé", "nickel", 👍, "super".
+        Do **NOT** proceed on your own, do **NOT** emit the signal. Ask
+        ONE short binary question:
 
-        > Plan validé. Tu veux raffiner un point précis, ou on passe à
-        > l'**implémentation** ?
+        > Plan validated. Do you want to refine a specific point, or shall
+        > we move to **implementation**?
 
-        ### CRITIQUE — discipline du signal
-        Émets `<promise>PLAN_READY</promise>` **uniquement** quand le message
-        de l'utilisateur signifie sans ambiguïté "arrête de planifier, démarre
-        l'implémentation". En cas de doute, n'émets PAS.
+        ### CRITICAL — signal discipline
+        Emit `<promise>PLAN_READY</promise>` **only** when the user's message
+        unambiguously means "stop planning, start implementation". When in
+        doubt, do NOT emit.
 
       until: PLAN_READY
       max_iterations: 15
       interactive: true
       gate_message: |
-        Valide le plan, donne du feedback pour raffiner, ou dis "aller impl"
-        quand tu es prêt à démarrer l'implémentation.
+        Validate the plan, give feedback to refine it, or say "aller impl"
+        when ready to start implementation.
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # PHASE 2 — IMPLEMENT (loop contexte frais + gate déterministe)
-  # Le gate (build + tests) partagé avec fcr-dev : clé `impl-validation-command`
-  # dans `.archon/config.yaml` (déjà configurée pour ce projet Swift).
+  # PHASE 2 — IMPLEMENT (fresh context loop + deterministic gate)
+  # Shared gate (build + tests) with fcr-dev: `impl-validation-command` key
+  # in `.archon/config.yaml` (already configured for this Swift project).
   # ═══════════════════════════════════════════════════════════════════════════
 
   - id: implement
@@ -239,31 +238,30 @@ nodes:
       prompt: |
         # resolve-tech-debt — IMPLEMENT
 
-        Session FRAÎCHE — tu n'as AUCUNE mémoire des itérations précédentes.
-        Lis l'état depuis le disque.
+        FRESH session — you have NO memory of previous iterations.
+        Read state from disk.
 
-        **Requête initiale** : $ARGUMENTS
-        **Feedback de l'itération précédente échouée (le cas échéant)** : $LOOP_USER_INPUT
+        **Initial request**: $ARGUMENTS
+        **Feedback from the previous failed iteration (if any)**: $LOOP_USER_INPUT
 
-        ## Discipline des commits
+        ## Commit discipline
 
-        Tu commites AU FIL de ton implémentation, **un commit par bloc logique**,
-        AVANT que le gate déterministe ou l'utilisateur ne valide quoi que ce
-        soit.
+        You commit AS YOU GO through implementation, **one commit per logical
+        block**, BEFORE the deterministic gate or the user validates anything.
 
-        **LANGUE — règle absolue : tous les messages de commit (sujet ET body)
-        sont rédigés en anglais.**
+        **LANGUAGE — absolute rule: all commit messages (subject AND body)
+        written in English.**
 
-        ## Outillage
+        ## Tooling
 
-        Privilégie **Serena** (`mcp__serena__*`) si disponible, sinon Grep /
+        Prefer **Serena** (`mcp__serena__*`) if available, otherwise Grep /
         Glob / Read.
 
         ## Setup
 
         ```bash
         PLAN_FILE=$(ls tech-debt/*/plan.md 2>/dev/null | head -1)
-        [ -n "$PLAN_FILE" ] || { echo 'ERREUR : aucun tech-debt/*/plan.md'; exit 1; }
+        [ -n "$PLAN_FILE" ] || { echo 'ERROR: no tech-debt/*/plan.md found'; exit 1; }
         DEBT_DIR=$(dirname "$PLAN_FILE")
         echo "=== $DEBT_DIR/debt.md ==="
         cat "$DEBT_DIR/debt.md"
@@ -273,56 +271,56 @@ nodes:
         git status
         ```
 
-        Lis `CLAUDE.md`. Si la dette concerne du code Swift, **lis en plus les
-        cinq docs listées sous "Swift code quality (mandatory)" dans
-        `CLAUDE.md`** — elles sont obligatoires avant toute modif Swift.
+        Read `CLAUDE.md`. If the debt involves Swift code, **also read the
+        five docs listed under "Swift code quality (mandatory)" in
+        `CLAUDE.md`** — mandatory before any Swift modification.
 
-        ## Ta mission cette itération
+        ## Your mission this iteration
 
-        1. Identifie ce qui est déjà implémenté (via `git log`) vs ce qui reste
-           dans le plan. Itérer est OK — tu n'es pas obligé de tout faire
-           en une passe.
-        2. Implémente le prochain bloc logique.
-        3. Écris des **tests solides** : cas nominal + cas limites + cas
-           d'erreur. N'attends pas qu'une review aval te rattrape : tu possèdes
-           la qualité de couverture ICI.
-        4. Commit AU FIL, un commit par bloc logique :
+        1. Identify what is already implemented (via `git log`) vs what
+           remains in the plan. Iterating is OK — you don't have to do
+           everything in one pass.
+        2. Implement the next logical block.
+        3. Write **solid tests**: happy path + edge cases + error cases.
+           Don't wait for a downstream review to catch you: you own the
+           coverage quality HERE.
+        4. Commit AS YOU GO, one commit per logical block:
            ```bash
-           git add <fichiers>
+           git add <files>
            git commit -m "<type>: <subject in English>" \
              -m "<WHY — retained trade-offs, discarded alternatives, technical decisions>"
            ```
-           Types : `feat:`, `test:`, `refactor:`, `fix:`, `chore:`.
-           NE DÉCRIS JAMAIS le QUOI dans le body (le `git diff` s'en charge) —
-           toujours le POURQUOI.
-        5. Avant de te déclarer prêt, lance toi-même build + tests via bash
-           pour réduire les allers-retours sur le gate.
+           Types: `feat:`, `test:`, `refactor:`, `fix:`, `chore:`.
+           NEVER describe the WHAT in the body (the `git diff` covers that) —
+           always the WHY.
+        5. Before declaring yourself ready, run build + tests yourself via
+           bash to reduce round-trips on the gate.
 
-        ## Critère de sortie
+        ## Exit criterion
 
-        Quand tu es confiant que :
-        - Tous les items pertinents du plan sont implémentés
-        - Les tests couvrent cas nominal + limites + erreurs
-        - Le build + les tests passent en local
+        When you are confident that:
+        - All relevant plan items are implemented
+        - Tests cover happy path + edge cases + errors
+        - Build + tests pass locally
 
-        Émets : <promise>IMPL_READY</promise>
+        Emit: <promise>IMPL_READY</promise>
 
-        Le moteur lance alors `until_bash` comme GATE DÉTERMINISTE. En cas
-        d'échec, tu reviendras ici avec la sortie d'erreur — corrige et
-        re-itère.
+        The engine will then run `until_bash` as the DETERMINISTIC GATE. On
+        failure, you will return here with the error output — fix and
+        re-iterate.
 
       until: IMPL_READY
       max_iterations: 8
       fresh_context: true
-      # Script partagé avec fcr-dev. Lit `impl-validation-command` dans
-      # `.archon/config.yaml`. Configuré pour ce projet :
+      # Shared script with fcr-dev. Reads `impl-validation-command` from
+      # `.archon/config.yaml`. Configured for this project:
       # "cd AIUsagesTrackers && swift build && swift test".
       until_bash: |
         bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
 
   # ═══════════════════════════════════════════════════════════════════════════
   # PHASE 3 — CREATE-PR (draft)
-  # Corps synthétisé depuis debt.md + plan.md + log des commits.
+  # Body synthesized from debt.md + plan.md + commit log.
   # ═══════════════════════════════════════════════════════════════════════════
 
   - id: create-pr
@@ -330,10 +328,10 @@ nodes:
     context: fresh
     model: sonnet
     prompt: |
-      # resolve-tech-debt — Création de la PR draft
+      # resolve-tech-debt — Draft PR creation
 
-      **LANGUE — règle absolue : le titre ET le corps de la PR sont rédigés
-      intégralement en anglais.**
+      **LANGUAGE — absolute rule: PR title AND body are written entirely
+      in English.**
 
       ```bash
       git fetch origin $BASE_BRANCH 2>/dev/null || true
@@ -352,7 +350,7 @@ nodes:
       git diff --stat origin/$BASE_BRANCH...HEAD
       ```
 
-      ## Structure requise du corps de PR (tout en anglais)
+      ## Required PR body structure (all in English)
 
       ```markdown
       ## Context
@@ -377,28 +375,28 @@ nodes:
       🤖 Generated by [resolve-tech-debt](.archon/workflows/resolve-tech-debt.yaml)
       ```
 
-      ## Étapes
+      ## Steps
 
-      1. Titre : `"resolve tech-debt: <summary from debt.md front-matter>"`
-      2. Push de la branche courante : `git push -u origin HEAD`
-      3. Construire le corps dans `/tmp/resolve-tech-debt-pr-body.md`, puis :
+      1. Title: `"resolve tech-debt: <summary from debt.md front-matter>"`
+      2. Push the current branch: `git push -u origin HEAD`
+      3. Build the body into `/tmp/resolve-tech-debt-pr-body.md`, then:
          ```bash
          gh pr create --draft --base "$BASE_BRANCH" --title "$TITLE" \
            --body-file /tmp/resolve-tech-debt-pr-body.md
          ```
-      4. **Fail-fast si `gh pr create` échoue** (token sans scope `workflow`,
-         PR déjà existante, remote mal configuré, etc.) :
-         - Message explicite avec la cause probable.
-         - Donne l'URL de création manuelle :
-           `https://github.com/<owner>/<repo>/pull/new/<branche-courante>`.
-         - N'invente PAS d'URL, n'écris PAS "PR créée".
-         - Sors en erreur — les reviews aval peuvent tourner sur `git diff`,
-           mais `finalize` ne pourra pas basculer la PR en ready.
-      5. Si OK, sors l'URL de la PR.
+      4. **Fail-fast if `gh pr create` fails** (token without `workflow` scope,
+         existing PR, misconfigured remote, etc.):
+         - Explicit message with probable cause.
+         - Provide manual creation URL:
+           `https://github.com/<owner>/<repo>/pull/new/<current-branch>`.
+         - Do NOT invent a URL, do NOT write "PR created".
+         - Exit with error — downstream reviews can run on `git diff`,
+           but `finalize` will not be able to mark the PR as ready.
+      5. If OK, output the PR URL.
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # PHASE 4 — REVIEWS (5 axes parallèles)
-  # Même axes que fcr-dev. Prompts inline pour self-containment.
+  # PHASE 4 — REVIEWS (5 parallel axes)
+  # Same axes as fcr-dev. Inline prompts for self-containment.
   # ═══════════════════════════════════════════════════════════════════════════
 
   - id: review-code-quality
@@ -406,29 +404,28 @@ nodes:
     context: fresh
     model: claude-opus-4-6
     prompt: |
-      # Axe de review — QUALITÉ DE CODE
+      # Review axis — CODE QUALITY
 
       ```bash
       git fetch origin $BASE_BRANCH 2>/dev/null || true
       git diff origin/$BASE_BRANCH...HEAD
       ```
 
-      Privilégie **Serena** si disponible, sinon Grep/Glob/Read.
+      Prefer **Serena** if available, otherwise Grep/Glob/Read.
 
-      Focus : idiomes du langage (en particulier les règles Swift listées dans
-      `CLAUDE.md` si du Swift est touché), lisibilité, simplicité,
-      over-engineering, nommage, duplication, ce qu'un humain voit et qu'un
-      linter ne voit pas. Ignore ce qu'un type-checker / linter attraperait
-      déjà.
+      Focus: language idioms (especially Swift rules listed in `CLAUDE.md`
+      if Swift is touched), readability, simplicity, over-engineering,
+      naming, duplication, what a human sees that a linter misses. Ignore
+      what a type-checker / linter would already catch.
 
-      ## Sortie (format strict)
+      ## Output (strict format)
       ```
-      # Review — Qualité de code
+      # Review — Code quality
 
-      1. [fichier:ligne] <recommandation concrète>
+      1. [file:line] <concrete recommendation>
       ...
 
-      (ou "Aucun problème significatif." si propre)
+      (or "No significant issues." if clean)
       ```
 
   - id: review-error-handling
@@ -436,25 +433,25 @@ nodes:
     context: fresh
     model: claude-opus-4-6
     prompt: |
-      # Axe de review — GESTION D'ERREURS
+      # Review axis — ERROR HANDLING
 
       ```bash
       git diff origin/$BASE_BRANCH...HEAD
       ```
 
-      Privilégie **Serena** si disponible.
+      Prefer **Serena** if available.
 
-      Focus : chemins d'erreur, cas limites, null/undefined, race conditions,
-      timeouts, échecs partiels, cleanup des ressources. Silent swallowing ?
-      Pour Swift : `try?` qui masque un échec métier, erreurs sans
-      associated values, `Process` sans timeout — voir
-      `docs/SWIFT-ERROR-HANDLING.md` et `docs/SWIFT-CONCURRENCY.md`.
+      Focus: error paths, edge cases, null/undefined, race conditions,
+      timeouts, partial failures, resource cleanup. Silent swallowing?
+      For Swift: `try?` masking a business failure, errors without
+      associated values, `Process` without timeout — see
+      `docs/SWIFT-ERROR-HANDLING.md` and `docs/SWIFT-CONCURRENCY.md`.
 
-      ## Sortie
+      ## Output
       ```
-      # Review — Gestion d'erreurs
+      # Review — Error handling
 
-      1. [fichier:ligne] <recommandation concrète>
+      1. [file:line] <concrete recommendation>
       ...
       ```
 
@@ -463,26 +460,26 @@ nodes:
     context: fresh
     model: claude-opus-4-6
     prompt: |
-      # Axe de review — COUVERTURE DE TESTS
+      # Review axis — TEST COVERAGE
 
       ```bash
       git diff origin/$BASE_BRANCH...HEAD
       ```
 
-      Privilégie **Serena** si disponible.
+      Prefer **Serena** if available.
 
-      Focus : couverture quantitative (branches, cas limites) + qualité
-      qualitative (les tests assertent-ils le comportement ou juste
-      l'implémentation ? mocks cassants ? modes d'échec manquants ?).
-      Mentionne les tests qui DEVRAIENT exister et n'existent pas.
-      Pour Swift : vérifier la testabilité (DI, pas de force unwrap) —
-      voir `docs/SWIFT-TESTABILITY.md`.
+      Focus: quantitative coverage (branches, edge cases) + qualitative
+      quality (do tests assert behavior or just implementation? brittle
+      mocks? missing failure modes?). Mention tests that SHOULD exist
+      but don't.
+      For Swift: check testability (DI, no force unwrap) —
+      see `docs/SWIFT-TESTABILITY.md`.
 
-      ## Sortie
+      ## Output
       ```
-      # Review — Couverture de tests
+      # Review — Test coverage
 
-      1. [fichier:ligne] <cas de test manquant OU amélioration>
+      1. [file:line] <missing test case OR improvement>
       ...
       ```
 
@@ -491,21 +488,21 @@ nodes:
     context: fresh
     model: sonnet
     prompt: |
-      # Axe de review — QUALITÉ DES COMMENTAIRES
+      # Review axis — COMMENT QUALITY
 
       ```bash
       git diff origin/$BASE_BRANCH...HEAD
       ```
 
-      Focus : POURQUOI vs QUOI. Commentaires périmés, redondants, trompeurs ?
-      Code non-trivial documenté ? Voir la règle projet : "Comment WHY, not
+      Focus: WHY vs WHAT. Stale, redundant, misleading comments?
+      Non-trivial code documented? See project rule: "Comment WHY, not
       WHAT — no restating code in plain English".
 
-      ## Sortie
+      ## Output
       ```
-      # Review — Qualité des commentaires
+      # Review — Comment quality
 
-      1. [fichier:ligne] <ajouter/supprimer/réécrire + contenu suggéré>
+      1. [file:line] <add/remove/rewrite + suggested content>
       ...
       ```
 
@@ -514,7 +511,7 @@ nodes:
     context: fresh
     model: sonnet
     prompt: |
-      # Axe de review — IMPACT DOC
+      # Review axis — DOC IMPACT
 
       ```bash
       git diff origin/$BASE_BRANCH...HEAD
@@ -522,25 +519,25 @@ nodes:
       ls roadmap/*.md 2>/dev/null
       ```
 
-      Focus : quels docs (README, CHANGELOG, docstrings publics, `docs/*.md`,
-      `roadmap/index.md` si l'item touche une epic listée) devraient être
-      mis à jour mais ne l'ont pas été ?
+      Focus: which docs (README, CHANGELOG, public docstrings, `docs/*.md`,
+      `roadmap/index.md` if the item touches a listed epic) should be
+      updated but haven't been?
 
-      Rappel : respecter `.claude/rules/markdown-authoring.md` — tous les
-      `*.md` sont en anglais, éviter les références éphémères (SHAs, PR#).
-      Exception : `roadmap/` peut décrire un état transitoire.
+      Reminder: respect `.claude/rules/markdown-authoring.md` — all
+      `*.md` files in English, avoid ephemeral references (SHAs, PR#).
+      Exception: `roadmap/` may describe a transitional state.
 
-      ## Sortie
+      ## Output
       ```
-      # Review — Impact doc
+      # Review — Doc impact
 
-      1. [fichier] <doc à mettre à jour + contenu>
+      1. [file] <doc to update + content>
       ...
       ```
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # PHASE 5 — AGGREGATE + HITL cherry-pick + apply (loop interactive)
-  # Même discipline que fcr-dev : fixup commits, re-gate après chaque bloc.
+  # PHASE 5 — AGGREGATE + HITL cherry-pick + apply (interactive loop)
+  # Same discipline as fcr-dev: fixup commits, re-gate after each block.
   # ═══════════════════════════════════════════════════════════════════════════
 
   - id: aggregate-apply
@@ -554,104 +551,103 @@ nodes:
     idle_timeout: 600000
     loop:
       prompt: |
-        # resolve-tech-debt — Agrégation des reviews & application
+        # resolve-tech-debt — Review aggregation & application
 
-        ## Reviews sources
-        - Qualité de code : $review-code-quality.output
-        - Gestion d'erreurs : $review-error-handling.output
-        - Couverture de tests : $review-test-coverage.output
-        - Qualité des commentaires : $review-comment-quality.output
-        - Impact doc : $review-docs-impact.output
+        ## Review sources
+        - Code quality: $review-code-quality.output
+        - Error handling: $review-error-handling.output
+        - Test coverage: $review-test-coverage.output
+        - Comment quality: $review-comment-quality.output
+        - Doc impact: $review-docs-impact.output
 
-        **Dernier message utilisateur** : $LOOP_USER_INPUT
+        **Last user message**: $LOOP_USER_INPUT
 
         ---
 
-        ## Principe non-négociable — discipline des commits
+        ## Non-negotiable principle — commit discipline
 
-        Tu commites AVANT de présenter le résultat. L'approbation finale
-        viendra ensuite (apply more / re-run / ship it).
+        You commit BEFORE presenting the result. Final approval
+        comes afterwards (apply more / re-run / ship it).
 
-        **LANGUE — règle absolue : messages de commit intégralement en anglais.**
+        **LANGUAGE — absolute rule: commit messages entirely in English.**
 
-        **FIXUP — règle absolue :** chaque application d'une recommandation
-        produit des commits `--fixup` rattachés au commit source, PAS des
-        commits `review(axe):` indépendants. Procédure par bloc :
+        **FIXUP — absolute rule:** each recommendation application
+        produces `--fixup` commits attached to the source commit, NOT
+        independent `review(axis):` commits. Procedure per block:
         ```bash
-        git log --oneline origin/$BASE_BRANCH..HEAD -- <fichiers>
-        SOURCE_HASH=<hash du commit source>
-        git add <fichiers>
+        git log --oneline origin/$BASE_BRANCH..HEAD -- <files>
+        SOURCE_HASH=<hash of the source commit>
+        git add <files>
         git commit --fixup=$SOURCE_HASH
         ```
-        Si un bloc touche plusieurs commits sources, crée **un fixup par
-        source** (staging séparé). L'historique doit être squashable proprement
-        avec `git rebase --autosquash`.
+        If a block touches multiple source commits, create **one fixup per
+        source** (separate staging). History must be squashable cleanly
+        with `git rebase --autosquash`.
 
-        ## Outillage
+        ## Tooling
 
-        Privilégie **Serena** si disponible.
+        Prefer **Serena** if available.
 
         ---
 
-        ## Première itération ($LOOP_USER_INPUT vide)
+        ## First iteration ($LOOP_USER_INPUT empty)
 
-        1. Consolide les 5 reviews en un plan d'action numéroté unique
-           (dédupe entre axes, priorité CRITICAL > HIGH > MED > LOW).
-           Format :
+        1. Consolidate the 5 reviews into a single numbered action plan
+           (deduplicate across axes, priority CRITICAL > HIGH > MED > LOW).
+           Format:
            ```
-           N. [priorité] [axe] [fichier:ligne] <recommandation>
+           N. [priority] [axis] [file:line] <recommendation>
            ```
-        2. Présente-le. Demande : `all` / `none` / `1,3,5` / texte libre.
-        3. N'émets **PAS** le signal.
+        2. Present it. Ask: `all` / `none` / `1,3,5` / free text.
+        3. Do **NOT** emit the signal.
 
-        ## Itérations suivantes
+        ## Subsequent iterations
 
         ### "none" / "skip" / "ship it" / "finaliser"
-        → Émets : <promise>REVIEWS_DONE</promise>
+        → Emit: <promise>REVIEWS_DONE</promise>
 
-        ### Sélection (`all`, `1,3,5`, etc.)
-        1. Applique chaque reco sélectionnée. Sois chirurgical.
-        2. Commit par bloc logique AVEC `--fixup` (voir section ci-dessus).
-        3. Lance le gate partagé :
+        ### Selection (`all`, `1,3,5`, etc.)
+        1. Apply each selected recommendation. Be surgical.
+        2. Commit per logical block WITH `--fixup` (see section above).
+        3. Run the shared gate:
            ```bash
            bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
            ```
-           Si échec (exit non-zero), corrige AVANT de présenter. NE présente
-           PAS "apply done" tant que le gate n'est pas vert.
-        4. Rapporte : appliqué / restant / diff stat.
-        5. Demande : "apply more / re-run reviews / ship it ?" — n'émets PAS
-           le signal.
+           If failure (non-zero exit), fix BEFORE presenting. Do NOT
+           present "apply done" until the gate is green.
+        4. Report: applied / remaining / diff stat.
+        5. Ask: "apply more / re-run reviews / ship it ?" — do NOT
+           emit the signal.
 
         ### "re-run reviews"
-        Le re-run tourne **sur l'état courant** (les fixups sont inclus dans
-        le diff).
+        The re-run runs **on the current state** (fixups are included in
+        the diff).
 
-        C'est câblé — tu as accès à Task / Agent. Lance **5 Tasks en parallèle**
-        dans UN SEUL message (tool `Agent` avec `subagent_type: general-purpose`),
-        chaque prompt commençant par `git diff origin/$BASE_BRANCH...HEAD`
-        puis appliquant l'axe correspondant (voir les axes définis phase 4).
-        Réponse format strict `[fichier:ligne] recommandation`.
+        This is wired in — you have access to Task / Agent. Launch **5 Tasks
+        in parallel** in ONE SINGLE message (tool `Agent` with
+        `subagent_type: general-purpose`), each prompt starting with
+        `git diff origin/$BASE_BRANCH...HEAD` then applying the corresponding
+        axis (see phase 4 axes). Strict response format
+        `[file:line] recommendation`.
 
-        Ré-agrège, re-priorise (CRITICAL > HIGH > MED > LOW), présente,
-        repose la question "apply more / re-run / ship it ?". N'émets PAS
-        le signal.
+        Re-aggregate, re-prioritize (CRITICAL > HIGH > MED > LOW), present,
+        ask "apply more / re-run / ship it ?" again. Do NOT emit the signal.
 
-        ### CRITIQUE — discipline du signal
-        Émets `<promise>REVIEWS_DONE</promise>` **uniquement** sur un signal
-        explicite de clôture. Les questions et demandes d'application NE SONT
-        PAS des approbations.
+        ### CRITICAL — signal discipline
+        Emit `<promise>REVIEWS_DONE</promise>` **only** on an explicit
+        closure signal. Questions and application requests are NOT approvals.
 
       until: REVIEWS_DONE
       max_iterations: 15
       interactive: true
       gate_message: |
-        Sélectionne (all / none / 1,3,5), demande "re-run reviews" pour
-        une nouvelle passe, ou dis "ship it" pour finaliser.
+        Select (all / none / 1,3,5), ask "re-run reviews" for another
+        pass, or say "ship it" to finalize.
 
   # ═══════════════════════════════════════════════════════════════════════════
   # PHASE 6 — VALIDATE acceptance criteria
-  # Vérifie point par point les critères de debt.md. Si un seul FAIL → stop,
-  # l'utilisateur doit reprendre l'implémentation avant la clôture.
+  # Checks each criterion from debt.md one by one. If a single FAIL → stop,
+  # the user must resume implementation before closure.
   # ═══════════════════════════════════════════════════════════════════════════
 
   - id: validate-acceptance
@@ -659,7 +655,7 @@ nodes:
     context: fresh
     model: claude-opus-4-6
     prompt: |
-      # resolve-tech-debt — Validation des acceptance criteria
+      # resolve-tech-debt — Acceptance criteria validation
 
       ```bash
       PLAN_FILE=$(ls tech-debt/*/plan.md 2>/dev/null | head -1)
@@ -670,46 +666,46 @@ nodes:
       git diff origin/$BASE_BRANCH...HEAD --stat
       ```
 
-      Privilégie **Serena** pour l'exploration.
+      Prefer **Serena** for exploration.
 
-      Pour chaque acceptance criterion listé dans la section
-      "## Acceptance criteria" de `debt.md` :
-      1. Cite le critère textuellement.
-      2. Vérifie-le contre l'état actuel du code (lecture des fichiers
-         concernés, recherche de patterns, inspection des tests).
-      3. Conclus : **PASS** (avec la preuve : fichier:ligne ou test
-         concerné) ou **FAIL** (avec l'explication de ce qui manque).
+      For each acceptance criterion listed in the
+      "## Acceptance criteria" section of `debt.md`:
+      1. Quote the criterion verbatim.
+      2. Verify it against the current code state (reading relevant files,
+         searching for patterns, inspecting tests).
+      3. Conclude: **PASS** (with evidence: file:line or relevant test)
+         or **FAIL** (with explanation of what is missing).
 
-      ## Sortie (format strict)
+      ## Output (strict format)
 
       ```
       # Validation — acceptance criteria
 
-      ## Criterion 1 — <texte>
-      **PASS** / **FAIL** — <preuve ou gap>
+      ## Criterion 1 — <text>
+      **PASS** / **FAIL** — <evidence or gap>
 
-      ## Criterion 2 — <texte>
+      ## Criterion 2 — <text>
       ...
 
       ## Verdict
       ALL_PASS
       ```
 
-      ou
+      or
 
       ```
       ## Verdict
-      BLOCKED — <liste des critères FAIL>
+      BLOCKED — <list of FAIL criteria>
       ```
 
-      Sois strict : si un critère n'est pas démontrablement satisfait, c'est
-      FAIL, pas "probablement OK".
+      Be strict: if a criterion is not demonstrably satisfied, it is
+      FAIL, not "probably OK".
 
   # ═══════════════════════════════════════════════════════════════════════════
   # PHASE 7 — CLOSE (interactive)
-  # Si validate-acceptance = ALL_PASS : demande confirmation, supprime le
-  # répertoire tech-debt, met à jour roadmap/index.md si l'item y est lié.
-  # Sinon : remonte l'erreur et stoppe la clôture (pas de suppression).
+  # If validate-acceptance = ALL_PASS: ask confirmation, delete the
+  # tech-debt directory, update roadmap/index.md if the item is linked.
+  # Otherwise: surface the error and stop closure (no deletion).
   # ═══════════════════════════════════════════════════════════════════════════
 
   - id: close-debt
@@ -718,9 +714,9 @@ nodes:
     model: sonnet
     idle_timeout: 300000
     prompt: |
-      # resolve-tech-debt — Clôture
+      # resolve-tech-debt — Closure
 
-      **Résultat de la validation** :
+      **Validation result**:
       $validate-acceptance.output
 
       ```bash
@@ -731,57 +727,57 @@ nodes:
       echo "SUMMARY=$SUMMARY"
       ```
 
-      ## Si le verdict contient "BLOCKED" ou un "FAIL" résiduel
-      - Affiche un bloc clair à l'utilisateur :
+      ## If the verdict contains "BLOCKED" or a residual "FAIL"
+      - Display a clear block to the user:
         ```
-        ⛔ Clôture bloquée — acceptance criteria non satisfaits.
-        Reprends l'implémentation puis relance `archon workflow run resolve-tech-debt --resume`.
+        ⛔ Closure blocked — acceptance criteria not satisfied.
+        Resume implementation then re-run `archon workflow run resolve-tech-debt --resume`.
         ```
-      - NE supprime PAS le répertoire de dette.
-      - NE touche PAS `roadmap/index.md`.
-      - Sors en erreur (non-zero).
+      - Do NOT delete the debt directory.
+      - Do NOT touch `roadmap/index.md`.
+      - Exit with error (non-zero).
 
-      ## Si le verdict est ALL_PASS
+      ## If the verdict is ALL_PASS
 
-      ### Étape 1 — confirmation utilisateur
-      Affiche un résumé court (ce qui a été implémenté, combien de commits,
-      acceptance criteria couverts) et demande explicitement :
+      ### Step 1 — user confirmation
+      Display a short summary (what was implemented, how many commits,
+      acceptance criteria covered) and explicitly ask:
 
-      > Tous les acceptance criteria sont satisfaits. Supprimer
-      > `<DEBT_DIR>/` pour marquer la dette comme résolue ? (yes / no)
+      > All acceptance criteria are satisfied. Delete
+      > `<DEBT_DIR>/` to mark the debt as resolved? (yes / no)
 
-      Si l'utilisateur répond non / cancel, stoppe proprement sans erreur.
+      If the user replies no / cancel, stop cleanly without error.
 
-      ### Étape 2 — vérification du lien roadmap
-      Si `roadmap/index.md` existe, cherche si une epic y référence cette
-      dette (par slug ou par titre) :
+      ### Step 2 — roadmap link check
+      If `roadmap/index.md` exists, check whether an epic references this
+      debt (by slug or title):
       ```bash
-      grep -iE "$SUMMARY|tech-debt|debt" roadmap/index.md || echo "(aucun match)"
+      grep -iE "$SUMMARY|tech-debt|debt" roadmap/index.md || echo "(no match)"
       ```
-      - Si un match pertinent est trouvé, demande à l'utilisateur : "L'epic
-        `<nom>` dans la roadmap semble liée. Mettre son statut à `done` ?"
-        Si yes → édite `roadmap/index.md` pour basculer la ligne
-        correspondante à `` `done` `` en respectant le format
+      - If a relevant match is found, ask the user: "The epic
+        `<name>` in the roadmap seems related. Set its status to `done`?"
+        If yes → edit `roadmap/index.md` to switch the corresponding line
+        to `` `done` `` following the format
         `1. \`<status>\` — [<name>](<slug>.md) — <summary>`.
 
-      ### Étape 3 — suppression + commit
+      ### Step 3 — deletion + commit
       ```bash
       git rm -r "$DEBT_DIR"
-      # Si roadmap/index.md modifié à l'étape 2 :
+      # If roadmap/index.md was modified in step 2:
       # git add roadmap/index.md
       git commit -m "chore(tech-debt): close $SUMMARY after resolution" \
         -m "All acceptance criteria documented in $DEBT_DIR/debt.md are verified against the implementation. Removing the directory marks the debt as resolved (project convention: a debt exists as long as its directory exists)."
       ```
 
-      ### Étape 4 — sortie
-      Confirme à l'utilisateur :
-      - Le répertoire supprimé.
-      - La roadmap mise à jour (ou non).
-      - Rappelle que la PR reste en draft jusqu'à l'étape `finalize`.
+      ### Step 4 — output
+      Confirm to the user:
+      - The deleted directory.
+      - The roadmap update (or lack thereof).
+      - Reminder that the PR remains in draft until the `finalize` step.
 
   # ═══════════════════════════════════════════════════════════════════════════
   # PHASE 8 — FINALIZE (bash)
-  # Push + draft → ready. Tolère l'absence de PR (échec phase 3).
+  # Push + draft → ready. Tolerates missing PR (phase 3 failure).
   # ═══════════════════════════════════════════════════════════════════════════
 
   - id: finalize
@@ -790,17 +786,17 @@ nodes:
       set -e
       git push origin HEAD 2>&1 | tail -5
       if gh pr view --json url -q .url >/dev/null 2>&1; then
-        gh pr ready 2>&1 || echo "(la PR est peut-être déjà ready)"
+        gh pr ready 2>&1 || echo "(PR may already be ready)"
         PR_URL=$(gh pr view --json url -q .url)
       else
-        PR_URL="(aucune PR détectée — vérifier la phase create-pr)"
+        PR_URL="(no PR detected — check the create-pr phase)"
       fi
       echo ""
       echo "════════════════════════════════════════════════════"
-      echo "  resolve-tech-debt — TERMINÉ"
+      echo "  resolve-tech-debt — DONE"
       echo "════════════════════════════════════════════════════"
-      echo "  PR : $PR_URL"
+      echo "  PR: $PR_URL"
       echo ""
-      echo "  Commits sur cette branche :"
+      echo "  Commits on this branch:"
       git log --oneline origin/$BASE_BRANCH..HEAD 2>/dev/null || git log --oneline -20
       echo "════════════════════════════════════════════════════"
