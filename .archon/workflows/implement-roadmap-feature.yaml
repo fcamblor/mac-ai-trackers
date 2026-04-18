@@ -36,7 +36,7 @@ interactive: true
 # Loop nodes ignore per-node `model:` — only the workflow-level is inherited.
 # Powerful default (opus 1M) for the `implement` loop on large codebases;
 # non-loop nodes can override.
-model: claude-opus-4-6[1m]
+model: opus
 
 nodes:
   # ═══════════════════════════════════════════════════════════════════════════
@@ -406,7 +406,7 @@ nodes:
   - id: review-code-quality
     depends_on: [create-pr]
     context: fresh
-    model: claude-opus-4-6
+    model: opus
     prompt: |
       # Review axis — CODE QUALITY
 
@@ -435,7 +435,7 @@ nodes:
   - id: review-error-handling
     depends_on: [create-pr]
     context: fresh
-    model: claude-opus-4-6
+    model: opus
     prompt: |
       # Review axis — ERROR HANDLING
 
@@ -462,7 +462,7 @@ nodes:
   - id: review-test-coverage
     depends_on: [create-pr]
     context: fresh
-    model: claude-opus-4-6
+    model: opus
     prompt: |
       # Review axis — TEST COVERAGE
 
@@ -650,7 +650,7 @@ nodes:
   - id: validate-acceptance
     depends_on: [aggregate-apply]
     context: fresh
-    model: claude-opus-4-6
+    model: opus
     prompt: |
       # implement-roadmap-feature — Acceptance criteria validation
 
