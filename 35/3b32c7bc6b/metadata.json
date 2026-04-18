@@ -3,7 +3,7 @@
   "checkpoint_id": "353b32c7bc6b",
   "strategy": "manual-commit",
   "branch": "chore/resolve-all-tech-debts",
-  "checkpoints_count": 3,
+  "checkpoints_count": 4,
   "files_touched": [
     "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/ClaudeCodeConnector.swift",
     "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/UsagesFileManager.swift",
@@ -18,13 +18,19 @@
       "transcript": "/35/3b32c7bc6b/0/full.jsonl",
       "content_hash": "/35/3b32c7bc6b/0/content_hash.txt",
       "prompt": "/35/3b32c7bc6b/0/prompt.txt"
+    },
+    {
+      "metadata": "/35/3b32c7bc6b/1/metadata.json",
+      "transcript": "/35/3b32c7bc6b/1/full.jsonl",
+      "content_hash": "/35/3b32c7bc6b/1/content_hash.txt",
+      "prompt": "/35/3b32c7bc6b/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 39,
-    "cache_creation_tokens": 79828,
-    "cache_read_tokens": 654603,
-    "output_tokens": 6781,
-    "api_call_count": 19
+    "input_tokens": 258,
+    "cache_creation_tokens": 407429,
+    "cache_read_tokens": 16389744,
+    "output_tokens": 60722,
+    "api_call_count": 187
   }
 }
