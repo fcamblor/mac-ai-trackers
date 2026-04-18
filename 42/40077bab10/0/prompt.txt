@@ -1,0 +1,18 @@
+remplace le skill .claude/skills/resolve-tech-debt par un workflow archon, afin de s'assurer que tous les steps sont biens réalisés (notamment le fait de créer le plan, implementer, review, fixer les éléments de
+  review, puis quand tout est terminé, penser à changer le statut de l'item dans la roadmap)
+
+  ne pas hesiter à s'inspirer fortement du workflow fcr-dev pour ca
+
+---
+
+<task-notification>
+<task-id>b4t4sbofi</task-id>
+<tool-use-id>toolu_014rfAMYyj8CqYe8HyS4kfHD</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/be892e22-f764-4a3d-8f28-a28b00f50569/tasks/b4t4sbofi.output</output-file>
+<status>failed</status>
+<summary>Background command "Find fcr-dev workflow dir" failed with exit code 1</summary>
+</task-notification>
+
+---
+
+reprends la ou tu en etais
