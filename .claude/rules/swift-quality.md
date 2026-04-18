@@ -48,12 +48,5 @@ codes — resolve errors before committing and avoid reintroducing warnings.
 | W4   | warning  | `@unchecked Sendable` without an adjacent justification comment | SWIFT-CONCURRENCY |
 | W5   | warning  | Comment embeds a bare `N unit` duration — drift risk after constant extraction | SWIFT-TESTABILITY §Comment WHY |
 
-Violations already present when the rules were introduced are recorded in
-`AIUsagesTrackers/.swiftlint.baseline` and do not fail the build; new
-violations matching the same rules do. When a finding fires on a file you
-did not author, fix it under the same change rather than leaving drift
-behind, and regenerate the baseline with:
-
-```
-cd AIUsagesTrackers && swift package plugin --allow-writing-to-package-directory swiftlint lint --write-baseline .swiftlint.baseline
-```
+All rules are now fully enforced with no baseline exceptions; every new
+violation fails the build.

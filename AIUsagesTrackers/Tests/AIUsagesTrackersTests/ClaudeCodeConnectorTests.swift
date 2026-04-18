@@ -4,6 +4,7 @@ import Testing
 
 // MARK: - URL mocking
 
+// swiftlint:disable:next w4_unchecked_sendable — URLProtocol subclass; all mutable static state accessed only from the serialized test suite (@Suite(.serialized))
 final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var handler: ((URLRequest) -> (Data, HTTPURLResponse))?
     // Captured by startLoading before handler runs; safe because the suite is .serialized

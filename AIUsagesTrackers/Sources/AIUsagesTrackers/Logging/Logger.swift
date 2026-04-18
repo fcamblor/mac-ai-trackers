@@ -28,10 +28,6 @@ public final class FileLogger: Sendable {
     public let filePath: String
     public let minLevel: LogLevel
     private let maxBytes: UInt64 = 5 * 1024 * 1024
-    private nonisolated(unsafe) static let isoFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        return f
-    }()
     private let queue = DispatchQueue(label: "FileLogger.serialQueue")
 
     public init(filePath: String, minLevel: LogLevel = .info) {
@@ -60,7 +56,9 @@ public final class FileLogger: Sendable {
 
     private func append(level: LogLevel, message: String) {
         queue.async { [self] in
-            let timestamp = Self.isoFormatter.string(from: Date())
+            // Per-call allocation — ISO8601DateFormatter is not thread-safe;
+            // acceptable here because logging is a cold path
+            let timestamp = ISO8601DateFormatter().string(from: Date())
             let entry = "[\(timestamp)] [\(level.label)] \(message)\n"
             guard let data = entry.data(using: .utf8) else { return }
             if !FileManager.default.fileExists(atPath: self.filePath) {

@@ -67,12 +67,12 @@ Breakdown:
 
 ## Acceptance criteria
 
-- [ ] `.swiftlint.baseline` is empty or the file is removed along with the
+- [x] `.swiftlint.baseline` is empty or the file is removed along with the
   `baseline:` key in `.swiftlint.yml`.
-- [ ] `swift build` passes with zero SwiftLint warnings.
-- [ ] No new `Task.sleep(fixed literal)` remains on a site where an
+- [x] `swift build` passes with zero SwiftLint warnings.
+- [x] No new `Task.sleep(fixed literal)` remains on a site where an
   observable state could be polled instead.
-- [ ] Every surviving `@unchecked Sendable` has a justification comment on
+- [x] Every surviving `@unchecked Sendable` has a justification comment on
   the preceding line.
 
 ## Additional context

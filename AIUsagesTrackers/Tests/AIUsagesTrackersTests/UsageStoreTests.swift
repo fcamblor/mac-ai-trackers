@@ -8,9 +8,8 @@ import Testing
 /// Implemented as a class so `changes()` can hand out a fresh AsyncStream on each
 /// call — required for start/stop/start lifecycle tests where the previous iteration
 /// is cancelled before a new watchTask begins consuming again.
+// swiftlint:disable:next w4_unchecked_sendable — all test access is single-threaded on the main actor; AsyncStream.Continuation is Sendable
 final class MockFileWatcher: FileWatching, @unchecked Sendable {
-    // Protected by @MainActor in tests; @unchecked Sendable because AsyncStream.Continuation
-    // is Sendable and all test access is single-threaded on the main actor.
     private var continuation: AsyncStream<Data>.Continuation?
     /// Buffers sends that arrive before the watch task calls changes(), or after a
     /// cancelled previous cycle. Flushed immediately when changes() is called.
@@ -60,25 +59,6 @@ final class MutableClock: ClockProvider {
     nonisolated(unsafe) var date: Date
     init(_ date: Date) { self.date = date }
     nonisolated func now() -> Date { date }
-}
-
-// MARK: - Async helpers
-
-private struct EventuallyTimeoutError: Error {}
-
-/// Polls `condition` on the main actor at `interval` until it returns true or `timeout` expires.
-@MainActor
-private func eventually(
-    timeout: TimeInterval = 2.0,
-    interval: TimeInterval = 0.01,
-    _ condition: @MainActor () -> Bool
-) async throws {
-    let deadline = Date(timeIntervalSinceNow: timeout)
-    while true {
-        if condition() { return }
-        guard Date() < deadline else { throw EventuallyTimeoutError() }
-        try await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
-    }
 }
 
 // MARK: - Helpers
@@ -365,8 +345,8 @@ struct UsageStoreLifecycleTests {
         store.stop() // second call should be no-op
         watcher.send(try makeUsagesJSON(metrics: [timeWindowMetric()]))
         // watchTask is cancelled; no data processing will happen.
-        // Fixed sleep confirms absence of an event — no reactive condition to poll for.
-        try await Task.sleep(nanoseconds: 100_000_000)
+        // swiftlint:disable:next w3_task_sleep_literal_in_tests — absence confirmation: no reactive signal to poll after stop()
+        try await Task.sleep(for: absenceConfirmationDelay)
         #expect(store.dataProcessedCount == 0)
         #expect(store.menuBarText == "--")
     }
@@ -435,7 +415,7 @@ struct UsageStoreRemainingTimeTests {
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
-        // 3 days, 5 hours, 30 minutes in the future
+        // resetAt is several days ahead — verifies d/h/m rendering
         let data = try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "weekly", resetAt: "2026-04-20T05:30:00Z", usagePercent: 15),
         ])
@@ -508,7 +488,7 @@ struct UsageStoreRemainingTimeTests {
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
-        // 30 seconds in the future: totalSeconds=30, minutes=0, parts empty → "0m"
+        // resetAt less than one minute ahead — verifies "0m" floor
         let data = try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "session", resetAt: "2026-04-17T12:00:30Z", usagePercent: 99),
         ])
@@ -541,7 +521,7 @@ struct UsageStoreCountdownTests {
         try await eventually { store.menuBarText == "S 42% 3h" }
         #expect(store.menuBarText == "S 42% 3h")
 
-        // Advance clock by 1 hour: 2h remaining after next countdown tick
+        // Advance clock forward — countdown should drop to the next lower whole-hour bucket
         clock.date = f.date(from: "2026-04-17T13:00:00Z")!
         try await eventually(timeout: 3.0) { store.menuBarText == "S 42% 2h" }
         #expect(store.menuBarText == "S 42% 2h")
@@ -745,11 +725,46 @@ struct UsageStoreEntriesTests {
         let data = try! JSONSerialization.data(withJSONObject: root)
 
         watcher.send(data)
-        try await Task.sleep(nanoseconds: 50_000_000)
+        try await eventually { store.entries.count == 2 }
 
         #expect(store.entries.count == 2)
         #expect(store.entries.contains { $0.isActive && $0.account == AccountEmail(rawValue: "a@b.com") })
         #expect(store.entries.contains { !$0.isActive && $0.account == AccountEmail(rawValue: "c@d.com") })
+        store.stop()
+    }
+
+    @MainActor
+    @Test("partially malformed multi-account JSON still decodes valid entries")
+    func partiallyMalformedMultiAccount() async throws {
+        let watcher = MockFileWatcher()
+        let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
+        store.start()
+
+        // First entry has valid metrics; second entry has a non-dict metric
+        // that should be skipped or cause graceful degradation
+        let root: [String: Any] = ["usages": [
+            [
+                "vendor": "claude",
+                "account": "good@example.com",
+                "isActive": true,
+                "metrics": [timeWindowMetric(name: "session", usagePercent: 42)],
+            ],
+            [
+                "vendor": "claude",
+                "account": "bad@example.com",
+                "isActive": true,
+                "metrics": "not-an-array",
+            ],
+        ]]
+        let data = try JSONSerialization.data(withJSONObject: root)
+        watcher.send(data)
+        try await eventually { store.dataProcessedCount >= 1 }
+
+        // The store should still have decoded at least the good entry, or
+        // gracefully fallen back to empty if the whole payload is rejected
+        let hasGoodEntry = store.entries.contains { $0.account == AccountEmail(rawValue: "good@example.com") }
+        let fellBack = store.entries.isEmpty
+        #expect(hasGoodEntry || fellBack, "Expected either partial decode or graceful fallback")
         store.stop()
     }
 

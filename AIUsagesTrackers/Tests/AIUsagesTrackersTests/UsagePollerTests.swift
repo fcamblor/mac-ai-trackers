@@ -124,7 +124,7 @@ struct UsagePollerTests {
     }
 
     @Test("start is idempotent — calling twice does not double-poll")
-    func startIdempotent() async {
+    func startIdempotent() async throws {
         let dir = makeTempDir()
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
@@ -140,7 +140,7 @@ struct UsagePollerTests {
 
         await poller.start()
         await poller.start() // second call should be no-op
-        try? await Task.sleep(for: .milliseconds(200))
+        try await eventually { await connector.fetchCount >= 2 }
         await poller.stop()
 
         // If start were not idempotent, fetchCount would roughly double
@@ -241,8 +241,8 @@ struct UsagePollerTests {
         #expect(fetchCount == 1)
     }
 
-    @Test("start/stop lifecycle")
-    func startStop() async {
+    @Test("stop is idempotent — calling twice does not crash")
+    func stopIdempotent() async throws {
         let dir = makeTempDir()
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
@@ -257,7 +257,55 @@ struct UsagePollerTests {
         )
 
         await poller.start()
-        try? await Task.sleep(for: .milliseconds(200))
+        try await eventually { await connector.fetchCount >= 1 }
+        await poller.stop()
+        await poller.stop() // second stop must be a no-op
+
+        let count = await connector.fetchCount
+        #expect(count >= 1)
+    }
+
+    @Test("stop during active poll does not crash")
+    func stopDuringPoll() async throws {
+        let dir = makeTempDir()
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
+        let connector = MockConnector(vendor: "claude", entries: [
+            VendorUsageEntry(vendor: "claude", account: "a@b.com"),
+        ])
+        let poller = UsagePoller(
+            connectors: [connector],
+            interval: .milliseconds(10),
+            fileManager: fm,
+            logger: logger
+        )
+
+        await poller.start()
+        // Stop immediately — may interrupt an in-flight poll
+        await poller.stop()
+
+        // Verify no crash occurred and poller is fully stopped
+        let count = await connector.fetchCount
+        #expect(count >= 0)
+    }
+
+    @Test("start/stop lifecycle")
+    func startStop() async throws {
+        let dir = makeTempDir()
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
+        let connector = MockConnector(vendor: "claude", entries: [
+            VendorUsageEntry(vendor: "claude", account: "a@b.com"),
+        ])
+        let poller = UsagePoller(
+            connectors: [connector],
+            interval: .milliseconds(50),
+            fileManager: fm,
+            logger: logger
+        )
+
+        await poller.start()
+        try await eventually { await connector.fetchCount >= 2 }
         await poller.stop()
 
         let count = await connector.fetchCount

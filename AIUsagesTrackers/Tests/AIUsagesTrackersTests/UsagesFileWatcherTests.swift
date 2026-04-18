@@ -30,7 +30,7 @@ struct UsagesFileWatcherTests {
         }
 
         // CancellationError swallowed intentionally; timeout guard only
-        try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+        try? await Task.sleep(for: .seconds(timeout))
         collectTask.cancel()
 
         return await collector.items
@@ -82,10 +82,10 @@ struct UsagesFileWatcherTests {
 
         let watcher = UsagesFileWatcher(path: url.path, pollInterval: 0.1)
 
-        // Start collecting in the background, then write the file
+        // Start collecting in the background, then write the file.
+        // No sequencing sleep needed: collect() has a 2s timeout, so the
+        // watcher will detect the file on its next poll cycle regardless.
         async let results = collect(from: watcher, maxCount: 1)
-        // Brief pause to let the watcher reach its first poll before we write
-        try await Task.sleep(nanoseconds: 50_000_000)
 
         let expected = #"{"usages":[]}"#
         try write(expected, to: url)
@@ -93,6 +93,23 @@ struct UsagesFileWatcherTests {
         let received = await results
         #expect(received.count == 1)
         #expect(String(data: received[0], encoding: .utf8) == expected)
+    }
+
+    @Test("file written before watcher starts is detected on first poll")
+    func writeBeforeWatcherStarts() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("UsagesFileWatcherTests-pre-write-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        // Write BEFORE creating the watcher — the first poll must detect it
+        let expected = #"{"usages":[{"vendor":"claude"}]}"#
+        try write(expected, to: url)
+
+        let watcher = UsagesFileWatcher(path: url.path, pollInterval: 0.1)
+        let results = await collect(from: watcher, maxCount: 1)
+
+        #expect(results.count == 1)
+        #expect(String(data: results[0], encoding: .utf8) == expected)
     }
 
     @Test("unchanged file is not emitted again on subsequent polls")
@@ -109,9 +126,10 @@ struct UsagesFileWatcherTests {
         // Collect up to 2 items; if dedup works we should only receive 1
         let results = await collect(from: watcher, maxCount: 2, timeout: 0.5)
 
-        // Wait for at least one additional poll tick beyond the initial emit to confirm dedup
-        // Fixed sleep is appropriate — absence of a second event has no reactive signal.
-        try await Task.sleep(nanoseconds: 300_000_000)
+        // Absence confirmation: no reactive signal for a non-emitted event;
+        // exceeds one poll interval, ensuring dedup had time to fire.
+        // swiftlint:disable:next w3_task_sleep_literal_in_tests
+        try await Task.sleep(for: .milliseconds(300))
 
         #expect(results.count == 1, "Unchanged modDate must suppress duplicate emits")
     }

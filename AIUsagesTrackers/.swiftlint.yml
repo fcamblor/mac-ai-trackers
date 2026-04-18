@@ -7,12 +7,6 @@ included:
   - Sources
   - Tests
 
-# Violations already present when these rules were introduced are stored in
-# .swiftlint.baseline. Each legacy warning should be resolved individually and
-# removed from the baseline; new violations matching the same rules still fail
-# the build.
-baseline: .swiftlint.baseline
-
 # Narrow the SwiftLint surface to exactly the codes documented in
 # .claude/rules/swift-quality.md. Built-in rules are deliberately NOT enabled —
 # we want a low-noise, high-signal lint focused on the patterns that reviews
