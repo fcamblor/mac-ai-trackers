@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "9cf95953b03c",
+  "strategy": "manual-commit",
+  "branch": "archon/task-fix-translate-french-to-english",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".archon/workflows/implement-roadmap-feature.yaml",
+    ".archon/workflows/resolve-tech-debt.yaml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/9c/f95953b03c/0/metadata.json",
+      "transcript": "/9c/f95953b03c/0/full.jsonl",
+      "content_hash": "/9c/f95953b03c/0/content_hash.txt",
+      "prompt": "/9c/f95953b03c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1189,
+    "cache_creation_tokens": 83612,
+    "cache_read_tokens": 213732,
+    "output_tokens": 1900,
+    "api_call_count": 5
+  }
+}
