@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "9b4b9e6f5c47",
+  "strategy": "manual-commit",
+  "branch": "archon/task-feat-consumption-color-indicators",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "roadmap/consumption-color-indicators.plan.md",
+    "roadmap/index.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/9b/4b9e6f5c47/0/metadata.json",
+      "transcript": "/9b/4b9e6f5c47/0/full.jsonl",
+      "content_hash": "/9b/4b9e6f5c47/0/content_hash.txt",
+      "prompt": "/9b/4b9e6f5c47/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 15,
+    "cache_creation_tokens": 40841,
+    "cache_read_tokens": 440982,
+    "output_tokens": 6499,
+    "api_call_count": 12
+  }
+}
