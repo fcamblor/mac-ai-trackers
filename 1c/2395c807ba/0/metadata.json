@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "1c2395c807ba",
+  "session_id": "2d330f62-ec40-477d-98dd-ff4ab6c688c4",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-18T17:23:57.741506Z",
+  "branch": "archon/task-feat-consumption-color-indicators",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageStoreTests.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "59a4984e3b33",
+  "checkpoint_transcript_start": 155,
+  "transcript_lines_at_start": 155,
+  "token_usage": {
+    "input_tokens": 9,
+    "cache_creation_tokens": 6078,
+    "cache_read_tokens": 789167,
+    "output_tokens": 3512,
+    "api_call_count": 9
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-18T17:23:57.426634Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 147,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 147,
+    "total_lines_changed": 147,
+    "agent_percentage": 0,
+    "metric_version": 2
+  }
+}
