@@ -62,25 +62,6 @@ final class MutableClock: ClockProvider {
     nonisolated func now() -> Date { date }
 }
 
-// MARK: - Async helpers
-
-private struct EventuallyTimeoutError: Error {}
-
-/// Polls `condition` on the main actor at `interval` until it returns true or `timeout` expires.
-@MainActor
-private func eventually(
-    timeout: TimeInterval = 2.0,
-    interval: TimeInterval = 0.01,
-    _ condition: @MainActor () -> Bool
-) async throws {
-    let deadline = Date(timeIntervalSinceNow: timeout)
-    while true {
-        if condition() { return }
-        guard Date() < deadline else { throw EventuallyTimeoutError() }
-        try await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
-    }
-}
-
 // MARK: - Helpers
 
 private func makeUsagesJSON(
