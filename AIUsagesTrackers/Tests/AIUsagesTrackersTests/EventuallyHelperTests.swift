@@ -32,6 +32,7 @@ struct EventuallyHelperTests {
         }
         let counter = Counter()
         Task {
+            // swiftlint:disable:next w3_task_sleep_literal_in_tests — sequencing: simulate async delay before state change
             try await Task.sleep(for: .milliseconds(20))
             await counter.increment()
         }
