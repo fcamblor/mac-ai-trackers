@@ -1,0 +1,793 @@
+name: implement-roadmap-feature
+description: |
+  À utiliser : quand l'utilisateur veut implémenter une epic planifiée dans
+  `roadmap/`, avec planification, implémentation gatée, PR draft + revue
+  multi-axes, validation des acceptance criteria, puis clôture auditable
+  (bascule du statut `planned` → `done` dans `roadmap/index.md`).
+  Déclencheurs : "implement roadmap", "implémente l'epic", "ship feature",
+                 "roadmap feature", "implement-roadmap-feature".
+  NE PAS utiliser pour : créer une epic (skill `roadmap-feature`),
+                         bug fix hors roadmap (archon-fix-github-issue),
+                         dette technique (resolve-tech-debt).
+
+  Flux :
+    1. PLAN (loop interactive) — sélection de l'epic, lecture du fichier +
+       dépendances + `CLAUDE.md`, rédaction de `roadmap/<slug>.plan.md`,
+       bascule `planned` → `in-progress` dans `roadmap/index.md`
+    2. IMPLEMENT (loop, contexte frais, gate déterministe build+test) avec
+       un commit par bloc logique portant le POURQUOI dans le body
+    3. CREATE-PR (draft) — corps synthétisé depuis l'epic + plan + commits
+    4. REVIEWS (5 axes parallèles : qualité de code, gestion d'erreurs,
+       couverture de tests, qualité des commentaires, impact doc)
+    5. AGGREGATE-APPLY (loop interactive) — cherry-pick HITL, fixup commits,
+       re-gate après chaque bloc
+    6. VALIDATE — vérifie point par point les acceptance criteria de l'epic,
+       PASS/FAIL explicite
+    7. CLOSE — bascule `in-progress` → `done` dans `roadmap/index.md`,
+       supprime `roadmap/<slug>.plan.md`
+    8. FINALIZE — push, bascule la PR en ready, affiche l'URL
+
+  Entrée ($ARGUMENTS) : slug de l'epic (nom de fichier sans `.md`) OU
+                        mot-clé du titre OU vide (choix interactif).
+
+provider: claude
+interactive: true
+
+# Les loop nodes ignorent le `model:` par-node — seul le workflow-level est
+# hérité. Défaut puissant (opus 1M) pour la loop `implement` sur gros
+# codebases ; les nodes non-loop peuvent overrider.
+model: claude-opus-4-6[1m]
+
+nodes:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # PHASE 1 — PLAN (loop interactive)
+  # Choix de l'epic, lecture de son fichier et de ses dépendances, bascule du
+  # statut à `in-progress`, rédaction du plan d'implémentation, commit à chaque
+  # itération acceptée.
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: plan
+    idle_timeout: 600000
+    loop:
+      prompt: |
+        # implement-roadmap-feature — PLAN
+
+        Tu es un senior engineering partner. Ton job : produire un
+        `roadmap/<slug>.plan.md` précis (assez pour qu'un agent autonome
+        l'exécute) pour implémenter une epic planifiée dans `roadmap/`.
+
+        **Requête initiale (première itération)** : $ARGUMENTS
+        **Dernier feedback utilisateur (itérations suivantes)** : $LOOP_USER_INPUT
+
+        ---
+
+        ## Principe non-négociable — discipline des commits
+
+        **Tous les commits sont faits AVANT de présenter le contenu à
+        l'utilisateur — JAMAIS après son approbation.** Le commit matérialise
+        ce que l'IA vient de produire ; l'approbation qui suit porte sur un
+        contenu déjà committé.
+
+        **LANGUE — règle absolue : messages de commit (sujet ET body) en
+        anglais. Contenu markdown (`roadmap/*.md` et plan) en anglais aussi
+        (règle `.claude/rules/markdown-authoring.md`).**
+
+        ## Outillage d'exploration préféré
+
+        Privilégie **Serena** (`mcp__serena__find_symbol`,
+        `mcp__serena__search_for_pattern`, `mcp__serena__get_symbols_overview`,
+        `mcp__serena__find_referencing_symbols`, `mcp__serena__read_file`)
+        si disponible. Fallback : `Grep` / `Glob` / `Read`.
+
+        ## Résolution de l'epic cible
+
+        ```bash
+        # Détection d'un plan déjà en cours (itérations suivantes / reprise)
+        EXISTING_PLAN=$(ls roadmap/*.plan.md 2>/dev/null | head -1)
+        echo "Plan en cours : ${EXISTING_PLAN:-<aucun>}"
+        ls roadmap/*.md 2>/dev/null | grep -v '\.plan\.md$' | grep -v '^roadmap/index\.md$'
+        cat roadmap/index.md 2>/dev/null
+        ```
+
+        - Si `roadmap/` est vide ou `index.md` n'existe pas → arrête avec un
+          message clair. **N'émets PAS** le signal — l'utilisateur doit
+          d'abord créer une epic via le skill `roadmap-feature`.
+        - Si `EXISTING_PLAN` est non vide → `SLUG=$(basename "$EXISTING_PLAN" .plan.md)`,
+          `EPIC_FILE=roadmap/$SLUG.md`. Continue sur cette epic.
+        - Sinon (première itération) → sélection :
+          - Si `$ARGUMENTS` matche exactement un slug (fichier
+            `roadmap/<slug>.md`) **dont le statut dans `index.md` est
+            `planned`** → utilise-le.
+          - Sinon si `$ARGUMENTS` matche un mot-clé du titre d'une epic
+            `planned` → propose le candidat à l'utilisateur (sans émettre
+            le signal).
+          - Sinon → liste les epics `planned` depuis `index.md` sous forme
+            de tableau (# | Position | Slug | Titre | Résumé), demande le
+            choix (sans émettre le signal). S'il n'y a qu'une seule epic
+            `planned`, confirme-la plutôt que de la demander.
+          - Si l'utilisateur pointe une epic avec statut `in-progress` ou
+            `done`, préviens-le explicitement et demande confirmation avant
+            de continuer.
+
+        ## Lecture de l'epic + dépendances + contexte
+
+        Une fois `SLUG` / `EPIC_FILE` fixés :
+
+        1. Lis `$EPIC_FILE` intégralement : Goal, Dependencies, Scope
+           (+ Out of scope), Acceptance criteria, Notes.
+        2. Pour chaque dépendance listée, lis le fichier correspondant dans
+           `roadmap/` et vérifie son statut dans `index.md`. Si une dépendance
+           n'est pas `done`, préviens l'utilisateur et demande s'il veut
+           continuer quand même (sans émettre le signal).
+        3. Lis `CLAUDE.md` pour les conventions projet. Si l'epic touche du
+           code Swift, lis aussi les cinq docs listées sous "Swift code
+           quality (mandatory)" dans `CLAUDE.md` — elles sont obligatoires
+           avant toute modif Swift.
+        4. Explore le code existant susceptible d'être impacté (Serena de
+           préférence). Identifie les points d'insertion, composants à
+           étendre, zones à refactorer.
+
+        ## Bascule du statut → `in-progress`
+
+        Avant d'écrire le plan la première fois (ou à la première itération
+        si le statut est encore `planned`) :
+
+        1. Édite `roadmap/index.md` pour basculer la ligne correspondante
+           de `` `planned` `` à `` `in-progress` ``, en respectant
+           **exactement** le format documenté dans `docs/ROADMAP.md` :
+           `1. \`<status>\` — [<Epic name>](<slug>.md) — <summary>`
+        2. NE touche PAS à l'ordre des items ni aux autres lignes.
+
+        ## Écriture du plan
+
+        Si `roadmap/<slug>.plan.md` existe déjà, **n'écrase pas silencieusement** :
+        mentionne-le et demande amend / rewrite.
+
+        Le plan doit être **auto-contenu** — assez précis pour qu'un agent
+        autonome l'exécute.
+
+        Structure (large → précis) :
+
+        ```markdown
+        ---
+        title: <epic title>
+        date: YYYY-MM-DD
+        ---
+
+        # Implementation plan — <epic title>
+
+        ## Overall approach
+
+        <2–3 sentences: strategy and rationale.>
+
+        ## Impacted areas
+
+        - `path/to/module/` — <role in this implementation>
+        - `path/to/file` — <extended / refactored / created>
+
+        ## Phases and commits
+
+        ### Phase 1 — <phase title>
+
+        **Goal**: <what this phase achieves.>
+
+        #### Commit 1 — `<type>(<scope>): <short description>`
+        - Files: `path/to/file`, `path/to/other`
+        - Changes: <precise description — what changes, how, and why>
+        - Risk: <side effect or dependency to watch for>
+
+        #### Commit 2 — `<type>(<scope>): <short description>`
+        - ...
+
+        ### Phase 2 — <phase title>
+        - ...
+
+        ## Validation
+
+        <How to verify the implementation is complete: commands to run,
+         patterns to check, tests to pass. Refer to acceptance criteria
+         in `roadmap/<slug>.md`.>
+        ```
+
+        ## Comportement par itération
+
+        ### Première itération ($LOOP_USER_INPUT vide)
+        1. Résous `SLUG` / `EPIC_FILE` (voir section dédiée).
+        2. Lis l'epic, ses dépendances, et explore le code pertinent.
+        3. Bascule le statut à `in-progress` dans `roadmap/index.md`.
+        4. Écris `roadmap/<slug>.plan.md`.
+        5. Commit AVANT de présenter :
+           ```bash
+           git add roadmap/index.md "roadmap/$SLUG.plan.md"
+           git commit -m "plan(roadmap): start <epic slug> — add implementation plan" \
+             -m "<WHY the chosen approach — impacted areas, rejected alternatives, risk trade-offs, dependency status>"
+           ```
+        6. Présente : overall approach + impacted areas + phases, puis demande
+           validation ou feedback. **N'émets PAS** le signal.
+
+        ### L'utilisateur donne du feedback / demande un raffinement
+        - Réécris `roadmap/<slug>.plan.md` en incorporant le feedback (état
+          propre, pas de changelog — l'historique vit dans git).
+        - Commit AVANT de re-présenter :
+          - Raffinement mineur : `git add` + `git commit --fixup=HEAD --no-edit`
+          - Rework significatif : nouveau commit avec un message qui explique
+            *pourquoi* la structure a changé
+        - N'émets PAS le signal.
+
+        ### L'utilisateur veut démarrer l'implémentation
+        Signaux EXPLICITES : "aller impl", "ok impl", "ship it", "go implement",
+        "let's go", "ready for impl", "démarrer l'implémentation".
+        → Émets : <promise>PLAN_READY</promise>
+
+        ### L'utilisateur valide sans signal clair
+        Signaux ambigus : "ok", "validé", "nickel", 👍, "super".
+        **NE PRODUIS PAS** de suite, **n'émets PAS** le signal. Pose UNE
+        question courte et binaire :
+
+        > Plan validé. Tu veux raffiner un point précis, ou on passe à
+        > l'**implémentation** ?
+
+        ### CRITIQUE — discipline du signal
+        Émets `<promise>PLAN_READY</promise>` **uniquement** quand le message
+        de l'utilisateur signifie sans ambiguïté "arrête de planifier, démarre
+        l'implémentation". En cas de doute, n'émets PAS.
+
+      until: PLAN_READY
+      max_iterations: 15
+      interactive: true
+      gate_message: |
+        Valide le plan, donne du feedback pour raffiner, ou dis "aller impl"
+        quand tu es prêt à démarrer l'implémentation.
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # PHASE 2 — IMPLEMENT (loop contexte frais + gate déterministe)
+  # Gate partagé avec fcr-dev / resolve-tech-debt : clé `impl-validation-command`
+  # dans `.archon/config.yaml`.
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: implement
+    depends_on: [plan]
+    idle_timeout: 900000
+    loop:
+      prompt: |
+        # implement-roadmap-feature — IMPLEMENT
+
+        Session FRAÎCHE — tu n'as AUCUNE mémoire des itérations précédentes.
+        Lis l'état depuis le disque.
+
+        **Requête initiale** : $ARGUMENTS
+        **Feedback de l'itération précédente échouée (le cas échéant)** : $LOOP_USER_INPUT
+
+        ## Discipline des commits
+
+        Tu commites AU FIL de ton implémentation, **un commit par bloc logique**,
+        AVANT que le gate déterministe ou l'utilisateur ne valide quoi que ce
+        soit.
+
+        **LANGUE — règle absolue : messages de commit intégralement en anglais.**
+
+        ## Outillage
+
+        Privilégie **Serena** (`mcp__serena__*`) si disponible.
+
+        ## Setup
+
+        ```bash
+        PLAN_FILE=$(ls roadmap/*.plan.md 2>/dev/null | head -1)
+        [ -n "$PLAN_FILE" ] || { echo 'ERREUR : aucun roadmap/*.plan.md'; exit 1; }
+        SLUG=$(basename "$PLAN_FILE" .plan.md)
+        EPIC_FILE="roadmap/$SLUG.md"
+        echo "=== $EPIC_FILE ==="
+        cat "$EPIC_FILE"
+        echo "=== $PLAN_FILE ==="
+        cat "$PLAN_FILE"
+        git log --oneline -20
+        git status
+        ```
+
+        Lis `CLAUDE.md`. Si l'epic touche du code Swift, **lis en plus les
+        cinq docs listées sous "Swift code quality (mandatory)" dans
+        `CLAUDE.md`** — obligatoires avant toute modif Swift.
+
+        ## Ta mission cette itération
+
+        1. Identifie ce qui est déjà implémenté (via `git log`) vs ce qui reste
+           dans le plan. Itérer est OK — pas besoin de tout faire en une passe.
+        2. Implémente le prochain bloc logique.
+        3. Écris des **tests solides** : cas nominal + cas limites + cas
+           d'erreur. N'attends pas qu'une review aval te rattrape.
+        4. Commit AU FIL, un commit par bloc logique :
+           ```bash
+           git add <fichiers>
+           git commit -m "<type>: <subject in English>" \
+             -m "<WHY — retained trade-offs, discarded alternatives, technical decisions>"
+           ```
+           Types : `feat:`, `test:`, `refactor:`, `fix:`, `chore:`.
+           NE DÉCRIS JAMAIS le QUOI dans le body — toujours le POURQUOI.
+        5. Avant de te déclarer prêt, lance toi-même build + tests via bash
+           pour réduire les allers-retours sur le gate.
+
+        ## Critère de sortie
+
+        Quand tu es confiant que :
+        - Tous les items pertinents du plan sont implémentés
+        - Les tests couvrent cas nominal + limites + erreurs
+        - Le build + les tests passent en local
+
+        Émets : <promise>IMPL_READY</promise>
+
+        Le moteur lance alors `until_bash` comme GATE DÉTERMINISTE.
+
+      until: IMPL_READY
+      max_iterations: 10
+      fresh_context: true
+      until_bash: |
+        bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # PHASE 3 — CREATE-PR (draft)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: create-pr
+    depends_on: [implement]
+    context: fresh
+    model: sonnet
+    prompt: |
+      # implement-roadmap-feature — Création de la PR draft
+
+      **LANGUE — règle absolue : titre ET corps de la PR en anglais.**
+
+      ```bash
+      git fetch origin $BASE_BRANCH 2>/dev/null || true
+      PLAN_FILE=$(ls roadmap/*.plan.md 2>/dev/null | head -1)
+      SLUG=$(basename "$PLAN_FILE" .plan.md)
+      EPIC_FILE="roadmap/$SLUG.md"
+      echo "=== $EPIC_FILE ==="
+      cat "$EPIC_FILE"
+      echo ""
+      echo "=== $PLAN_FILE ==="
+      cat "$PLAN_FILE"
+      echo ""
+      echo "=== commits ==="
+      git log --format="## %s%n%n%b%n---" origin/$BASE_BRANCH..HEAD
+      echo ""
+      echo "=== diff stat ==="
+      git diff --stat origin/$BASE_BRANCH...HEAD
+      ```
+
+      ## Structure requise du corps de PR (tout en anglais)
+
+      ```markdown
+      ## Context
+      <1-2 sentences referencing the roadmap epic — the user problem it
+       solves, linked as [<slug>](roadmap/<slug>.md).>
+
+      ## Approach — the WHY
+      <3-6 bullets synthesizing the *why* from commit messages. Mention
+       accepted trade-offs, alternatives considered then rejected.>
+
+      ## Acceptance criteria coverage
+      <Checklist mirroring the acceptance criteria in the epic file, with
+       a short note on how each is addressed by the changes.>
+
+      ## Test plan
+      - [ ] <precise check a reviewer can run>
+      - [ ] <edge case the reviewer should pay attention to>
+      - [ ] Automated: build + tests pass locally
+
+      ---
+      🤖 Generated by [implement-roadmap-feature](.archon/workflows/implement-roadmap-feature.yaml)
+      ```
+
+      ## Étapes
+
+      1. Titre : `"feat(<slug>): <epic name from H1 of the epic file>"`.
+      2. Push : `git push -u origin HEAD`.
+      3. Écrire le corps dans `/tmp/implement-roadmap-feature-pr-body.md`, puis :
+         ```bash
+         gh pr create --draft --base "$BASE_BRANCH" --title "$TITLE" \
+           --body-file /tmp/implement-roadmap-feature-pr-body.md
+         ```
+      4. **Fail-fast si `gh pr create` échoue** (token sans scope `workflow`,
+         PR existante, remote mal configuré) :
+         - Message explicite avec la cause probable.
+         - URL de création manuelle :
+           `https://github.com/<owner>/<repo>/pull/new/<branche-courante>`.
+         - N'invente PAS d'URL, n'écris PAS "PR créée".
+         - Sors en erreur.
+      5. Si OK, sors l'URL de la PR.
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # PHASE 4 — REVIEWS (5 axes parallèles)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: review-code-quality
+    depends_on: [create-pr]
+    context: fresh
+    model: claude-opus-4-6
+    prompt: |
+      # Axe de review — QUALITÉ DE CODE
+
+      ```bash
+      git fetch origin $BASE_BRANCH 2>/dev/null || true
+      git diff origin/$BASE_BRANCH...HEAD
+      ```
+
+      Privilégie **Serena** si disponible.
+
+      Focus : idiomes du langage (en particulier les règles Swift listées
+      dans `CLAUDE.md` si du Swift est touché), lisibilité, simplicité,
+      over-engineering, nommage, duplication, ce qu'un humain voit et qu'un
+      linter ne voit pas. Ignore ce qu'un type-checker / linter attraperait
+      déjà.
+
+      ## Sortie (format strict)
+      ```
+      # Review — Qualité de code
+
+      1. [fichier:ligne] <recommandation concrète>
+      ...
+
+      (ou "Aucun problème significatif." si propre)
+      ```
+
+  - id: review-error-handling
+    depends_on: [create-pr]
+    context: fresh
+    model: claude-opus-4-6
+    prompt: |
+      # Axe de review — GESTION D'ERREURS
+
+      ```bash
+      git diff origin/$BASE_BRANCH...HEAD
+      ```
+
+      Privilégie **Serena** si disponible.
+
+      Focus : chemins d'erreur, cas limites, null/undefined, race conditions,
+      timeouts, échecs partiels, cleanup des ressources. Silent swallowing ?
+      Pour Swift : `try?` qui masque un échec métier, erreurs sans associated
+      values, `Process` sans timeout — voir `docs/SWIFT-ERROR-HANDLING.md`
+      et `docs/SWIFT-CONCURRENCY.md`.
+
+      ## Sortie
+      ```
+      # Review — Gestion d'erreurs
+
+      1. [fichier:ligne] <recommandation concrète>
+      ...
+      ```
+
+  - id: review-test-coverage
+    depends_on: [create-pr]
+    context: fresh
+    model: claude-opus-4-6
+    prompt: |
+      # Axe de review — COUVERTURE DE TESTS
+
+      ```bash
+      git diff origin/$BASE_BRANCH...HEAD
+      ```
+
+      Privilégie **Serena** si disponible.
+
+      Focus : couverture quantitative (branches, cas limites) + qualité
+      qualitative (les tests assertent-ils le comportement ou juste
+      l'implémentation ? mocks cassants ? modes d'échec manquants ?).
+      Pour Swift : testabilité (DI, pas de force unwrap) — voir
+      `docs/SWIFT-TESTABILITY.md`.
+
+      ## Sortie
+      ```
+      # Review — Couverture de tests
+
+      1. [fichier:ligne] <cas de test manquant OU amélioration>
+      ...
+      ```
+
+  - id: review-comment-quality
+    depends_on: [create-pr]
+    context: fresh
+    model: sonnet
+    prompt: |
+      # Axe de review — QUALITÉ DES COMMENTAIRES
+
+      ```bash
+      git diff origin/$BASE_BRANCH...HEAD
+      ```
+
+      Focus : POURQUOI vs QUOI. Commentaires périmés, redondants, trompeurs ?
+      Code non-trivial documenté ? Règle projet : "Comment WHY, not WHAT".
+
+      ## Sortie
+      ```
+      # Review — Qualité des commentaires
+
+      1. [fichier:ligne] <ajouter/supprimer/réécrire + contenu suggéré>
+      ...
+      ```
+
+  - id: review-docs-impact
+    depends_on: [create-pr]
+    context: fresh
+    model: sonnet
+    prompt: |
+      # Axe de review — IMPACT DOC
+
+      ```bash
+      git diff origin/$BASE_BRANCH...HEAD
+      git ls-files | grep -iE "readme|changelog|docs/|\.md$" | head -30
+      ```
+
+      Focus : quels docs (README, CHANGELOG, docstrings publics, `docs/*.md`)
+      devraient être mis à jour mais ne l'ont pas été ? Rappel : respecter
+      `.claude/rules/markdown-authoring.md` — tous les `*.md` en anglais,
+      éviter les références éphémères (SHAs, PR#). Exception : `roadmap/`
+      peut décrire un état transitoire.
+
+      NE signale PAS un manque de MAJ du statut dans `roadmap/index.md` :
+      la phase `close-feature` s'en charge après validation.
+
+      ## Sortie
+      ```
+      # Review — Impact doc
+
+      1. [fichier] <doc à mettre à jour + contenu>
+      ...
+      ```
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # PHASE 5 — AGGREGATE + HITL cherry-pick + apply (loop interactive)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: aggregate-apply
+    depends_on:
+      - review-code-quality
+      - review-error-handling
+      - review-test-coverage
+      - review-comment-quality
+      - review-docs-impact
+    trigger_rule: all_done
+    idle_timeout: 600000
+    loop:
+      prompt: |
+        # implement-roadmap-feature — Agrégation des reviews & application
+
+        ## Reviews sources
+        - Qualité de code : $review-code-quality.output
+        - Gestion d'erreurs : $review-error-handling.output
+        - Couverture de tests : $review-test-coverage.output
+        - Qualité des commentaires : $review-comment-quality.output
+        - Impact doc : $review-docs-impact.output
+
+        **Dernier message utilisateur** : $LOOP_USER_INPUT
+
+        ---
+
+        ## Principe non-négociable — discipline des commits
+
+        Tu commites AVANT de présenter le résultat.
+
+        **LANGUE — règle absolue : messages de commit intégralement en anglais.**
+
+        **FIXUP — règle absolue :** chaque application d'une recommandation
+        produit des commits `--fixup` rattachés au commit source, PAS des
+        commits `review(axe):` indépendants.
+        ```bash
+        git log --oneline origin/$BASE_BRANCH..HEAD -- <fichiers>
+        SOURCE_HASH=<hash du commit source>
+        git add <fichiers>
+        git commit --fixup=$SOURCE_HASH
+        ```
+        Si un bloc touche plusieurs commits sources, un fixup par source.
+        L'historique doit être squashable avec `git rebase --autosquash`.
+
+        ## Outillage
+
+        Privilégie **Serena** si disponible.
+
+        ---
+
+        ## Première itération ($LOOP_USER_INPUT vide)
+
+        1. Consolide les 5 reviews en un plan d'action numéroté unique
+           (dédupe entre axes, priorité CRITICAL > HIGH > MED > LOW).
+           Format :
+           ```
+           N. [priorité] [axe] [fichier:ligne] <recommandation>
+           ```
+        2. Présente-le. Demande : `all` / `none` / `1,3,5` / texte libre.
+        3. N'émets **PAS** le signal.
+
+        ## Itérations suivantes
+
+        ### "none" / "skip" / "ship it" / "finaliser"
+        → Émets : <promise>REVIEWS_DONE</promise>
+
+        ### Sélection (`all`, `1,3,5`, etc.)
+        1. Applique chaque reco. Sois chirurgical.
+        2. Commit par bloc logique AVEC `--fixup`.
+        3. Lance le gate partagé :
+           ```bash
+           bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
+           ```
+           Si échec, corrige AVANT de présenter. NE présente PAS "apply done"
+           tant que le gate n'est pas vert.
+        4. Rapporte : appliqué / restant / diff stat.
+        5. Demande : "apply more / re-run reviews / ship it ?" — n'émets PAS
+           le signal.
+
+        ### "re-run reviews"
+        Le re-run tourne **sur l'état courant** (fixups inclus).
+
+        Lance **5 Tasks en parallèle** dans UN SEUL message (tool `Agent`
+        avec `subagent_type: general-purpose`), chaque prompt commençant par
+        `git diff origin/$BASE_BRANCH...HEAD` puis appliquant l'axe
+        correspondant (voir phase 4). Réponse format strict
+        `[fichier:ligne] recommandation`.
+
+        Ré-agrège, re-priorise, présente, repose la question
+        "apply more / re-run / ship it ?". N'émets PAS le signal.
+
+        ### CRITIQUE — discipline du signal
+        Émets `<promise>REVIEWS_DONE</promise>` **uniquement** sur un signal
+        explicite de clôture.
+
+      until: REVIEWS_DONE
+      max_iterations: 15
+      interactive: true
+      gate_message: |
+        Sélectionne (all / none / 1,3,5), demande "re-run reviews", ou dis
+        "ship it" pour finaliser.
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # PHASE 6 — VALIDATE acceptance criteria
+  # Vérifie point par point les critères de l'epic. Si un seul FAIL → stop,
+  # l'utilisateur doit reprendre l'implémentation avant la clôture.
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: validate-acceptance
+    depends_on: [aggregate-apply]
+    context: fresh
+    model: claude-opus-4-6
+    prompt: |
+      # implement-roadmap-feature — Validation des acceptance criteria
+
+      ```bash
+      PLAN_FILE=$(ls roadmap/*.plan.md 2>/dev/null | head -1)
+      SLUG=$(basename "$PLAN_FILE" .plan.md)
+      EPIC_FILE="roadmap/$SLUG.md"
+      echo "SLUG=$SLUG"
+      cat "$EPIC_FILE"
+      echo "---"
+      git diff origin/$BASE_BRANCH...HEAD --stat
+      ```
+
+      Privilégie **Serena** pour l'exploration.
+
+      Pour chaque acceptance criterion listé dans la section
+      "## Acceptance criteria" de l'epic :
+      1. Cite le critère textuellement.
+      2. Vérifie-le contre l'état actuel du code (lecture des fichiers
+         concernés, patterns, tests).
+      3. Conclus : **PASS** (avec preuve : fichier:ligne ou test concerné)
+         ou **FAIL** (avec ce qui manque).
+
+      ## Sortie (format strict)
+
+      ```
+      # Validation — acceptance criteria
+
+      ## Criterion 1 — <texte>
+      **PASS** / **FAIL** — <preuve ou gap>
+
+      ## Criterion 2 — <texte>
+      ...
+
+      ## Verdict
+      ALL_PASS
+      ```
+
+      ou
+
+      ```
+      ## Verdict
+      BLOCKED — <liste des critères FAIL>
+      ```
+
+      Sois strict : si un critère n'est pas démontrablement satisfait, c'est
+      FAIL, pas "probablement OK".
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # PHASE 7 — CLOSE (interactive)
+  # Si ALL_PASS : confirmation user → bascule statut `in-progress` → `done`
+  # dans index.md, supprime le plan file, commit.
+  # Sinon : remonte l'erreur et stoppe la clôture.
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: close-feature
+    depends_on: [validate-acceptance]
+    context: fresh
+    model: sonnet
+    idle_timeout: 300000
+    prompt: |
+      # implement-roadmap-feature — Clôture
+
+      **Résultat de la validation** :
+      $validate-acceptance.output
+
+      ```bash
+      PLAN_FILE=$(ls roadmap/*.plan.md 2>/dev/null | head -1)
+      SLUG=$(basename "$PLAN_FILE" .plan.md)
+      EPIC_FILE="roadmap/$SLUG.md"
+      echo "SLUG=$SLUG"
+      echo "EPIC_FILE=$EPIC_FILE"
+      echo "PLAN_FILE=$PLAN_FILE"
+      ```
+
+      ## Si le verdict contient "BLOCKED" ou un "FAIL" résiduel
+      - Affiche :
+        ```
+        ⛔ Clôture bloquée — acceptance criteria non satisfaits.
+        Reprends l'implémentation puis relance `archon workflow run implement-roadmap-feature --resume`.
+        ```
+      - NE touche PAS `roadmap/index.md`.
+      - NE supprime PAS le plan file.
+      - Sors en erreur (non-zero).
+
+      ## Si le verdict est ALL_PASS
+
+      ### Étape 1 — confirmation utilisateur
+      Affiche un résumé court (ce qui a été implémenté, nombre de commits,
+      acceptance criteria couverts) puis demande :
+
+      > Tous les acceptance criteria sont satisfaits. Basculer l'epic
+      > `<slug>` à `done` dans `roadmap/index.md` et supprimer
+      > `<plan-file>` ? (yes / no)
+
+      Si non / cancel, stoppe proprement sans erreur.
+
+      ### Étape 2 — bascule `in-progress` → `done` + suppression du plan
+      Édite `roadmap/index.md` pour changer le statut de la ligne de
+      l'epic courante de `` `in-progress` `` à `` `done` `` (format strict :
+      `N. \`<status>\` — [<name>](<slug>.md) — <summary>`). NE touche PAS
+      à l'ordre ni aux autres lignes.
+
+      Puis :
+      ```bash
+      git rm "$PLAN_FILE"
+      git add roadmap/index.md
+      git commit -m "chore(roadmap): close $SLUG after implementation" \
+        -m "All acceptance criteria documented in $EPIC_FILE are verified against the implementation. The plan file was a working document for the plan/impl phases — layer history lives in git log and the PR body synthesizes technical decisions from commit messages."
+      ```
+
+      ### Étape 3 — sortie
+      Confirme :
+      - Statut `done` posé sur l'epic.
+      - Plan file supprimé.
+      - Rappelle que la PR reste en draft jusqu'à `finalize`.
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # PHASE 8 — FINALIZE (bash)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: finalize
+    depends_on: [close-feature]
+    bash: |
+      set -e
+      git push origin HEAD 2>&1 | tail -5
+      if gh pr view --json url -q .url >/dev/null 2>&1; then
+        gh pr ready 2>&1 || echo "(la PR est peut-être déjà ready)"
+        PR_URL=$(gh pr view --json url -q .url)
+      else
+        PR_URL="(aucune PR détectée — vérifier la phase create-pr)"
+      fi
+      echo ""
+      echo "════════════════════════════════════════════════════"
+      echo "  implement-roadmap-feature — TERMINÉ"
+      echo "════════════════════════════════════════════════════"
+      echo "  PR : $PR_URL"
+      echo ""
+      echo "  Commits sur cette branche :"
+      git log --oneline origin/$BASE_BRANCH..HEAD 2>/dev/null || git log --oneline -20
+      echo "════════════════════════════════════════════════════"
