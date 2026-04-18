@@ -126,8 +126,9 @@ struct UsagesFileWatcherTests {
         // Collect up to 2 items; if dedup works we should only receive 1
         let results = await collect(from: watcher, maxCount: 2, timeout: 0.5)
 
-        // swiftlint:disable:next w3_task_sleep_literal_in_tests — absence confirmation: no reactive
-        // signal for a non-emitted event; 300 ms > one poll interval, ensuring dedup had time to fire
+        // Absence confirmation: no reactive signal for a non-emitted event;
+        // exceeds one poll interval, ensuring dedup had time to fire.
+        // swiftlint:disable:next w3_task_sleep_literal_in_tests
         try await Task.sleep(for: .milliseconds(300))
 
         #expect(results.count == 1, "Unchanged modDate must suppress duplicate emits")
