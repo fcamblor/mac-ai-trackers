@@ -67,11 +67,9 @@ struct UsagesFileWatcherTests {
         // Intentionally not creating the file
 
         let watcher = UsagesFileWatcher(path: url.path, pollInterval: 0.1)
-        // Fixed sleep is appropriate here — absence of an event has no reactive condition to poll.
-        // 0.3s covers at least 3 poll cycles at 0.1s interval.
-        let noEmitWaitNanos: UInt64 = 300_000_000
+        // Fixed sleep: absence of an event has no reactive condition to poll for.
+        // 0.3 s covers ≥ 3 poll cycles at pollInterval: 0.1.
         let results = await collect(from: watcher, maxCount: 1, timeout: 0.3)
-        _ = noEmitWaitNanos // named constant documents the intent above
 
         #expect(results.isEmpty)
     }

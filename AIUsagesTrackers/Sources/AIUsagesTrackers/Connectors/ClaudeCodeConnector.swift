@@ -14,6 +14,17 @@ public actor ClaudeCodeConnector: UsageConnector {
 
     // Long enough for a cached keychain lookup; short enough to avoid stalling the poller
     private static let keychainTimeoutSeconds: Int = 10
+    // Claude Pro/Max rate-limit policy — durations are fixed by Anthropic and not returned by the API
+    private static let sessionWindowMinutes = DurationMinutes(rawValue: 300)
+    private static let weeklyWindowMinutes  = DurationMinutes(rawValue: 10080)
+
+    // Actor-isolated: safe without nonisolated(unsafe) since all access is on the actor
+    private let isoFormatter = ISO8601DateFormatter()
+    private let isoFormatterFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
 
 
     public init(
@@ -113,18 +124,17 @@ public actor ClaudeCodeConnector: UsageConnector {
         do {
             let usage = try parseAPIResponse(data)
             logger.log(.info, "Fetched successfully: session=\(usage.sessionPercent)% weekly=\(usage.weeklyPercent)%")
-            // Window durations are not in the API response — they're fixed by Claude's rate-limit policy
             let metrics: [UsageMetric] = [
                 .timeWindow(
                     name: "session",
                     resetAt: usage.sessionResetAt,
-                    windowDuration: DurationMinutes(rawValue: 300),
+                    windowDuration: Self.sessionWindowMinutes,
                     usagePercent: UsagePercent(rawValue: usage.sessionPercent)
                 ),
                 .timeWindow(
                     name: "weekly",
                     resetAt: usage.weeklyResetAt,
-                    windowDuration: DurationMinutes(rawValue: 10080),
+                    windowDuration: Self.weeklyWindowMinutes,
                     usagePercent: UsagePercent(rawValue: usage.weeklyPercent)
                 ),
             ]
@@ -163,8 +173,7 @@ public actor ClaudeCodeConnector: UsageConnector {
                     return
                 }
 
-                // Keychain may prompt the user or hang if the login keychain is locked;
-                // 10 s is long enough for a cached lookup, short enough to not stall the poller
+                // Keychain may prompt the user or hang if the login keychain is locked
                 let timedOut = DispatchSemaphore(value: 0)
                 DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(Self.keychainTimeoutSeconds)) {
                     guard process.isRunning else { return }
@@ -269,24 +278,18 @@ public actor ClaudeCodeConnector: UsageConnector {
         }
         return ParsedUsage(
             sessionPercent: Int(sessionUtil.rounded()),
-            sessionResetAt: Self.normalizeISO8601(sessionReset),
+            sessionResetAt: normalizeISO8601(sessionReset),
             weeklyPercent: Int(weeklyUtil.rounded()),
-            weeklyResetAt: Self.normalizeISO8601(weeklyReset)
+            weeklyResetAt: normalizeISO8601(weeklyReset)
         )
     }
 
     /// Strips sub-second precision from API-provided ISO8601 strings so downstream
     /// consumers can rely on the standard formatter (no fractional-seconds option needed).
     /// Returns the original string unchanged if it cannot be parsed.
-    private static func normalizeISO8601(_ raw: String) -> ISODate {
-        let fractional: ISO8601DateFormatter = {
-            let f = ISO8601DateFormatter()
-            f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            return f
-        }()
-        let standard = ISO8601DateFormatter()
-        if let date = fractional.date(from: raw) ?? standard.date(from: raw) {
-            return ISODate(rawValue: standard.string(from: date))
+    private func normalizeISO8601(_ raw: String) -> ISODate {
+        if let date = isoFormatterFractional.date(from: raw) ?? isoFormatter.date(from: raw) {
+            return ISODate(rawValue: isoFormatter.string(from: date))
         }
         return ISODate(rawValue: raw)
     }

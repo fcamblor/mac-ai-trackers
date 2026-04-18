@@ -591,7 +591,7 @@ struct UsageStoreEntryTests {
                 timeWindowMetric(name: "weekly", resetAt: "2026-04-17T14:00:00Z", usagePercent: 50),
             ]],
         ]]
-        let data = try! JSONSerialization.data(withJSONObject: root)
+        let data = try JSONSerialization.data(withJSONObject: root)
         watcher.send(data)
         try await eventually { store.menuBarText != "--" }
         #expect(store.menuBarText == "S 10% 1h")
@@ -633,7 +633,7 @@ struct UsageStoreEntryTests {
                 ["type": "unknown-future-type", "name": "x"],
             ]],
         ]]
-        let data = try! JSONSerialization.data(withJSONObject: root)
+        let data = try JSONSerialization.data(withJSONObject: root)
         watcher.send(data)
         try await eventually { store.menuBarText == "S 10% 1h" }
         #expect(store.menuBarText == "S 10% 1h")

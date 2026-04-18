@@ -35,6 +35,8 @@ public actor UsagesFileManager {
     public func read() async -> UsagesFile {
         do {
             return try await withFileLock(mode: LOCK_SH) { readUnsafe() }
+        } catch is CancellationError {
+            return UsagesFile()
         } catch {
             logger.log(.warning, "flock read failed — returning empty file: \(error)")
             return UsagesFile()
@@ -48,6 +50,8 @@ public actor UsagesFileManager {
                 file = merge(existing: file, incoming: entries)
                 writeUnsafe(file)
             }
+        } catch is CancellationError {
+            return
         } catch {
             logger.log(.warning, "flock update failed — skipping write: \(error)")
         }
@@ -72,6 +76,8 @@ public actor UsagesFileManager {
                     writeUnsafe(file)
                 }
             }
+        } catch is CancellationError {
+            return
         } catch {
             logger.log(.warning, "flock updateIsActive failed — skipping: \(error)")
         }

@@ -126,6 +126,9 @@ public final class UsageStore {
     }
 
     private func formatTimeWindowSegment(_ metric: UsageMetric) -> String? {
+        if case let .unknown(t) = metric {
+            logger.log(.debug, "UsageStore: skipping unknown metric type '\(t)'")
+        }
         guard case let .timeWindow(name, resetAt, _windowDuration, usagePercent) = metric else {
             return nil
         }
