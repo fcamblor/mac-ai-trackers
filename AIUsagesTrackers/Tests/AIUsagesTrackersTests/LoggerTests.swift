@@ -76,6 +76,22 @@ struct FileLoggerTests {
         #expect(FileManager.default.fileExists(atPath: path))
         let content = try! String(contentsOfFile: path, encoding: .utf8)
         #expect(!content.isEmpty)
+
+        // Every line must start with a valid ISO8601 timestamp — verifies no
+        // partial corruption under concurrent formatter usage.
+        let formatter = ISO8601DateFormatter()
+        let lines = content.split(separator: "\n")
+        #expect(lines.count == 20)
+        for line in lines {
+            // Format: [2026-04-17T12:00:00Z] [INFO] message N
+            guard let open = line.firstIndex(of: "["),
+                  let close = line.firstIndex(of: "]") else {
+                Issue.record("Missing timestamp brackets in: \(line)")
+                continue
+            }
+            let timestamp = String(line[line.index(after: open)..<close])
+            #expect(formatter.date(from: timestamp) != nil, "Invalid ISO8601 timestamp: \(timestamp)")
+        }
     }
 
     @Test("rotates log file when exceeding max size")
