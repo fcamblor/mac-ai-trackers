@@ -1,0 +1,56 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "b2de96f9a52a",
+  "session_id": "af471eda-bffb-4734-9e34-22a3739caab2",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-18T15:23:32.025388Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".claude/settings.json"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-4-6",
+  "turn_id": "72fc59c6eb32",
+  "token_usage": {
+    "input_tokens": 37,
+    "cache_creation_tokens": 16343,
+    "cache_read_tokens": 367363,
+    "output_tokens": 1874,
+    "api_call_count": 5
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-18T15:23:31.9873Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 4,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 4,
+    "total_lines_changed": 4,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 211,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/scripts/check-swift-quality.sh": 144,
+        ".claude/settings.json": 4,
+        ".idea/.gitignore": 10,
+        ".idea/codeStyles/codeStyleConfig.xml": 5,
+        ".idea/copilot.data.migration.agent.xml": 6,
+        ".idea/go.imports.xml": 11,
+        ".idea/mac-ai-trackers.iml": 9,
+        ".idea/misc.xml": 6,
+        ".idea/modules.xml": 8,
+        ".idea/vcs.xml": 6,
+        ".serena/.gitignore": 2
+      }
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+/commit le fichier .claude/settings.json pour permettre d'executer les commande entire
