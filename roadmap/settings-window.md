@@ -6,7 +6,7 @@ Give users a dedicated window to configure the application, accessible via a set
 
 ## Dependencies
 
-- [Usage details popover](usage-details-popover.md)
+None.
 
 ## Scope
 

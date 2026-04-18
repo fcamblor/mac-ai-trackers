@@ -6,7 +6,7 @@ Let users support the developer with a single click, surfaced unobtrusively insi
 
 ## Dependencies
 
-- [Usage details popover](usage-details-popover.md)
+None.
 
 ## Scope
 

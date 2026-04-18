@@ -45,9 +45,11 @@ Write `roadmap/<slug>.md` following the template defined in `docs/ROADMAP.md` ex
 
 ## Phase 4: Update `roadmap/index.md`
 
-Insert the new entry in the `## Epics` list, placed after all of its dependencies and before any existing entry that depends on it. If the placeholder "_No epics yet…_" is present, replace it with a proper ordered list. Renumber so the list stays contiguous and in strict topological order.
+The index format (Epics list + Mermaid dependency graph) is defined in `docs/ROADMAP.md`. Read it before editing.
 
-Use the line format prescribed by `docs/ROADMAP.md`; the status of a newly created epic is `planned`.
+**Epics list**: Insert the new entry in the `## Epics` list, placed after all of its dependencies and before any existing entry that depends on it. If the placeholder "_No epics yet…_" is present, replace it with a proper ordered list. Renumber so the list stays contiguous and in strict topological order. The status of a newly created epic is `planned`.
+
+**Dependency graph**: Add the new epic's node to the Mermaid `graph TD` block and add a directed edge (`dependency --> new-slug`) for each dependency that is still an open epic in the index. If the new epic has no open-epic dependencies, add the node without edges.
 
 ## Phase 5: Confirm
 

@@ -115,10 +115,13 @@ nodes:
 
         1. Lis `$EPIC_FILE` intégralement : Goal, Dependencies, Scope
            (+ Out of scope), Acceptance criteria, Notes.
-        2. Pour chaque dépendance listée, lis le fichier correspondant dans
-           `roadmap/` et vérifie son statut dans `index.md`. Si une dépendance
-           n'est pas `done`, préviens l'utilisateur et demande s'il veut
-           continuer quand même (sans émettre le signal).
+        2. Pour chaque dépendance listée dans l'epic (section `## Dependencies`),
+           vérifie si le fichier existe encore dans `roadmap/`. Un fichier
+           absent signifie que la dépendance a été livrée et retirée du roadmap
+           (comportement normal). Si le fichier existe encore et que son statut
+           dans `index.md` n'est pas absent (i.e. la feature est encore open),
+           préviens l'utilisateur et demande s'il veut continuer quand même
+           (sans émettre le signal).
         3. Lis `CLAUDE.md` pour les conventions projet. Si l'epic touche du
            code Swift, lis aussi les cinq docs listées sous "Swift code
            quality (mandatory)" dans `CLAUDE.md` — elles sont obligatoires
@@ -732,7 +735,7 @@ nodes:
         Reprends l'implémentation puis relance `archon workflow run implement-roadmap-feature --resume`.
         ```
       - NE touche PAS `roadmap/index.md`.
-      - NE supprime PAS le plan file.
+      - NE supprime PAS les fichiers roadmap.
       - Sors en erreur (non-zero).
 
       ## Si le verdict est ALL_PASS
@@ -741,30 +744,40 @@ nodes:
       Affiche un résumé court (ce qui a été implémenté, nombre de commits,
       acceptance criteria couverts) puis demande :
 
-      > Tous les acceptance criteria sont satisfaits. Basculer l'epic
-      > `<slug>` à `done` dans `roadmap/index.md` et supprimer
-      > `<plan-file>` ? (yes / no)
+      > Tous les acceptance criteria sont satisfaits. Supprimer l'epic
+      > `<slug>` du roadmap (fichier epic + ligne d'index + nœud DAG) et
+      > supprimer `<plan-file>` ? (yes / no)
 
       Si non / cancel, stoppe proprement sans erreur.
 
-      ### Étape 2 — bascule `in-progress` → `done` + suppression du plan
-      Édite `roadmap/index.md` pour changer le statut de la ligne de
-      l'epic courante de `` `in-progress` `` à `` `done` `` (format strict :
-      `N. \`<status>\` — [<name>](<slug>.md) — <summary>`). NE touche PAS
-      à l'ordre ni aux autres lignes.
+      ### Étape 2 — suppression de l'epic du roadmap
 
-      Puis :
-      ```bash
-      git rm "$PLAN_FILE"
-      git add roadmap/index.md
-      git commit -m "chore(roadmap): close $SLUG after implementation" \
-        -m "All acceptance criteria documented in $EPIC_FILE are verified against the implementation. The plan file was a working document for the plan/impl phases — layer history lives in git log and the PR body synthesizes technical decisions from commit messages."
-      ```
+      Le processus de clôture est défini dans `docs/ROADMAP.md` (section
+      "Closing a shipped epic"). Lis-le pour les détails ; résumé opérationnel :
+
+      1. **Retire la ligne de l'epic** dans la section `## Epics` de
+         `roadmap/index.md`. Renumérote la liste pour qu'elle reste contiguë.
+         NE touche PAS aux autres lignes.
+
+      2. **Mets à jour le DAG Mermaid** dans la section `## Dependency graph`
+         de `roadmap/index.md` :
+         - Supprime le nœud correspondant au slug (`$SLUG["..."]`).
+         - Supprime toutes les arêtes qui impliquent `$SLUG` (lignes
+           `$SLUG --> X` ou `X --> $SLUG`).
+
+      3. **Supprime les fichiers** :
+         ```bash
+         git rm "$EPIC_FILE"
+         [ -f "$PLAN_FILE" ] && git rm "$PLAN_FILE" || true
+         git add roadmap/index.md
+         git commit -m "chore(roadmap): ship $SLUG — remove from roadmap" \
+           -m "All acceptance criteria verified against the implementation. Epic file and plan file removed; feature is shipped. Technical decisions live in git log and the PR body."
+         ```
 
       ### Étape 3 — sortie
       Confirme :
-      - Statut `done` posé sur l'epic.
-      - Plan file supprimé.
+      - Epic retirée de l'index et du DAG.
+      - Fichiers `$EPIC_FILE` et `$PLAN_FILE` supprimés.
       - Rappelle que la PR reste en draft jusqu'à `finalize`.
 
   # ═══════════════════════════════════════════════════════════════════════════

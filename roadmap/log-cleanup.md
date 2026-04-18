@@ -6,7 +6,7 @@ Prevent log files from growing indefinitely by automatically purging entries old
 
 ## Dependencies
 
-- [Menubar usage metrics display](menubar-usage-metrics.md)
+None.
 
 ## Scope
 

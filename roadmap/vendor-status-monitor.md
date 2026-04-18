@@ -6,7 +6,7 @@ Alert the user to ongoing incidents or degradations on AI vendor platforms direc
 
 ## Dependencies
 
-- [Menubar usage metrics display](menubar-usage-metrics.md)
+None.
 
 ## Scope
 
