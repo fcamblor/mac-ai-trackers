@@ -3,7 +3,7 @@
   "checkpoint_id": "bac3bc70f3f3",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 2,
+  "checkpoints_count": 1,
   "files_touched": [
     "roadmap/index.md",
     "roadmap/usage-history-snapshots.md"
@@ -23,11 +23,11 @@
     }
   ],
   "token_usage": {
-    "input_tokens": 1407,
-    "cache_creation_tokens": 75925,
-    "cache_read_tokens": 750168,
-    "output_tokens": 9110,
-    "api_call_count": 26
+    "input_tokens": 29,
+    "cache_creation_tokens": 26286,
+    "cache_read_tokens": 541284,
+    "output_tokens": 5047,
+    "api_call_count": 19
   },
   "combined_attribution": {
     "calculated_at": "2026-04-18T23:00:23.586792Z",
