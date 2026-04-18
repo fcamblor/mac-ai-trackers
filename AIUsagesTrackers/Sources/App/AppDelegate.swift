@@ -44,7 +44,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             fileManager: fileManager,
             refreshState: refreshState
         )
-        let accountMonitor = ClaudeActiveAccountMonitor(fileManager: fileManager)
+        let accountMonitor = ClaudeActiveAccountMonitor(
+            fileManager: fileManager,
+            onActiveAccountChanged: { [weak poller] _ in
+                await poller?.pollOnce(force: true)
+            }
+        )
         self.poller = poller
         self.accountMonitor = accountMonitor
         self.refreshState = refreshState

@@ -9,8 +9,10 @@ public actor ClaudeActiveAccountMonitor {
     private let fileManager: UsagesFileManager
     private let logger: FileLogger
     private let interval: Duration
+    private let onActiveAccountChanged: (@Sendable (AccountEmail) async -> Void)?
 
     private var monitorTask: Task<Void, Never>?
+    private var lastObservedActiveAccount: AccountEmail?
 
     private static let monitoredVendor: Vendor = .claude
 
@@ -18,13 +20,15 @@ public actor ClaudeActiveAccountMonitor {
         claudeConfigPath: String? = nil,
         fileManager: UsagesFileManager,
         logger: FileLogger = Loggers.claude,
-        interval: Duration = ClaudeActiveAccountMonitor.defaultInterval
+        interval: Duration = ClaudeActiveAccountMonitor.defaultInterval,
+        onActiveAccountChanged: (@Sendable (AccountEmail) async -> Void)? = nil
     ) {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         self.claudeConfigPath = claudeConfigPath ?? "\(home)/.claude.json"
         self.fileManager = fileManager
         self.logger = logger
         self.interval = interval
+        self.onActiveAccountChanged = onActiveAccountChanged
     }
 
     public func start() {
@@ -49,9 +53,24 @@ public actor ClaudeActiveAccountMonitor {
     }
 
     public func checkOnce() async {
-        let active = readActiveAccount()
+        guard let active = readActiveAccount() else {
+            // `/login` rewrites `.claude.json` through a transient state where `oauthAccount`
+            // is absent (user briefly logged out between accounts). Treating that as "no active
+            // account" would blank the menu bar label for up to one poll interval.
+            // We only trust positive signals — preserve the previous isActive state otherwise.
+            logger.log(.debug, "Active account unresolved — keeping previous isActive state")
+            return
+        }
         await fileManager.updateIsActive(vendor: Self.monitoredVendor, activeAccount: active)
-        logger.log(.debug, "isActive updated: activeAccount=\(active?.rawValue ?? "<none>")")
+        logger.log(.debug, "isActive updated: activeAccount=\(active.rawValue)")
+
+        let previous = lastObservedActiveAccount
+        lastObservedActiveAccount = active
+        // Skip the callback on the first resolution (startup) — only fire on genuine switches,
+        // so we don't force a redundant poll the first time the monitor sees an account.
+        if let previous, previous != active {
+            await onActiveAccountChanged?(active)
+        }
     }
 
     private func readActiveAccount() -> AccountEmail? {

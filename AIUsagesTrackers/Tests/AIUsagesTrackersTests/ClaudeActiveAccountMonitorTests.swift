@@ -2,6 +2,11 @@ import Foundation
 import Testing
 @testable import AIUsagesTrackersLib
 
+private actor AccountChangeRecorder {
+    private(set) var accounts: [AccountEmail] = []
+    func record(_ account: AccountEmail) { accounts.append(account) }
+}
+
 @Suite("ClaudeActiveAccountMonitor")
 struct ClaudeActiveAccountMonitorTests {
     private func makeTempDir() -> String {
@@ -16,14 +21,19 @@ struct ClaudeActiveAccountMonitorTests {
         return path
     }
 
-    private func makeMonitor(dir: String, configPath: String) -> (ClaudeActiveAccountMonitor, UsagesFileManager) {
+    private func makeMonitor(
+        dir: String,
+        configPath: String,
+        onActiveAccountChanged: (@Sendable (AccountEmail) async -> Void)? = nil
+    ) -> (ClaudeActiveAccountMonitor, UsagesFileManager) {
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let fileManager = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
         let monitor = ClaudeActiveAccountMonitor(
             claudeConfigPath: configPath,
             fileManager: fileManager,
             logger: logger,
-            interval: .seconds(3600)
+            interval: .seconds(3600),
+            onActiveAccountChanged: onActiveAccountChanged
         )
         return (monitor, fileManager)
     }
@@ -49,8 +59,8 @@ struct ClaudeActiveAccountMonitorTests {
         #expect(byAccount["other@example.com"] == false)
     }
 
-    @Test("checkOnce deactivates all accounts when config has no oauthAccount")
-    func checkOnceDeactivatesWhenNoOauth() async {
+    @Test("checkOnce preserves isActive when config has no oauthAccount (transient /login state)")
+    func checkOncePreservesWhenNoOauth() async {
         let dir = makeTempDir()
         let configPath = writeConfig("{}", to: dir)
         let (monitor, fileManager) = makeMonitor(dir: dir, configPath: configPath)
@@ -61,11 +71,11 @@ struct ClaudeActiveAccountMonitorTests {
         await monitor.checkOnce()
 
         let result = await fileManager.read()
-        #expect(result.usages[0].isActive == false)
+        #expect(result.usages[0].isActive == true)
     }
 
-    @Test("checkOnce deactivates all accounts when config file is missing")
-    func checkOnceDeactivatesWhenFileMissing() async {
+    @Test("checkOnce preserves isActive when config file is missing")
+    func checkOncePreservesWhenFileMissing() async {
         let dir = makeTempDir()
         let (monitor, fileManager) = makeMonitor(dir: dir, configPath: "\(dir)/missing.json")
         await fileManager.update(with: [
@@ -75,7 +85,56 @@ struct ClaudeActiveAccountMonitorTests {
         await monitor.checkOnce()
 
         let result = await fileManager.read()
-        #expect(result.usages[0].isActive == false)
+        #expect(result.usages[0].isActive == true)
+    }
+
+    @Test("onActiveAccountChanged fires when switching between two accounts")
+    func callbackFiresOnAccountSwitch() async {
+        let dir = makeTempDir()
+        let configPath = writeConfig(
+            #"{"oauthAccount":{"emailAddress":"first@example.com"}}"#,
+            to: dir
+        )
+        let recorder = AccountChangeRecorder()
+        let (monitor, _) = makeMonitor(
+            dir: dir,
+            configPath: configPath,
+            onActiveAccountChanged: { account in await recorder.record(account) }
+        )
+
+        // First tick sets the baseline — no callback expected.
+        await monitor.checkOnce()
+        #expect(await recorder.accounts.isEmpty)
+
+        // Simulate a /login switch by rewriting the config.
+        _ = writeConfig(
+            #"{"oauthAccount":{"emailAddress":"second@example.com"}}"#,
+            to: dir
+        )
+        await monitor.checkOnce()
+
+        #expect(await recorder.accounts == ["second@example.com"])
+    }
+
+    @Test("onActiveAccountChanged does not fire on idempotent tick")
+    func callbackSilentWhenAccountUnchanged() async {
+        let dir = makeTempDir()
+        let configPath = writeConfig(
+            #"{"oauthAccount":{"emailAddress":"user@example.com"}}"#,
+            to: dir
+        )
+        let recorder = AccountChangeRecorder()
+        let (monitor, _) = makeMonitor(
+            dir: dir,
+            configPath: configPath,
+            onActiveAccountChanged: { account in await recorder.record(account) }
+        )
+
+        await monitor.checkOnce()
+        await monitor.checkOnce()
+        await monitor.checkOnce()
+
+        #expect(await recorder.accounts.isEmpty)
     }
 
     @Test("start/stop idempotence — double start does not crash")
