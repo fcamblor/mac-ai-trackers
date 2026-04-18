@@ -339,12 +339,12 @@ struct ClaudeCodeConnectorFetchTests {
         if let weekly = requireTimeWindowMetric(named: "weekly", in: entries[0].metrics) {
             #expect(weekly.pct == 8)
         }
-        if let sonnet = requireTimeWindowMetric(named: "weekly_sonnet", in: entries[0].metrics) {
+        if let sonnet = requireTimeWindowMetric(named: "Weekly Sonnet", in: entries[0].metrics) {
             #expect(sonnet.pct == 15)
             #expect(sonnet.resetAt == "2026-04-23T21:00:00Z")
             #expect(sonnet.duration == Self.weeklyWindowMinutes)
         }
-        if let opus = requireTimeWindowMetric(named: "weekly_opus", in: entries[0].metrics) {
+        if let opus = requireTimeWindowMetric(named: "Weekly Opus", in: entries[0].metrics) {
             #expect(opus.pct == 3)
             #expect(opus.resetAt == "2026-04-24T12:00:00Z")
             #expect(opus.duration == Self.weeklyWindowMinutes)
@@ -369,7 +369,7 @@ struct ClaudeCodeConnectorFetchTests {
         if let weekly = requireTimeWindowMetric(named: "weekly", in: entries[0].metrics) {
             #expect(weekly.pct == 8)
         }
-        if let sonnet = requireTimeWindowMetric(named: "weekly_sonnet", in: entries[0].metrics) {
+        if let sonnet = requireTimeWindowMetric(named: "Weekly Sonnet", in: entries[0].metrics) {
             #expect(sonnet.pct == 15)
         }
     }
@@ -392,7 +392,7 @@ struct ClaudeCodeConnectorFetchTests {
         if let weekly = requireTimeWindowMetric(named: "weekly", in: entries[0].metrics) {
             #expect(weekly.pct == 8)
         }
-        if let opus = requireTimeWindowMetric(named: "weekly_opus", in: entries[0].metrics) {
+        if let opus = requireTimeWindowMetric(named: "Weekly Opus", in: entries[0].metrics) {
             #expect(opus.pct == 3)
         }
     }
@@ -430,7 +430,7 @@ struct ClaudeCodeConnectorFetchTests {
 
         #expect(entries[0].lastError == nil)
         #expect(entries[0].metrics.count == 3)
-        _ = requireTimeWindowMetric(named: "weekly_opus", in: entries[0].metrics)
+        _ = requireTimeWindowMetric(named: "Weekly Opus", in: entries[0].metrics)
     }
 
     @Test("HTTP 429 preserves all 4 per-model metrics from previous successful fetch")
@@ -517,10 +517,10 @@ struct ClaudeCodeConnectorFetchTests {
         let connector = makeConnector(dir: dir) { "fake-token" }
         let entries = try await connector.fetchUsages()
 
-        if let sonnet = requireTimeWindowMetric(named: "weekly_sonnet", in: entries[0].metrics) {
+        if let sonnet = requireTimeWindowMetric(named: "Weekly Sonnet", in: entries[0].metrics) {
             #expect(sonnet.pct == 16)
         }
-        if let opus = requireTimeWindowMetric(named: "weekly_opus", in: entries[0].metrics) {
+        if let opus = requireTimeWindowMetric(named: "Weekly Opus", in: entries[0].metrics) {
             #expect(opus.pct == 15)
         }
     }
@@ -536,7 +536,7 @@ struct ClaudeCodeConnectorFetchTests {
         let connector = makeConnector(dir: dir) { "fake-token" }
         let entries = try await connector.fetchUsages()
 
-        if let sonnet = requireTimeWindowMetric(named: "weekly_sonnet", in: entries[0].metrics) {
+        if let sonnet = requireTimeWindowMetric(named: "Weekly Sonnet", in: entries[0].metrics) {
             #expect(sonnet.resetAt.date != nil)
             #expect(!sonnet.resetAt.rawValue.contains("."))
         }

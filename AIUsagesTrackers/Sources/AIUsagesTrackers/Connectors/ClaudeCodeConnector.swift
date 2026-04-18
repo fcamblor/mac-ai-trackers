@@ -140,8 +140,8 @@ public actor ClaudeCodeConnector: UsageConnector {
             ]
             // Per-model weekly metrics are purely additive — absent keys are silently skipped
             let perModelDefs: [(metric: ModelWeeklyMetric?, name: String)] = [
-                (usage.sonnetWeekly, "weekly_sonnet"),
-                (usage.opusWeekly, "weekly_opus"),
+                (usage.sonnetWeekly, "Weekly Sonnet"),
+                (usage.opusWeekly, "Weekly Opus"),
             ]
             for def in perModelDefs {
                 if let m = def.metric {
