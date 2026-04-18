@@ -1,0 +1,55 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "7a7be94fed2d",
+  "session_id": "1174360e-1631-481d-a0ef-bb87944a874a",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-18T20:06:19.520558Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".claude/rules/swift-concurrency.md",
+    ".claude/rules/swift-error-handling.md",
+    ".claude/rules/swift-io-robustness.md",
+    ".claude/rules/swift-quality.md",
+    ".claude/rules/swift-testability.md",
+    "CLAUDE.md",
+    "docs/SWIFT-CONCURRENCY.md",
+    "docs/SWIFT-ERROR-HANDLING.md",
+    "docs/SWIFT-IO-ROBUSTNESS.md",
+    "docs/SWIFT-TESTABILITY.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "bd7a9ab20ac2",
+  "token_usage": {
+    "input_tokens": 21,
+    "cache_creation_tokens": 58012,
+    "cache_read_tokens": 594735,
+    "output_tokens": 21764,
+    "api_call_count": 17
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-18T20:06:19.405309Z",
+    "agent_lines": 297,
+    "agent_removed": 0,
+    "human_added": 8460,
+    "human_modified": 2,
+    "human_removed": 0,
+    "total_committed": 8759,
+    "total_lines_changed": 8958,
+    "agent_percentage": 3.3154722036168787,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}

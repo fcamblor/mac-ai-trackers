@@ -1,0 +1,55 @@
+---
+description: General assistance - questions, debugging, one-off tasks, exploration
+argument-hint: <any request>
+---
+
+# Assist Mode
+
+**Request**: claude-opus-4-7 Utilise le skill improve-ai-harness pour analyser les logs du dernier run fcr-dev (run ID 77047594ea8f699acd4d6dcb2d3bc445, worktree /Users/fcamblor/.archon/worktrees/third-party-oss/mac-ai-trackers/archon/task-feat-claude-usages-connector) et en tirer les règles / outillage à ajouter au harness AI du projet pour éviter que les prochaines générations de code Swift reproduisent les mêmes problèmes.
+
+Les reviews ont remonté 3 passes successives de findings (46+ items au total), couvrant :
+- Sécurité concurrence Swift : data races sur NSFormatter, Logger sans lock, weak self inutile sur actor, Process.waitUntilExit() bloquant le cooperative thread pool
+- Robustesse I/O : deadlock pipe (readDataToEndOfFile après waitUntilExit), écriture non-atomique, TOCTOU sur lock file, flock sans timeout
+- Erreurs silencieuses : try? qui avalent des erreurs critiques (createDirectory, moveItem rotation), log succès après catch sans return
+- Injection de dépendances : URLSession/Keychain non-injectable → 0% couverture réseau, ISO8601DateFormatter instancié à chaque appel
+- Design : ConnectorError sans associated values, merge O(n*m), force-unwrap URL littérale
+- Tests : fetchUsages() non testé, rotation non testée, flock failure non testée, idempotence start() non testée
+- Commentaires : WHAT au lieu de WHY, magic numbers sans constante nommée
+
+L'objectif : produire des règles CLAUDE.md / docs Swift spécifiques au projet qui guideront les prochaines générations d'agents pour produire du code Swift de qualité production dès la première implémentation, sans nécessiter 3 passes de review correctives.
+
+---
+
+You are helping with a request that didn't match a specific workflow.
+
+## Instructions
+
+1. **Understand the request** - What is the user actually asking for?
+2. **Take action** - Use your full Claude Code capabilities to help
+3. **Be helpful** - Answer questions, debug issues, explore code, make changes
+4. **Note the gap** - If this should have been a specific workflow, mention it:
+   "Note: Using assist mode. Consider creating a workflow for this use case."
+
+## Capabilities
+
+You have full Claude Code capabilities:
+- Read and write files
+- Run commands
+- Search the codebase
+- Make code changes
+- Answer questions
+
+## Request
+
+claude-opus-4-7 Utilise le skill improve-ai-harness pour analyser les logs du dernier run fcr-dev (run ID 77047594ea8f699acd4d6dcb2d3bc445, worktree /Users/fcamblor/.archon/worktrees/third-party-oss/mac-ai-trackers/archon/task-feat-claude-usages-connector) et en tirer les règles / outillage à ajouter au harness AI du projet pour éviter que les prochaines générations de code Swift reproduisent les mêmes problèmes.
+
+Les reviews ont remonté 3 passes successives de findings (46+ items au total), couvrant :
+- Sécurité concurrence Swift : data races sur NSFormatter, Logger sans lock, weak self inutile sur actor, Process.waitUntilExit() bloquant le cooperative thread pool
+- Robustesse I/O : deadlock pipe (readDataToEndOfFile après waitUntilExit), écriture non-atomique, TOCTOU sur lock file, flock sans timeout
+- Erreurs silencieuses : try? qui avalent des erreurs critiques (createDirectory, moveItem rotation), log succès après catch sans return
+- Injection de dépendances : URLSession/Keychain non-injectable → 0% couverture réseau, ISO8601DateFormatter instancié à chaque appel
+- Design : ConnectorError sans associated values, merge O(n*m), force-unwrap URL littérale
+- Tests : fetchUsages() non testé, rotation non testée, flock failure non testée, idempotence start() non testée
+- Commentaires : WHAT au lieu de WHY, magic numbers sans constante nommée
+
+L'objectif : produire des règles CLAUDE.md / docs Swift spécifiques au projet qui guideront les prochaines générations d'agents pour produire du code Swift de qualité production dès la première implémentation, sans nécessiter 3 passes de review correctives.

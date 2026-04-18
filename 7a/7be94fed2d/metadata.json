@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "7a7be94fed2d",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".claude/rules/swift-concurrency.md",
+    ".claude/rules/swift-error-handling.md",
+    ".claude/rules/swift-io-robustness.md",
+    ".claude/rules/swift-quality.md",
+    ".claude/rules/swift-testability.md",
+    "CLAUDE.md",
+    "docs/SWIFT-CONCURRENCY.md",
+    "docs/SWIFT-ERROR-HANDLING.md",
+    "docs/SWIFT-IO-ROBUSTNESS.md",
+    "docs/SWIFT-TESTABILITY.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/7a/7be94fed2d/0/metadata.json",
+      "transcript": "/7a/7be94fed2d/0/full.jsonl",
+      "content_hash": "/7a/7be94fed2d/0/content_hash.txt",
+      "prompt": "/7a/7be94fed2d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 21,
+    "cache_creation_tokens": 58012,
+    "cache_read_tokens": 594735,
+    "output_tokens": 21764,
+    "api_call_count": 17
+  }
+}
