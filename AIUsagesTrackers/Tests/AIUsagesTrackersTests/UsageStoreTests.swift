@@ -773,6 +773,100 @@ struct UsageStoreEntriesTests {
     }
 }
 
+// MARK: - menuBarSegments tests
+
+@Suite("UsageStore menuBarSegments")
+struct UsageStoreMenuBarSegmentsTests {
+
+    @MainActor
+    @Test("default menuBarSegments is empty")
+    func defaultIsEmpty() {
+        let watcher = MockFileWatcher()
+        let store = UsageStore(fileWatcher: watcher)
+        #expect(store.menuBarSegments.isEmpty)
+    }
+
+    @MainActor
+    @Test("single metric produces one segment with text and tier")
+    func singleSegment() async throws {
+        let watcher = MockFileWatcher()
+        // Session: 300 min, reset 15:00, now 12:30 → 50% elapsed, 48% usage → ratio 0.96 → approaching
+        let clock = FixedClock(ISO8601DateFormatter().date(from: "2026-04-17T12:30:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
+        store.start()
+
+        let data = try makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 48),
+        ])
+        watcher.send(data)
+        try await eventually { store.menuBarSegments.count == 1 }
+
+        #expect(store.menuBarSegments.count == 1)
+        #expect(store.menuBarSegments[0].text == "S 48% 2h 30m")
+        #expect(store.menuBarSegments[0].tier == .approaching)
+        store.stop()
+    }
+
+    @MainActor
+    @Test("multiple metrics produce one segment per metric in order")
+    func multipleSegments() async throws {
+        let watcher = MockFileWatcher()
+        let clock = FixedClock(ISO8601DateFormatter().date(from: "2026-04-17T12:30:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
+        store.start()
+
+        let data = try makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 10),
+            timeWindowMetric(name: "weekly",  resetAt: "2026-04-23T21:00:00Z", windowDurationMinutes: 10080, usagePercent: 80),
+        ])
+        watcher.send(data)
+        try await eventually { store.menuBarSegments.count == 2 }
+
+        #expect(store.menuBarSegments[0].text.hasPrefix("S "))
+        #expect(store.menuBarSegments[1].text.hasPrefix("W "))
+        store.stop()
+    }
+
+    @MainActor
+    @Test("segment tier is nil when theoretical fraction is zero")
+    func nilTierAtWindowStart() async throws {
+        let watcher = MockFileWatcher()
+        // Now is exactly at window start → 0% elapsed → tier nil
+        let clock = FixedClock(ISO8601DateFormatter().date(from: "2026-04-17T10:00:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
+        store.start()
+
+        let data = try makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 50),
+        ])
+        watcher.send(data)
+        try await eventually { store.menuBarSegments.count == 1 }
+
+        #expect(store.menuBarSegments[0].tier == nil)
+        store.stop()
+    }
+
+    @MainActor
+    @Test("segments cleared on decode error")
+    func segmentsClearedOnError() async throws {
+        let watcher = MockFileWatcher()
+        let clock = FixedClock(ISO8601DateFormatter().date(from: "2026-04-17T12:30:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
+        store.start()
+
+        let data = try makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 48),
+        ])
+        watcher.send(data)
+        try await eventually { store.menuBarSegments.count == 1 }
+
+        watcher.send("bad".data(using: .utf8)!)
+        try await eventually { store.menuBarSegments.isEmpty }
+        #expect(store.menuBarSegments.isEmpty)
+        store.stop()
+    }
+}
+
 // MARK: - menuBarTier tests
 
 @Suite("UsageStore menuBarTier")
