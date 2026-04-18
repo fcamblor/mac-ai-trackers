@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "af2474638be7",
+  "strategy": "manual-commit",
+  "branch": "archon/task-fix-tech-debt-swiftlint",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsagesFileWatcherTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/af/2474638be7/0/metadata.json",
+      "transcript": "/af/2474638be7/0/full.jsonl",
+      "content_hash": "/af/2474638be7/0/content_hash.txt",
+      "prompt": "/af/2474638be7/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 56,
+    "cache_creation_tokens": 198322,
+    "cache_read_tokens": 3936192,
+    "output_tokens": 21118,
+    "api_call_count": 49
+  }
+}
