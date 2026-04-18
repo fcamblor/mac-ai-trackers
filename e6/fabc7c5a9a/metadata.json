@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "e6fabc7c5a9a",
+  "strategy": "manual-commit",
+  "branch": "archon/task-fix-tech-debt-swiftlint",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "tech-debt/20260418_medium_S_swiftlint-legacy-warnings/debt.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e6/fabc7c5a9a/0/metadata.json",
+      "transcript": "/e6/fabc7c5a9a/0/full.jsonl",
+      "content_hash": "/e6/fabc7c5a9a/0/content_hash.txt",
+      "prompt": "/e6/fabc7c5a9a/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 42,
+    "cache_creation_tokens": 101614,
+    "cache_read_tokens": 2726139,
+    "output_tokens": 16933,
+    "api_call_count": 36
+  }
+}
