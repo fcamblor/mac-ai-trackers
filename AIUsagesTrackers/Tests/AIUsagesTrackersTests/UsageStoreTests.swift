@@ -415,7 +415,7 @@ struct UsageStoreRemainingTimeTests {
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
-        // 3 days, 5 hours, 30 minutes in the future
+        // resetAt is several days ahead — verifies d/h/m rendering
         let data = try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "weekly", resetAt: "2026-04-20T05:30:00Z", usagePercent: 15),
         ])
@@ -488,7 +488,7 @@ struct UsageStoreRemainingTimeTests {
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
         store.start()
 
-        // 30 seconds in the future: totalSeconds=30, minutes=0, parts empty → "0m"
+        // resetAt less than one minute ahead — verifies "0m" floor
         let data = try makeUsagesJSON(metrics: [
             timeWindowMetric(name: "session", resetAt: "2026-04-17T12:00:30Z", usagePercent: 99),
         ])
@@ -521,7 +521,7 @@ struct UsageStoreCountdownTests {
         try await eventually { store.menuBarText == "S 42% 3h" }
         #expect(store.menuBarText == "S 42% 3h")
 
-        // Advance clock by 1 hour: 2h remaining after next countdown tick
+        // Advance clock forward — countdown should drop to the next lower whole-hour bucket
         clock.date = f.date(from: "2026-04-17T13:00:00Z")!
         try await eventually(timeout: 3.0) { store.menuBarText == "S 42% 2h" }
         #expect(store.menuBarText == "S 42% 2h")
