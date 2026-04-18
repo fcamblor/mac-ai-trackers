@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Testing
 @testable import AIUsagesTrackersLib
@@ -266,6 +267,43 @@ struct UsagesFileManagerTests {
         let mgr = makeManager(dir: dir)
         await mgr.updateIsActive(vendor: "claude", activeAccount: "a@b.com")
         let result = await mgr.read()
+        #expect(result.usages.isEmpty)
+    }
+
+    // MARK: - Lock error paths
+
+    @Test("read returns empty file when lock times out")
+    func lockTimeoutFallsBackToEmpty() async throws {
+        let dir = makeTempDir()
+        let filePath = "\(dir)/usages.json"
+        let lockPath = filePath + ".lock"
+
+        // Pre-create and hold an exclusive lock so the manager cannot acquire it
+        let fd = Darwin.open(lockPath, O_CREAT | O_RDWR, 0o644)
+        #expect(fd >= 0)
+        flock(fd, LOCK_EX)
+        defer { flock(fd, LOCK_UN); Darwin.close(fd) }
+
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let mgr = UsagesFileManager(filePath: filePath, logger: logger, lockTimeoutSeconds: 0.1)
+        let result = await mgr.read()
+        // Lock timed out — manager falls back to empty file
+        #expect(result.usages.isEmpty)
+    }
+
+    @Test("read returns empty file when lock file cannot be opened")
+    func cannotOpenLockFileFallsBackToEmpty() async throws {
+        let dir = makeTempDir()
+        // Make the lock path a directory so Darwin.open returns -1
+        let filePath = "\(dir)/usages.json"
+        let lockPath = filePath + ".lock"
+        try FileManager.default.createDirectory(atPath: lockPath, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(atPath: lockPath) }
+
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let mgr = UsagesFileManager(filePath: filePath, logger: logger)
+        let result = await mgr.read()
+        // Darwin.open failed — manager falls back to empty file
         #expect(result.usages.isEmpty)
     }
 }

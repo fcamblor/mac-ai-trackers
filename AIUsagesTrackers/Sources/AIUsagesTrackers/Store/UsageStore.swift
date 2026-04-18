@@ -21,11 +21,10 @@ public struct SystemClock: ClockProvider {
 @Observable
 @MainActor
 public final class UsageStore {
-    // MARK: Published state
-
     public private(set) var menuBarText: String = "--"
-
-    // MARK: Dependencies
+    /// Incremented each time handleNewData is called, whether the data is valid or malformed.
+    /// Tests use this as a reliable signal that the store has consumed the latest yielded item.
+    public private(set) var dataProcessedCount: Int = 0
 
     private let fileWatcher: FileWatching
     private let clock: ClockProvider
@@ -39,12 +38,8 @@ public final class UsageStore {
     // Latest decoded file kept for countdown refresh without re-reading disk
     private var lastFile: UsagesFile?
 
-    // MARK: Tasks
-
     private var watchTask: Task<Void, Never>?
     private var countdownTask: Task<Void, Never>?
-
-    // MARK: Init
 
     public init(
         fileWatcher: FileWatching,
@@ -93,9 +88,13 @@ public final class UsageStore {
         countdownTask = nil
     }
 
+    // Defensive: cancels tasks when the store is released without an explicit stop() call.
+    @MainActor deinit { stop() }
+
     // MARK: - Processing
 
     private func handleNewData(_ data: Data) {
+        dataProcessedCount += 1
         do {
             let file = try JSONDecoder().decode(UsagesFile.self, from: data)
             lastFile = file
@@ -121,19 +120,22 @@ public final class UsageStore {
             return Self.fallbackText
         }
 
-        let segments = entry.metrics.compactMap { metric -> String? in
-            formatTimeWindowSegment(metric)
-        }
+        let segments = entry.metrics.compactMap(formatTimeWindowSegment)
 
         return segments.isEmpty ? Self.fallbackText : segments.joined(separator: " | ")
     }
 
     private func formatTimeWindowSegment(_ metric: UsageMetric) -> String? {
-        guard case let .timeWindow(name, resetAt, _, usagePercent) = metric else {
+        if case let .unknown(t) = metric {
+            logger.log(.debug, "UsageStore: skipping unknown metric type '\(t)'")
+        }
+        guard case let .timeWindow(name, resetAt, _windowDuration, usagePercent) = metric else {
             return nil
         }
 
         let abbreviation = name.prefix(1).uppercased()
+        // A metric with an empty name cannot be abbreviated — skip to avoid a leading space in output
+        guard !abbreviation.isEmpty else { return nil }
         let remaining = formatRemainingTime(resetAt: resetAt)
         return "\(abbreviation) \(usagePercent.rawValue)% \(remaining)"
     }

@@ -75,6 +75,19 @@ struct UsagePollerTests {
         #expect(result.usages[0].vendor == "claude")
     }
 
+    @Test("pollOnce with no connectors skips file write")
+    func pollOnceZeroConnectors() async {
+        let dir = makeTempDir()
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
+        let poller = UsagePoller(connectors: [], fileManager: fm, logger: logger)
+
+        await poller.pollOnce()
+
+        let result = await fm.read()
+        #expect(result.usages.isEmpty)
+    }
+
     @Test("pollOnce with all connectors failing writes nothing")
     func pollOnceAllFail() async {
         let dir = makeTempDir()

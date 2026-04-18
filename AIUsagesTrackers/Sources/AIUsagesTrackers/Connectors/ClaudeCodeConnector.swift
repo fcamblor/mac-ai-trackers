@@ -12,13 +12,20 @@ public actor ClaudeCodeConnector: UsageConnector {
 
     private var lastKnownMetrics: [UsageMetric] = []
 
-    nonisolated(unsafe) private static let isoFormatter = ISO8601DateFormatter()
-    // API responses may include sub-second precision; this formatter handles them for normalization
-    nonisolated(unsafe) private static let isoFormatterFractional: ISO8601DateFormatter = {
+    // Long enough for a cached keychain lookup; short enough to avoid stalling the poller
+    private static let keychainTimeoutSeconds: Int = 10
+    // Claude Pro/Max rate-limit policy — durations are fixed by Anthropic and not returned by the API
+    private static let sessionWindowMinutes = DurationMinutes(rawValue: 300)
+    private static let weeklyWindowMinutes  = DurationMinutes(rawValue: 10080)
+
+    // Actor-isolated: safe without nonisolated(unsafe) since all access is on the actor
+    private let isoFormatter = ISO8601DateFormatter()
+    private let isoFormatterFractional: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f
     }()
+
 
     public init(
         claudeConfigPath: String? = nil,
@@ -117,18 +124,17 @@ public actor ClaudeCodeConnector: UsageConnector {
         do {
             let usage = try parseAPIResponse(data)
             logger.log(.info, "Fetched successfully: session=\(usage.sessionPercent)% weekly=\(usage.weeklyPercent)%")
-            // Window durations are not in the API response — they're fixed by Claude's rate-limit policy
             let metrics: [UsageMetric] = [
                 .timeWindow(
                     name: "session",
                     resetAt: usage.sessionResetAt,
-                    windowDuration: DurationMinutes(rawValue: 300),  // 5 hours
+                    windowDuration: Self.sessionWindowMinutes,
                     usagePercent: UsagePercent(rawValue: usage.sessionPercent)
                 ),
                 .timeWindow(
                     name: "weekly",
                     resetAt: usage.weeklyResetAt,
-                    windowDuration: DurationMinutes(rawValue: 10080),  // 7 days
+                    windowDuration: Self.weeklyWindowMinutes,
                     usagePercent: UsagePercent(rawValue: usage.weeklyPercent)
                 ),
             ]
@@ -167,10 +173,9 @@ public actor ClaudeCodeConnector: UsageConnector {
                     return
                 }
 
-                // Keychain may prompt the user or hang if the login keychain is locked;
-                // 10 s is long enough for a cached lookup, short enough to not stall the poller
+                // Keychain may prompt the user or hang if the login keychain is locked
                 let timedOut = DispatchSemaphore(value: 0)
-                DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(10)) {
+                DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(Self.keychainTimeoutSeconds)) {
                     guard process.isRunning else { return }
                     process.terminate()
                     timedOut.signal()
@@ -182,7 +187,7 @@ public actor ClaudeCodeConnector: UsageConnector {
                 // Check the flag rather than terminationReason, which may not
                 // reflect SIGTERM reliably if the process handles the signal
                 if timedOut.wait(timeout: .now()) == .success {
-                    continuation.resume(throwing: ConnectorError.keychainTimeout(serviceName: serviceName, timeoutSeconds: 10))
+                    continuation.resume(throwing: ConnectorError.keychainTimeout(serviceName: serviceName, timeoutSeconds: Self.keychainTimeoutSeconds))
                     return
                 }
                 guard process.terminationStatus == 0 else {
@@ -273,16 +278,16 @@ public actor ClaudeCodeConnector: UsageConnector {
         }
         return ParsedUsage(
             sessionPercent: Int(sessionUtil.rounded()),
-            sessionResetAt: Self.normalizeISO8601(sessionReset),
+            sessionResetAt: normalizeISO8601(sessionReset),
             weeklyPercent: Int(weeklyUtil.rounded()),
-            weeklyResetAt: Self.normalizeISO8601(weeklyReset)
+            weeklyResetAt: normalizeISO8601(weeklyReset)
         )
     }
 
     /// Strips sub-second precision from API-provided ISO8601 strings so downstream
     /// consumers can rely on the standard formatter (no fractional-seconds option needed).
     /// Returns the original string unchanged if it cannot be parsed.
-    private static func normalizeISO8601(_ raw: String) -> ISODate {
+    private func normalizeISO8601(_ raw: String) -> ISODate {
         if let date = isoFormatterFractional.date(from: raw) ?? isoFormatter.date(from: raw) {
             return ISODate(rawValue: isoFormatter.string(from: date))
         }

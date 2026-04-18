@@ -6,11 +6,20 @@ import Testing
 
 final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var handler: ((URLRequest) -> (Data, HTTPURLResponse))?
+    // Captured by startLoading before handler runs; safe because the suite is .serialized
+    nonisolated(unsafe) static var capturedRequest: URLRequest?
+    // When set, startLoading fails with this error instead of invoking handler
+    nonisolated(unsafe) static var errorToThrow: Error?
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
+        Self.capturedRequest = request
+        if let error = Self.errorToThrow {
+            client?.urlProtocol(self, didFailWithError: error)
+            return
+        }
         guard let handler = Self.handler else {
             client?.urlProtocolDidFinishLoading(self)
             return
@@ -240,6 +249,42 @@ struct ClaudeCodeConnectorFetchTests {
         } else {
             Issue.record("Expected timeWindow metric for weekly")
         }
+    }
+
+    @Test("URLError returns api_error entry")
+    func urlErrorReturnsApiError() async throws {
+        let dir = makeTempDir()
+        MockURLProtocol.capturedRequest = nil
+        MockURLProtocol.errorToThrow = URLError(.notConnectedToInternet)
+        MockURLProtocol.handler = nil
+        let connector = makeConnector(dir: dir) { "fake-token" }
+        let entries = try await connector.fetchUsages()
+        MockURLProtocol.errorToThrow = nil
+
+        #expect(entries.count == 1)
+        #expect(entries[0].lastError?.type == "api_error")
+        #expect(entries[0].metrics.isEmpty)
+    }
+
+    @Test("success path sends correct Authorization and anthropic-beta headers")
+    func successPathHeaders() async throws {
+        let dir = makeTempDir()
+        MockURLProtocol.capturedRequest = nil
+        MockURLProtocol.errorToThrow = nil
+        let apiJSON = """
+        {"five_hour":{"utilization":42,"resets_at":"2026-04-17T15:00:00+00:00"},
+         "seven_day":{"utilization":8,"resets_at":"2026-04-23T21:00:00+00:00"}}
+        """
+        MockURLProtocol.handler = { _ in
+            let data = apiJSON.data(using: .utf8)!
+            let resp = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (data, resp)
+        }
+        let connector = makeConnector(dir: dir) { "fake-token" }
+        _ = try await connector.fetchUsages()
+
+        #expect(MockURLProtocol.capturedRequest?.value(forHTTPHeaderField: "Authorization") == "Bearer fake-token")
+        #expect(MockURLProtocol.capturedRequest?.value(forHTTPHeaderField: "anthropic-beta") == "oauth-2025-04-20")
     }
 
     @Test("nil account returns account_unknown error entry")
