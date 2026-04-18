@@ -5,7 +5,7 @@ An executable Swift Package produces a **menubar-only** macOS application: no Do
 Invariants worth preserving when modifying the codebase:
 
 - The app sets its activation policy to `.accessory` at startup. Removing this call makes macOS show a Dock icon and breaks the menubar-only contract.
-- The UI is exposed through a SwiftUI `MenuBarExtra` scene. User-visible features belong inside that scene or in views it references — there is intentionally no main `WindowGroup`.
+- The UI is exposed through an AppKit `NSStatusItem` owned by `AppDelegate`, not SwiftUI's `MenuBarExtra`. `MenuBarExtra` was dropped after it proved unable to render per-segment colored indicators (template tinting strips colors, mixed HStacks silently truncate). See `docs/SWIFT-MENUBAR.md` before changing anything menu-bar related. User-visible features belong inside the popover's root SwiftUI view — there is intentionally no main `WindowGroup`.
 
 ## Package structure
 
@@ -27,7 +27,9 @@ A file watcher observes `usages.json` using a hybrid strategy: a kernel `Dispatc
 
 An `@Observable` store (running on `@MainActor`) receives each new file snapshot, decodes it, locates the active Claude account, and formats the session and weekly time-window metrics into the menubar label. A secondary countdown timer periodically refreshes the remaining-time values in the display so they stay current between file changes. When data is unavailable or malformed the label falls back to `"--"`.
 
-When the user clicks the menu bar item, a `.window`-style `MenuBarExtra` opens a scrollable popover. The popover renders one card per vendor/account entry, sorted alphabetically by vendor then by account (active accounts first within a vendor). Each card shows time-window metrics (gauge bar, theoretical pace marker, remaining time, next reset date) and pay-as-you-go metrics (amount with currency). An empty state is shown when no entries are available. A footer provides the app name and a Quit shortcut.
+When the user clicks the menu bar item, `AppDelegate` toggles an `NSPopover` hosting the root SwiftUI view via `NSHostingController`. The popover renders one card per vendor/account entry, sorted alphabetically by vendor then by account (active accounts first within a vendor). Each card shows time-window metrics (gauge bar, theoretical pace marker, remaining time, next reset date) and pay-as-you-go metrics (amount with currency). An empty state is shown when no entries are available. A footer provides the app name and a Quit shortcut.
+
+The menu bar label itself is rasterised into a non-template `NSImage` by `MenuBarLabelRenderer`, so per-tier dot colors survive macOS's template tinting. Text color is picked from the status button's `effectiveAppearance` (which tracks the menu bar, not the app) and re-rendered whenever that appearance changes.
 
 ## Account monitoring
 
