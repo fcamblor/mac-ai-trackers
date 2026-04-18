@@ -11,8 +11,18 @@ None.
 ## Scope
 
 - Add a cog (⚙) icon button in the popover that opens a native macOS settings window.
-- The settings window hosts app-wide configuration options (exact settings to be defined during implementation; candidates include refresh interval, account management, and launch-at-login).
-- The window follows macOS HIG for preferences windows (tabbed or single-pane depending on the number of settings).
+- The settings window follows macOS HIG for preferences windows (tabbed or single-pane depending on the number of settings).
+
+### Configurable settings
+
+**Menu bar display items** — a multi-select group (at least one item must remain selected at all times):
+- Show percentage
+- Show time remaining until next reset
+- Show weekly-only component
+- Show 5-hour session component
+- Show Sonnet weekly component
+
+**Auto-refresh interval** — a discrete slider with five steps: 1 minute, 2 minutes, 3 minutes, 5 minutes, 10 minutes.
 
 **Out of scope**
 
@@ -28,4 +38,5 @@ None.
 
 ## Notes
 
-- Exact list of configurable settings to be agreed on before implementation begins.
+- The menu bar display group must enforce a minimum of one selected item (disabling the last checked option is not allowed).
+- The discrete refresh-interval slider maps to fixed values [1, 2, 3, 5, 10] minutes; intermediate positions snap to the nearest defined step.
