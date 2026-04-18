@@ -1,0 +1,15 @@
+j'aimerais qu'on crée une nouvelle feature visant à intégrer un nouveau type de compte: après claude, j'aimerais supporter codex
+
+---
+
+je ne veux pas que tu implementes la feature .. reference là simplement avec le plus d'infos possibles en utilisant le skill roadmap-feature
+
+---
+
+pour moi, la feature codex-connector nécessite d'avoir d'implémenté settings-window et vendor-status-monitor avant de pouvoir commencer
+
+---
+
+les raisons:
+- je veux que le changement de structure du fichier json introduit par vendor-status-monitor soit fait
+- je veux que l'écran de settings ait commencé à être créé de manière à pouvoir configurer ce qui sera affiché dans la menubar
