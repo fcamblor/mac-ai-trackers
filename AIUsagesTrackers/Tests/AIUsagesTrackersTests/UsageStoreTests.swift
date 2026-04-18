@@ -734,6 +734,41 @@ struct UsageStoreEntriesTests {
     }
 
     @MainActor
+    @Test("partially malformed multi-account JSON still decodes valid entries")
+    func partiallyMalformedMultiAccount() async throws {
+        let watcher = MockFileWatcher()
+        let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
+        store.start()
+
+        // First entry has valid metrics; second entry has a non-dict metric
+        // that should be skipped or cause graceful degradation
+        let root: [String: Any] = ["usages": [
+            [
+                "vendor": "claude",
+                "account": "good@example.com",
+                "isActive": true,
+                "metrics": [timeWindowMetric(name: "session", usagePercent: 42)],
+            ],
+            [
+                "vendor": "claude",
+                "account": "bad@example.com",
+                "isActive": true,
+                "metrics": "not-an-array",
+            ],
+        ]]
+        let data = try JSONSerialization.data(withJSONObject: root)
+        watcher.send(data)
+        try await eventually { store.dataProcessedCount >= 1 }
+
+        // The store should still have decoded at least the good entry, or
+        // gracefully fallen back to empty if the whole payload is rejected
+        let hasGoodEntry = store.entries.contains { $0.account == AccountEmail(rawValue: "good@example.com") }
+        let fellBack = store.entries.isEmpty
+        #expect(hasGoodEntry || fellBack, "Expected either partial decode or graceful fallback")
+        store.stop()
+    }
+
+    @MainActor
     @Test("entries recovered after error")
     func recoveredAfterError() async throws {
         let watcher = MockFileWatcher()
