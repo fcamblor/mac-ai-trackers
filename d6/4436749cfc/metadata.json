@@ -3,7 +3,7 @@
   "checkpoint_id": "d64436749cfc",
   "strategy": "manual-commit",
   "branch": "chore/resolve-all-tech-debts",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "roadmap/claude-model-weekly-metrics.md",
     "roadmap/index.md"
@@ -14,13 +14,19 @@
       "transcript": "/d6/4436749cfc/0/full.jsonl",
       "content_hash": "/d6/4436749cfc/0/content_hash.txt",
       "prompt": "/d6/4436749cfc/0/prompt.txt"
+    },
+    {
+      "metadata": "/d6/4436749cfc/1/metadata.json",
+      "transcript": "/d6/4436749cfc/1/full.jsonl",
+      "content_hash": "/d6/4436749cfc/1/content_hash.txt",
+      "prompt": "/d6/4436749cfc/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 24,
-    "cache_creation_tokens": 36799,
-    "cache_read_tokens": 441147,
-    "output_tokens": 5253,
-    "api_call_count": 17
+    "input_tokens": 180,
+    "cache_creation_tokens": 290323,
+    "cache_read_tokens": 9092423,
+    "output_tokens": 37973,
+    "api_call_count": 132
   }
 }
