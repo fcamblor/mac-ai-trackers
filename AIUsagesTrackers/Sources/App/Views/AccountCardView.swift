@@ -5,6 +5,7 @@ import AIUsagesTrackersLib
 struct AccountCardView: View {
     let entry: VendorUsageEntry
     let showActiveBadge: Bool
+    let isRefreshing: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -17,6 +18,13 @@ struct AccountCardView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+
+                if isRefreshing {
+                    ProgressView()
+                        .controlSize(.small)
+                        .scaleEffect(0.6)
+                        .frame(width: 12, height: 12)
+                }
 
                 Spacer()
 

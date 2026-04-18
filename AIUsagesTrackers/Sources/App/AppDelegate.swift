@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var accountMonitor: ClaudeActiveAccountMonitor?
     private var pidGuard: AppPidGuard?
     private var usageStore: UsageStore?
+    private var refreshState: RefreshState?
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private var appearanceObserver: NSKeyValueObservation?
@@ -37,17 +38,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pidGuard = guard_
 
         let fileManager = UsagesFileManager.shared
-        let poller = UsagePoller(connectors: [ClaudeCodeConnector()], fileManager: fileManager)
+        let refreshState = RefreshState()
+        let poller = UsagePoller(
+            connectors: [ClaudeCodeConnector()],
+            fileManager: fileManager,
+            refreshState: refreshState
+        )
         let accountMonitor = ClaudeActiveAccountMonitor(fileManager: fileManager)
         self.poller = poller
         self.accountMonitor = accountMonitor
+        self.refreshState = refreshState
 
         let usagesPath = fileManager.filePath
         let fileWatcher = UsagesFileWatcher(path: usagesPath)
         let store = UsageStore(fileWatcher: fileWatcher)
         self.usageStore = store
 
-        setupStatusItem(store: store)
+        setupStatusItem(store: store, refreshState: refreshState)
         trackStoreChanges(store: store)
 
         Task {
@@ -63,7 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Status item
 
-    private func setupStatusItem(store: UsageStore) {
+    private func setupStatusItem(store: UsageStore, refreshState: RefreshState) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem = item
 
@@ -71,9 +78,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.behavior = .transient
         popover.contentSize = NSSize(width: 320, height: 400)
         popover.contentViewController = NSHostingController(
-            rootView: UsageDetailsView(store: store) { [weak self] in
-                self?.quit()
-            }
+            rootView: UsageDetailsView(
+                store: store,
+                refreshState: refreshState,
+                onRefresh: { [weak self] in
+                    await self?.poller?.pollOnce(now: Date(), force: true)
+                },
+                onQuit: { [weak self] in
+                    self?.quit()
+                }
+            )
         )
         self.popover = popover
 

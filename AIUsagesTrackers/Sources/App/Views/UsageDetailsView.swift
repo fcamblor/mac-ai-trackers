@@ -5,7 +5,10 @@ import AIUsagesTrackersLib
 /// so the popover does not stretch unboundedly when many accounts are present.
 struct UsageDetailsView: View {
     let store: UsageStore
+    let refreshState: RefreshState
+    let onRefresh: () async -> Void
     let onQuit: () -> Void
+
 
     private static let maxPopoverHeight: CGFloat = 480
     private static let popoverWidth: CGFloat = 320
@@ -23,7 +26,11 @@ struct UsageDetailsView: View {
                         ForEach(sorted) { entry in
                             AccountCardView(
                                 entry: entry,
-                                showActiveBadge: multiVendors.contains(entry.vendor)
+                                showActiveBadge: multiVendors.contains(entry.vendor),
+                                isRefreshing: refreshState.isRefreshing(
+                                    vendor: entry.vendor,
+                                    account: entry.account
+                                )
                             )
                         }
                     }
@@ -56,16 +63,40 @@ struct UsageDetailsView: View {
     }
 
     private var footer: some View {
-        HStack {
+        let refreshing = !refreshState.inFlight.isEmpty
+        return HStack(spacing: 8) {
             Text("AI Usages Tracker")
                 .font(.system(size: 10))
                 .foregroundStyle(.tertiary)
             Spacer()
+            Button {
+                guard !refreshing else { return }
+                Task { await onRefresh() }
+            } label: {
+                ZStack {
+                    if refreshing {
+                        ProgressView()
+                            .controlSize(.small)
+                            .scaleEffect(0.6)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                }
+                .frame(width: 16, height: 16)
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .disabled(refreshing)
+            .help("Refresh usage data")
+            .keyboardShortcut("r")
+            .focusable(false)
+
             Button("Quit") {
                 onQuit()
             }
             .keyboardShortcut("q")
             .controlSize(.small)
+            .focusable(false)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

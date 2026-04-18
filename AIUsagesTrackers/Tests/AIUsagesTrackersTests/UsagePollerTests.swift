@@ -172,6 +172,30 @@ struct UsagePollerTests {
         #expect(fetchCount == 0)
     }
 
+    @Test("pollOnce with force=true bypasses freshness cache")
+    func pollOnceForceBypassesCache() async {
+        let dir = makeTempDir()
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
+
+        let now = Date()
+        let recentDate = now.addingTimeInterval(-60)
+        let cachedEntry = VendorUsageEntry(
+            vendor: "claude", account: "a@b.com", isActive: true,
+            lastAcquiredOn: ISODate(date: recentDate),
+            metrics: []
+        )
+        await fm.update(with: [cachedEntry])
+
+        let connector = MockConnector(vendor: "claude", entries: [cachedEntry])
+        let poller = UsagePoller(connectors: [connector], interval: .seconds(180), fileManager: fm, logger: logger)
+
+        await poller.pollOnce(now: now, force: true)
+
+        let fetchCount = await connector.fetchCount
+        #expect(fetchCount == 1)
+    }
+
     @Test("pollOnce fetches when cached data exceeds interval")
     func pollOnceStaleDataFetched() async {
         let dir = makeTempDir()

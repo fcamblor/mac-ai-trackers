@@ -5,6 +5,7 @@ public actor UsagePoller {
     public let interval: Duration
     public let fileManager: UsagesFileManager
     private let logger: FileLogger
+    private let refreshState: RefreshState?
 
     private var pollingTask: Task<Void, Never>?
 
@@ -12,12 +13,14 @@ public actor UsagePoller {
         connectors: [any UsageConnector],
         interval: Duration = .seconds(180),
         fileManager: UsagesFileManager = UsagesFileManager.shared,
-        logger: FileLogger = Loggers.app
+        logger: FileLogger = Loggers.app,
+        refreshState: RefreshState? = nil
     ) {
         self.connectors = connectors
         self.interval = interval
         self.fileManager = fileManager
         self.logger = logger
+        self.refreshState = refreshState
     }
 
     public func start() {
@@ -43,17 +46,20 @@ public actor UsagePoller {
         logger.log(.info, "Poller stopped")
     }
 
-    public func pollOnce(now: Date = Date()) async {
-        logger.log(.debug, "Poll tick — fetching from \(connectors.count) connector(s)")
+    public func pollOnce(now: Date = Date(), force: Bool = false) async {
+        logger.log(.debug, "Poll tick — fetching from \(connectors.count) connector(s)\(force ? " (forced)" : "")")
 
         let existingFile = await fileManager.read()
         let intervalSeconds = Double(interval.components.seconds)
         var skippedCount = 0
         let log = self.logger
 
+        let refreshState = self.refreshState
         let entries: [VendorUsageEntry] = await withTaskGroup(of: [VendorUsageEntry].self) { group in
             for connector in connectors {
-                if let account = connector.resolveActiveAccount(),
+                let account = connector.resolveActiveAccount()
+                if !force,
+                   let account,
                    let cached = existingFile.usages.first(where: { $0.vendor == connector.vendor && $0.account == account }),
                    let acquiredDate = cached.lastAcquiredOn?.date,
                    now.timeIntervalSince(acquiredDate) < intervalSeconds {
@@ -62,13 +68,22 @@ public actor UsagePoller {
                     skippedCount += 1
                     continue
                 }
+                let refreshKey = account.map { AccountKey(vendor: connector.vendor, account: $0) }
+                if let refreshKey {
+                    await refreshState?.begin(refreshKey)
+                }
                 group.addTask {
+                    let result: [VendorUsageEntry]
                     do {
-                        return try await connector.fetchUsages()
+                        result = try await connector.fetchUsages()
                     } catch {
                         log.log(.error, "Connector \(connector.vendor) threw: \(error)")
-                        return []
+                        result = []
                     }
+                    if let refreshKey {
+                        await refreshState?.end(refreshKey)
+                    }
+                    return result
                 }
             }
             var all: [VendorUsageEntry] = []
