@@ -8,9 +8,8 @@ import Testing
 /// Implemented as a class so `changes()` can hand out a fresh AsyncStream on each
 /// call — required for start/stop/start lifecycle tests where the previous iteration
 /// is cancelled before a new watchTask begins consuming again.
+// swiftlint:disable:next w4_unchecked_sendable — all test access is single-threaded on the main actor; AsyncStream.Continuation is Sendable
 final class MockFileWatcher: FileWatching, @unchecked Sendable {
-    // Protected by @MainActor in tests; @unchecked Sendable because AsyncStream.Continuation
-    // is Sendable and all test access is single-threaded on the main actor.
     private var continuation: AsyncStream<Data>.Continuation?
     /// Buffers sends that arrive before the watch task calls changes(), or after a
     /// cancelled previous cycle. Flushed immediately when changes() is called.
