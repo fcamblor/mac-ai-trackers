@@ -3,6 +3,10 @@
     "allow": [
       "Bash(swift run *)",
       "Bash(swift test *)",
+      "Bash(entire *)",
+      "WebFetch(domain:docs.entire.io)",
+      "Bash(brew info *)",
+      "Bash(chmod +x *)",
       "mcp__plugin_serena_serena__get_symbols_overview",
       "mcp__plugin_serena_serena__activate_project",
       "mcp__plugin_serena_serena__read_file",
