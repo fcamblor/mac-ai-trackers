@@ -44,6 +44,17 @@ public final class UsageStore {
 
     public static let defaultCountdownRefreshSeconds: UInt64 = 60
     private static let fallbackText = "--"
+    private static let rawPreviewMaxBytes = 200
+
+    private static func rawPreview(_ data: Data) -> String {
+        let slice = data.prefix(rawPreviewMaxBytes)
+        if let text = String(data: slice, encoding: .utf8) {
+            return "utf8:\(text.debugDescription)"
+        }
+        let hex = slice.map { String(format: "%02x", $0) }.joined()
+        return "hex:\(hex)"
+    }
+
     private static let targetVendor: Vendor = .claude
     // Only top-level aggregate metrics belong in the compact menu bar label; per-model breakdowns live in the popover only
     private static let menuBarMetricNames: Set<String> = ["session", "weekly"]
@@ -117,7 +128,8 @@ public final class UsageStore {
             menuBarTier = result.tier
             menuBarSegments = result.segments
         } catch {
-            logger.log(.error, "UsageStore: JSON decode failed: \(error)")
+            let preview = Self.rawPreview(data)
+            logger.log(.error, "UsageStore: JSON decode failed: \(error) — bytes=\(data.count), preview=\(preview)")
             lastFile = nil
             entries = []
             menuBarText = Self.fallbackText
