@@ -662,14 +662,14 @@ struct UsageStoreEntriesTests {
         let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
         store.start()
 
-        let data = makeUsagesJSON(
+        let data = try makeUsagesJSON(
             vendor: "claude",
             account: "a@b.com",
             isActive: true,
             metrics: [timeWindowMetric(name: "session", usagePercent: 42)]
         )
         watcher.send(data)
-        try await Task.sleep(nanoseconds: 50_000_000)
+        try await eventually { store.entries.count == 1 }
 
         #expect(store.entries.count == 1)
         #expect(store.entries[0].vendor == .claude)
@@ -685,14 +685,14 @@ struct UsageStoreEntriesTests {
         store.start()
 
         // First send valid data
-        let validData = makeUsagesJSON(metrics: [timeWindowMetric()])
+        let validData = try makeUsagesJSON(metrics: [timeWindowMetric()])
         watcher.send(validData)
-        try await Task.sleep(nanoseconds: 50_000_000)
+        try await eventually { !store.entries.isEmpty }
         #expect(!store.entries.isEmpty)
 
         // Then send malformed data
         watcher.send("bad".data(using: .utf8)!)
-        try await Task.sleep(nanoseconds: 50_000_000)
+        try await eventually { store.entries.isEmpty }
         #expect(store.entries.isEmpty)
 
         store.stop()
@@ -738,12 +738,12 @@ struct UsageStoreEntriesTests {
         store.start()
 
         watcher.send("bad".data(using: .utf8)!)
-        try await Task.sleep(nanoseconds: 50_000_000)
+        try await eventually { store.entries.isEmpty }
         #expect(store.entries.isEmpty)
 
-        let data = makeUsagesJSON(metrics: [timeWindowMetric()])
+        let data = try makeUsagesJSON(metrics: [timeWindowMetric()])
         watcher.send(data)
-        try await Task.sleep(nanoseconds: 50_000_000)
+        try await eventually { store.entries.count == 1 }
         #expect(store.entries.count == 1)
 
         store.stop()
