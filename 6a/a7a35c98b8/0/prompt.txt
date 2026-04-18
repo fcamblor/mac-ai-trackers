@@ -1,0 +1,10 @@
+il semblerait que suite à une 429, tu as ENCORE supprimé le contenu du noeuds metrics d'un account
+
+Il ne faut pas faire ça !
+
+Quand tu as une 429, tu stockes l'erreur dans lastError, mais tu n'altères pas les données qui étaient dans metrics !!
+Fais des tests pour enforcer cette regle, et corrige le problème
+
+---
+
+reprends la ou tu en etais
