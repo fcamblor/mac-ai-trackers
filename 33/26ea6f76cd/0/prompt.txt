@@ -1,0 +1,44 @@
+rajoute une feature permettant, dans la popover, d'avoir un petit bouton refresh qui force le refresh de tous les connecteurs disponibles pour faire en sorte que les stats soient rafraichies
+
+---
+
+2 points un peu bizarres:
+- lorsque je clique sur le bouton refresh, j'ai les éléments suivants qui s'affichent dans la console:
+=== AttributeGraph: cycle detected through attribute 34200 ===
+=== AttributeGraph: cycle detected through attribute 74172 ===
+=== AttributeGraph: cycle detected through attribute 74776 ===
+=== AttributeGraph: cycle detected through attribute 86648 ===
+=== AttributeGraph: cycle detected through attribute 86800 ===
+=== AttributeGraph: cycle detected through attribute 92184 ===
+=== AttributeGraph: cycle detected through attribute 143124 ===
+=== AttributeGraph: cycle detected through attribute 143124 ===
+=== AttributeGraph: cycle detected through attribute 143124 ===
+=== AttributeGraph: cycle detected through attribute 86800 ===
+=== AttributeGraph: cycle detected through attribute 86800 ===
+=== AttributeGraph: cycle detected through attribute 92184 ===
+=== AttributeGraph: cycle detected through attribute 92184 ===
+=== AttributeGraph: cycle detected through attribute 34200 ===
+=== AttributeGraph: cycle detected through attribute 74776 ===
+=== AttributeGraph: cycle detected through attribute 86648 ===
+=== AttributeGraph: cycle detected through attribute 86800 ===
+=== AttributeGraph: cycle detected through attribute 86800 ===
+=== AttributeGraph: cycle detected through attribute 92184 ===
+=== AttributeGraph: cycle detected through attribute 92184 ===
+=== AttributeGraph: cycle detected through attribute 140480 ===
+=== AttributeGraph: cycle detected through attribute 140480 ===
+=== AttributeGraph: cycle detected through attribute 140480 ===
+=== AttributeGraph: cycle detected through attribute 140480 ===
+=== AttributeGraph: cycle detected through attribute 140480 ===
+
+- lorsque j'ouvre la popover, le bouton refresh semble avoir le focus avec un liseret bleu autours, ce qui empeche de voir que c'est un bouton refresh
+[Image #2]
+=> est-il possible de ne pas avoir ce style sur les éléments focus en général (car lorsque le bouton refresh n'existait pas encore, le focus était mis sur le bouton quit)
+
+---
+
+pourrais-tu afficher un petit spinner à coté de chaque compte quand il se fait rafraichir (soit lors d'un auto-refresh, soit lors du clic sur le bouton refresh du footer) ?
+dans le cas de multi-comptes claude code, seul le compte actif devrait avoir ce spinner
+
+---
+
+quand au moins un refresh state est en cours, le bouton refresh devrait etre disable
