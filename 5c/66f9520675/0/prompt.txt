@@ -1,0 +1,11 @@
+quand je change de compte claude code via un /login (par exemple fcamblor@gmail.com => frederic.camblor@4sh.fr) l'item de la menubar disparaît (alors que l'app run toujours)
+
+  Il faudrait voir ce qui ne va pas
+
+---
+
+oui
+
+---
+
+j'ai pas bien compris le principe de wire le callback vers poller.pollOnce(), tu peux m'en dire plus ?

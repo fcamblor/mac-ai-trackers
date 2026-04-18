@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "5c66f9520675",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/ClaudeActiveAccountMonitor.swift",
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/ClaudeActiveAccountMonitorTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/5c/66f9520675/0/metadata.json",
+      "transcript": "/5c/66f9520675/0/full.jsonl",
+      "content_hash": "/5c/66f9520675/0/content_hash.txt",
+      "prompt": "/5c/66f9520675/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 86,
+    "cache_creation_tokens": 204595,
+    "cache_read_tokens": 2266941,
+    "output_tokens": 23780,
+    "api_call_count": 33
+  }
+}
