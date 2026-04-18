@@ -1,0 +1,43 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "909514aa8096",
+  "session_id": "c3e664f8-ef4d-4bfd-80d3-403a89f2b81a",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-18T22:02:42.57373Z",
+  "branch": "archon/task-fix-tech-debt-swiftlint",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".claude/rules/swift-quality.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "b2bf75c90088",
+  "token_usage": {
+    "input_tokens": 41,
+    "cache_creation_tokens": 101173,
+    "cache_read_tokens": 2630073,
+    "output_tokens": 16752,
+    "api_call_count": 35
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-18T22:02:42.223949Z",
+    "agent_lines": 2,
+    "agent_removed": 9,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 2,
+    "total_lines_changed": 11,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
