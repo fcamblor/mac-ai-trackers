@@ -1,0 +1,3 @@
+parcours l'ensemble des répertoires des worktress et compare dans chacun d'eux, les permissions contenues dans le .claude/settings.local.json avec ce qui est contenu dans le repository courant (dans le ./.claude/settings.json)
+
+Lorsqu'il y a des entrées manquantes, demande-moi si je souhaite les intégrer dans les settings claude courant
