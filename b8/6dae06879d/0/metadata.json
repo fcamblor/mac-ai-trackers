@@ -1,0 +1,43 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "b86dae06879d",
+  "session_id": "77d63700-b561-475f-b3e8-b7f1fcf3601a",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-18T20:32:26.337946Z",
+  "branch": "archon/task-fix-tech-debt-swiftlint",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "tech-debt/20260418_medium_S_swiftlint-legacy-warnings/plan.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "2d1dfc679e71",
+  "token_usage": {
+    "input_tokens": 16,
+    "cache_creation_tokens": 40723,
+    "cache_read_tokens": 524385,
+    "output_tokens": 10765,
+    "api_call_count": 15
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-18T20:32:26.219906Z",
+    "agent_lines": 204,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 204,
+    "total_lines_changed": 204,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
