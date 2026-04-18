@@ -1,0 +1,7 @@
+j'aimerais qu'on revoit le mode de fonctionnement des features:
+- lorsqu'une feature est done, il faut la supprimer et la déréferencer de l'index (en profiter pour supprimer toutes les features déjà réalisées)
+- l'index sert a lister toutes les features restantes a implementer ET à lister les dépendances les unes envers les autres ... d'ailleurs ca serait peut etre pas mal de représenter ces dépendances sous la forme d'un DAG avec la syntaxe mermaid
+
+---
+
+il faut mettre a jour le workflow archon en conséquence egalement

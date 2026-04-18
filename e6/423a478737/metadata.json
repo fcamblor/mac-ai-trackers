@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "e6423a478737",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".archon/workflows/implement-roadmap-feature.yaml",
+    ".claude/skills/roadmap-feature/SKILL.md",
+    "docs/ROADMAP.md",
+    "roadmap/buy-me-a-coffee.md",
+    "roadmap/claude-model-weekly-metrics.md",
+    "roadmap/claude-model-weekly-metrics.plan.md",
+    "roadmap/consumption-color-indicators.md",
+    "roadmap/consumption-color-indicators.plan.md",
+    "roadmap/index.md",
+    "roadmap/log-cleanup.md",
+    "roadmap/menubar-usage-metrics.md",
+    "roadmap/settings-window.md",
+    "roadmap/usage-details-popover.md",
+    "roadmap/vendor-status-monitor.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e6/423a478737/0/metadata.json",
+      "transcript": "/e6/423a478737/0/full.jsonl",
+      "content_hash": "/e6/423a478737/0/content_hash.txt",
+      "prompt": "/e6/423a478737/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 43,
+    "cache_creation_tokens": 156073,
+    "cache_read_tokens": 906776,
+    "output_tokens": 11914,
+    "api_call_count": 25
+  }
+}

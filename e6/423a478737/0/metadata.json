@@ -1,0 +1,88 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "e6423a478737",
+  "session_id": "1d06a9f6-0e32-45f8-91cf-9d98e91d750d",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-18T22:17:08.028071Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".archon/workflows/implement-roadmap-feature.yaml",
+    ".claude/skills/roadmap-feature/SKILL.md",
+    "docs/ROADMAP.md",
+    "roadmap/buy-me-a-coffee.md",
+    "roadmap/claude-model-weekly-metrics.md",
+    "roadmap/claude-model-weekly-metrics.plan.md",
+    "roadmap/consumption-color-indicators.md",
+    "roadmap/consumption-color-indicators.plan.md",
+    "roadmap/index.md",
+    "roadmap/log-cleanup.md",
+    "roadmap/menubar-usage-metrics.md",
+    "roadmap/settings-window.md",
+    "roadmap/usage-details-popover.md",
+    "roadmap/vendor-status-monitor.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "7ef79be4110b",
+  "token_usage": {
+    "input_tokens": 43,
+    "cache_creation_tokens": 156073,
+    "cache_read_tokens": 906776,
+    "output_tokens": 11914,
+    "api_call_count": 25
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-18T22:17:07.84004Z",
+    "agent_lines": 96,
+    "agent_removed": 375,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 96,
+    "total_lines_changed": 471,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 63,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10,
+        ".idea/codeStyles/codeStyleConfig.xml": 5,
+        ".idea/copilot.data.migration.agent.xml": 6,
+        ".idea/go.imports.xml": 11,
+        ".idea/mac-ai-trackers.iml": 9,
+        ".idea/misc.xml": 6,
+        ".idea/modules.xml": 8,
+        ".idea/vcs.xml": 6,
+        ".serena/.gitignore": 2
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 63,
+      "user_lines_removed": 0,
+      "agent_lines_added": 96,
+      "agent_lines_removed": 375,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10,
+        ".idea/codeStyles/codeStyleConfig.xml": 5,
+        ".idea/copilot.data.migration.agent.xml": 6,
+        ".idea/go.imports.xml": 11,
+        ".idea/mac-ai-trackers.iml": 9,
+        ".idea/misc.xml": 6,
+        ".idea/modules.xml": 8,
+        ".idea/vcs.xml": 6,
+        ".serena/.gitignore": 2
+      }
+    }
+  ]
+}
