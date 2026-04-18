@@ -19,9 +19,7 @@ A polling actor periodically invokes all registered connectors in parallel and m
 
 ## Persistence
 
-Usage data is persisted as a JSON file at `~/.cache/ai-usages-tracker/usages.json`. The schema is a top-level `usages` array where each entry is keyed by `(vendor, account)`. A dedicated actor (`UsagesFileManager`) serializes all reads and writes for internal callers, so no POSIX file lock is needed internally. Writes use the system's atomic write facility to prevent partial-file corruption.
-
-Note: external processes reading the file (widgets, scripts) must tolerate a brief window where the file contains partial JSON between the OS atomic rename and their `read` call. A future addition of `flock` (see `docs/SWIFT-IO-ROBUSTNESS.md`) would remove this window.
+Usage data is persisted as a JSON file at `~/.cache/ai-usages-tracker/usages.json`. The schema is a top-level `usages` array where each entry is keyed by `(vendor, account)`. A dedicated actor (`UsagesFileManager`) serializes all reads and writes for internal callers. Writes use the system's atomic write facility to prevent partial-file corruption. All public methods also acquire an advisory POSIX `flock` on a dedicated lock file (`usages.json.lock`) before touching the data file, so external readers (widgets, scripts) that do the same can safely coordinate access.
 
 ## Display pipeline
 
