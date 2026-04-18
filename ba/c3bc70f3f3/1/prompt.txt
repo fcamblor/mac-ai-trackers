@@ -1,0 +1,13 @@
+peux-tu parcourir chaque worktree du repo courant et identifier ceux pour lesquels il y a des changements git non commités dans le worktree
+
+---
+
+revois ton script, il n'est pas bon, car le worktree ~/.archon/worktrees/third-party-oss/mac-ai-trackers/archon/task-fix-translate-french-to-english contient du code non commité
+
+---
+
+pour les worktrees 1 et 3, peux tu analyser les éléments non commités et me faire une synthèse de l'idée que tu te fais de ces modifications ?
+
+---
+
+peux-tu regarder si les changements du worktree 3 semblent avoir déjà été intégré à origin/main ou s'il faudrait prévoir de le faire

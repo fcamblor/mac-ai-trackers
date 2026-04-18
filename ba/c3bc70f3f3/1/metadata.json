@@ -1,0 +1,58 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "bac3bc70f3f3",
+  "session_id": "94ff6c69-530c-45d0-9442-81bc8d389ab3",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-18T23:00:23.563374Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "roadmap/index.md",
+    "roadmap/usage-history-snapshots.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "fb90adda7205",
+  "token_usage": {
+    "input_tokens": 22,
+    "cache_creation_tokens": 20345,
+    "cache_read_tokens": 335486,
+    "output_tokens": 3741,
+    "api_call_count": 14
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-18T23:00:23.493547Z",
+    "agent_lines": 40,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 40,
+    "total_lines_changed": 40,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 63,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10,
+        ".idea/codeStyles/codeStyleConfig.xml": 5,
+        ".idea/copilot.data.migration.agent.xml": 6,
+        ".idea/go.imports.xml": 11,
+        ".idea/mac-ai-trackers.iml": 9,
+        ".idea/misc.xml": 6,
+        ".idea/modules.xml": 8,
+        ".idea/vcs.xml": 6,
+        ".serena/.gitignore": 2
+      }
+    }
+  ]
+}
