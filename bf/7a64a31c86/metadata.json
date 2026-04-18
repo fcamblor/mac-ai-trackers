@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "bf7a64a31c86",
+  "strategy": "manual-commit",
+  "branch": "archon/task-feat-claude-model-weekly-metrics",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/bf/7a64a31c86/0/metadata.json",
+      "transcript": "/bf/7a64a31c86/0/full.jsonl",
+      "content_hash": "/bf/7a64a31c86/0/content_hash.txt",
+      "prompt": "/bf/7a64a31c86/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 23,
+    "cache_creation_tokens": 110568,
+    "cache_read_tokens": 415214,
+    "output_tokens": 3854,
+    "api_call_count": 9
+  }
+}
