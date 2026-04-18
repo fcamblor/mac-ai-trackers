@@ -9,7 +9,7 @@ See `docs/ROADMAP.md` for the process and file conventions.
 ## Epics
 
 1. `done` — [Menubar usage metrics display](menubar-usage-metrics.md) — show the active Claude account's session and weekly usage percentages plus reset delays in the macOS menubar.
-2. `planned` — [Claude model-specific weekly metrics](claude-model-weekly-metrics.md) — parse and expose per-model 7-day usage windows (Weekly Sonnet, Weekly Opus) from the Claude API payload.
+2. `in-progress` — [Claude model-specific weekly metrics](claude-model-weekly-metrics.md) — parse and expose per-model 7-day usage windows (Weekly Sonnet, Weekly Opus) from the Claude API payload.
 3. `planned` — [Log cleanup](log-cleanup.md) — purge log entries older than 7 days at startup and once per day to keep log files bounded.
 4. `done` — [Usage details popover](usage-details-popover.md) — open a polished popover on click with one card per account showing progress bars, reset dates, theoretical pace, and pay-as-you-go amounts.
 5. `planned` — [Vendor status monitor](vendor-status-monitor.md) — surface active incidents from vendor status pages (Claude, and others as accounts are added) inside the app.
