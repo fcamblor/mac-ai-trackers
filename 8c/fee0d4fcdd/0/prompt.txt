@@ -1,0 +1,5 @@
+j'aimerais que tu lances en parallèle les workflow archon d'implementation des features vendor-status-monitor, log-cleanup et settings-window
+
+Pour settings-window, les éléments que je souhaiterais voir configurables:
+- items à afficher dans la menubar: pourcentage ? temps restant d'ici au prochain reset ? composantes weekly-only / 5h session / sonnet-weekly (au moins une doit être sélectionnée)
+- fréquence d'auto refresh des usages (discrete slider): 1minute, 2minutes, 3mminutes, 5mminutes, 10minutes
