@@ -464,7 +464,7 @@ struct UsageStoreRemainingTimeTests {
     }
 
     @MainActor
-    @Test("invalid ISO8601 resetAt shows 0m")
+    @Test("invalid ISO8601 resetAt shows -- for remaining time")
     func invalidResetAt() async throws {
         let watcher = MockFileWatcher()
         let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
@@ -474,8 +474,9 @@ struct UsageStoreRemainingTimeTests {
             timeWindowMetric(name: "session", resetAt: "not-a-date", usagePercent: 50),
         ])
         watcher.send(data)
+        // Store's formatRemainingTime returns "--" for unparseable dates (with a warning log)
         try await eventually { store.menuBarText != "--" }
-        #expect(store.menuBarText == "S 50% 0m")
+        #expect(store.menuBarText == "S 50% --")
         store.stop()
     }
 
