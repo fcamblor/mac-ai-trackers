@@ -1,0 +1,37 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "5aefd7d05a4d",
+  "session_id": "ffa53b7a-f7f0-4e7a-af59-3151a30b54dd",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-18T20:06:28.646886Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".archon/scripts/link-worktree.sh"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-4-6",
+  "turn_id": "8b9ff28004e1",
+  "token_usage": {
+    "input_tokens": 47,
+    "cache_creation_tokens": 37101,
+    "cache_read_tokens": 1203574,
+    "output_tokens": 11594,
+    "api_call_count": 32
+  },
+  "session_metrics": {
+    "turn_count": 7
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-18T20:06:28.510823Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 6159,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 6159,
+    "total_lines_changed": 6672,
+    "agent_percentage": 0,
+    "metric_version": 2
+  }
+}
