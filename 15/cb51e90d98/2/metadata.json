@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "15cb51e90d98",
+  "session_id": "f56052c7-e3c3-4158-8c77-d565d3ff9415",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-18T17:22:45.349433Z",
+  "branch": "archon/task-feat-consumption-color-indicators",
+  "checkpoints_count": 0,
+  "files_touched": [],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "dc9f9650b2b7",
+  "token_usage": {
+    "input_tokens": 30,
+    "cache_creation_tokens": 27536,
+    "cache_read_tokens": 898398,
+    "output_tokens": 4588,
+    "api_call_count": 29
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
