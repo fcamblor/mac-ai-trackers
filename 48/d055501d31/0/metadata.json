@@ -1,0 +1,81 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "48d055501d31",
+  "session_id": "1a6e8b27-3d65-46b2-aa45-aea1f6fd74d1",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-18T19:31:57.882624Z",
+  "branch": "archon/task-feat-consumption-color-indicators",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Store/UsageStore.swift",
+    "AIUsagesTrackers/Sources/App/AIUsagesTrackersApp.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageStoreTests.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-4-6",
+  "turn_id": "5c053821438f",
+  "token_usage": {
+    "input_tokens": 37,
+    "cache_creation_tokens": 70834,
+    "cache_read_tokens": 1548990,
+    "output_tokens": 33396,
+    "api_call_count": 29
+  },
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-18T19:31:57.668317Z",
+    "agent_lines": 63,
+    "agent_removed": 23,
+    "human_added": 145,
+    "human_modified": 86,
+    "human_removed": 0,
+    "total_committed": 294,
+    "total_lines_changed": 323,
+    "agent_percentage": 26.625386996904027,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 10,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 10,
+      "user_lines_removed": 0,
+      "agent_lines_added": 142,
+      "agent_lines_removed": 23,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 10,
+      "user_lines_removed": 0,
+      "agent_lines_added": 141,
+      "agent_lines_removed": 23,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10
+      }
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 10,
+      "user_lines_removed": 0,
+      "agent_lines_added": 147,
+      "agent_lines_removed": 23,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10
+      }
+    }
+  ]
+}

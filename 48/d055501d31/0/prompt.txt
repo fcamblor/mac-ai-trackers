@@ -1,0 +1,13 @@
+il manque une pastille en face de chaque indicateur dans la menubar
+
+---
+
+- je n'ai plus la partie weekly dans la menubar
+
+---
+
+j'ai uniquement des pastilles blanches, c'est normal ?
+
+---
+
+c'est toujours pas bon, cercles blancs toujours
