@@ -114,8 +114,8 @@ struct UsagesFileManagerTests {
         #expect(result.usages[0].lastError == nil)
     }
 
-    @Test("merge removes stale account_unknown entry when real account fetch succeeds")
-    func mergeRemovesUnknownAccountPlaceholderOnSuccess() async {
+    @Test("merge keeps account_unknown placeholder when real account fetch succeeds")
+    func mergeKeepsUnknownAccountPlaceholderOnSuccess() async {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
         let placeholderError = VendorUsageEntry(
@@ -133,9 +133,9 @@ struct UsagesFileManagerTests {
         await mgr.update(with: [successEntry])
 
         let result = await mgr.read()
-        #expect(result.usages.count == 1)
-        #expect(result.usages[0].account == "real@b.com")
-        #expect(result.usages[0].lastError == nil)
+        #expect(result.usages.count == 2)
+        #expect(result.usages.contains(where: { $0.account == "real@b.com" && $0.lastError == nil }))
+        #expect(result.usages.contains(where: { $0.account == "unknown" && $0.lastError?.type == "account_unknown" }))
     }
 
     @Test("merge keeps error entries for other vendors when one vendor succeeds")
@@ -163,6 +163,46 @@ struct UsagesFileManagerTests {
         let codexEntry = result.usages.first { $0.vendor == "codex" }
         #expect(codexEntry != nil)
         #expect(codexEntry?.lastError?.type == "api_error")
+    }
+
+    @Test("merge keeps old account entry with metrics even if it has an error when new account succeeds")
+    func mergeKeepsOldAccountWithMetricsOnErrorWhenOtherAccountSucceeds() async {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+
+        // Account A: had good data previously (metrics preserved in file), but last fetch failed
+        let oldMetrics: [UsageMetric] = [
+            .timeWindow(name: "session", resetAt: "2026-04-17T15:00:00+00:00",
+                        windowDuration: 300, usagePercent: 42),
+        ]
+        await mgr.update(with: [VendorUsageEntry(
+            vendor: "claude", account: "a@b.com", isActive: false,
+            lastAcquiredOn: "2026-04-17T09:00:00+00:00",
+            metrics: oldMetrics
+        )])
+        // Simulate a failed fetch for A (metrics are preserved by the merge, but lastError is set)
+        await mgr.update(with: [VendorUsageEntry(
+            vendor: "claude", account: "a@b.com", isActive: false,
+            lastError: UsageError(timestamp: "2026-04-17T10:00:00+00:00", type: "api_error"),
+            metrics: []
+        )])
+
+        // Account B now succeeds — A's entry (which has metrics despite the error) must survive
+        let bMetrics: [UsageMetric] = [
+            .timeWindow(name: "session", resetAt: "2026-04-17T20:00:00+00:00",
+                        windowDuration: 300, usagePercent: 10),
+        ]
+        await mgr.update(with: [VendorUsageEntry(
+            vendor: "claude", account: "b@b.com", isActive: true,
+            lastAcquiredOn: "2026-04-17T11:00:00+00:00",
+            metrics: bMetrics
+        )])
+
+        let result = await mgr.read()
+        let entryA = result.usages.first { $0.account == "a@b.com" }
+        #expect(entryA != nil, "Account A entry must be preserved after account B succeeds")
+        #expect(entryA?.metrics == oldMetrics, "Account A metrics must survive the account switch")
+        #expect(entryA?.lastError?.type == "api_error")
     }
 
     @Test("merge preserves prior successful entry for other account when new account errors")

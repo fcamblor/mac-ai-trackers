@@ -164,6 +164,7 @@ public actor ClaudeCodeConnector: UsageConnector {
             )]
         } catch {
             logger.log(.error, "Response parse failed: \(error)")
+            logger.log(.warning, "Failed payload dump: \(Self.maskedPayload(data))")
             return [errorEntry(account: account, type: "parse_error")]
         }
     }
@@ -297,6 +298,9 @@ public actor ClaudeCodeConnector: UsageConnector {
               let sessionReset = fiveHour["resets_at"] as? String,
               let weeklyUtil = sevenDay["utilization"] as? Double,
               let weeklyReset = sevenDay["resets_at"] as? String else {
+            let fiveHour = json["five_hour"] as? [String: Any]
+            let sevenDay = json["seven_day"] as? [String: Any]
+            logger.log(.warning, "Parse fields: five_hour=\(fiveHour != nil) sevenDay=\(sevenDay != nil) sessionUtil=\(fiveHour?["utilization"] != nil) sessionReset=\(fiveHour?["resets_at"] != nil) weeklyUtil=\(sevenDay?["utilization"] != nil) weeklyReset=\(sevenDay?["resets_at"] != nil)")
             throw ConnectorError.unexpectedAPIFormat(receivedKeys: Array(json.keys))
         }
         let sonnet = extractOptionalModelMetric(from: json, key: "seven_day_sonnet")
