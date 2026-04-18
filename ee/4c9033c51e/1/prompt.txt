@@ -1,0 +1,13 @@
+j'aimerais que tu crées plusieurs workflow archon pour traiter des micros changements en parallèle:
+- lance un workflow pour resolve toutes les tech debts
+- lance un workflow pour faire en sorte de remplacer la couleur noire par une couleur violette, dans les ratios de dépassement (car lorsque la progress bar est en noir, on ne voit pas l'indicateur de consommation théorique qui est affiché en noir)
+- lance un workflow qui parcourt les différents fichiers du repository à la recherche de contenu en français, pour le traduire en anglais (je pense notamment aux workflows archon)
+
+---
+
+à quelles occasions les infos de la popover sont rafraichies ?
+y a-t-il un refresh automatique qui relit le fichier usages regulièrement pour mettre à jour la progression du temps (et des métriques) automatiquement ? si oui: a quelle frequence ?
+
+---
+
+j'ai modifié le fichier usages.json a la main, et j'ai pas vu les modifications se refléter immédiatement dans la popover

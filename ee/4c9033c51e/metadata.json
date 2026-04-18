@@ -3,7 +3,7 @@
   "checkpoint_id": "ee4c9033c51e",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 2,
+  "checkpoints_count": 5,
   "files_touched": [
     "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/ClaudeCodeConnector.swift",
     "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/UsagesFileManager.swift",
@@ -15,13 +15,19 @@
       "transcript": "/ee/4c9033c51e/0/full.jsonl",
       "content_hash": "/ee/4c9033c51e/0/content_hash.txt",
       "prompt": "/ee/4c9033c51e/0/prompt.txt"
+    },
+    {
+      "metadata": "/ee/4c9033c51e/1/metadata.json",
+      "transcript": "/ee/4c9033c51e/1/full.jsonl",
+      "content_hash": "/ee/4c9033c51e/1/content_hash.txt",
+      "prompt": "/ee/4c9033c51e/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 24,
-    "cache_creation_tokens": 67891,
-    "cache_read_tokens": 826283,
-    "output_tokens": 20599,
-    "api_call_count": 20
+    "input_tokens": 44,
+    "cache_creation_tokens": 126483,
+    "cache_read_tokens": 1269232,
+    "output_tokens": 31716,
+    "api_call_count": 33
   }
 }
