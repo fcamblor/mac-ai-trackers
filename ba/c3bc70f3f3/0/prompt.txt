@@ -1,1 +1,0 @@
-amend le commit pour faire en sorte de rajouter que les fichiers d'historique doivent etre cloisonnés par date iso (1 fichier jsonl par jour, dans une arborescence ~/.cache/ai-usages-tracker/usage-history/{year}/{month}/{year}-{month}-{day}.jsonl
