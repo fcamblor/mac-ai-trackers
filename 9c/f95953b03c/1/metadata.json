@@ -1,0 +1,47 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "9cf95953b03c",
+  "session_id": "cf20981c-b653-4803-9b57-7407bdf92836",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-18T22:47:46.369078Z",
+  "branch": "archon/task-fix-translate-french-to-english",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".archon/workflows/implement-roadmap-feature.yaml",
+    ".archon/workflows/resolve-tech-debt.yaml"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "b7d932eb4273",
+  "token_usage": {
+    "input_tokens": 6,
+    "cache_creation_tokens": 63087,
+    "cache_read_tokens": 164006,
+    "output_tokens": 29547,
+    "api_call_count": 5
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-18T22:47:46.082124Z",
+    "agent_lines": 687,
+    "agent_removed": 693,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 687,
+    "total_lines_changed": 1380,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
