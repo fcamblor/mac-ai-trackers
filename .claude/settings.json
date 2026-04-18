@@ -7,6 +7,9 @@
       "WebFetch(domain:docs.entire.io)",
       "Bash(brew info *)",
       "Bash(chmod +x *)",
+      "Bash(swift package *)",
+      "Bash(ARCHON_SUPPRESS_NESTED_CLAUDE_WARNING=1 archon *)",
+      "Bash(archon *)",
       "mcp__plugin_serena_serena__get_symbols_overview",
       "mcp__plugin_serena_serena__activate_project",
       "mcp__plugin_serena_serena__read_file",
@@ -89,8 +92,8 @@
           {
             "type": "command",
             "command": "npx @fcamblor/gitdiff-watcher@0.2.0 --on 'AIUsagesTrackers/Sources/**/*.swift' --on 'AIUsagesTrackers/Package.swift' --exec 'cd AIUsagesTrackers && swift build'",
-            "timeout": 120,
-            "statusMessage": "Building Swift package..."
+            "timeout": 180,
+            "statusMessage": "Building Swift package (incl. SwiftLint)..."
           },
           {
             "type": "command",

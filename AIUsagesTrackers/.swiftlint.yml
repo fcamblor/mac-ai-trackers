@@ -1,0 +1,73 @@
+# SwiftLint configuration for AIUsagesTrackers.
+#
+# Rule codes mirror .claude/rules/swift-quality.md — keep the mapping in sync.
+# Severities: `error` fails the build; `warning` surfaces in logs / IDE.
+
+included:
+  - Sources
+  - Tests
+
+# Violations already present when these rules were introduced are stored in
+# .swiftlint.baseline. Each legacy warning should be resolved individually and
+# removed from the baseline; new violations matching the same rules still fail
+# the build.
+baseline: .swiftlint.baseline
+
+# Narrow the SwiftLint surface to exactly the codes documented in
+# .claude/rules/swift-quality.md. Built-in rules are deliberately NOT enabled —
+# we want a low-noise, high-signal lint focused on the patterns that reviews
+# keep flagging. Reach for built-in rules only if a review finding recurs that
+# a custom rule cannot express precisely.
+only_rules:
+  - custom_rules
+
+custom_rules:
+  e1_try_silencing_critical_fs:
+    name: "try? on critical filesystem op"
+    regex: 'try\?\s+(FileManager\.default\.)?(createDirectory|moveItem|copyItem|setAttributes)\b'
+    message: "try? swallows failure on a correctness-critical FS op — use do/catch (SWIFT-ERROR-HANDLING §1)"
+    severity: error
+
+  e2_flock_lock_ex_without_nb:
+    name: "flock LOCK_EX without LOCK_NB"
+    regex: 'flock\([^)]*LOCK_EX(?![^)]*LOCK_NB)'
+    message: "flock with LOCK_EX must be OR'd with LOCK_NB and wrapped in a timeout loop (SWIFT-CONCURRENCY / SWIFT-IO-ROBUSTNESS)"
+    severity: error
+    excluded:
+      - "AIUsagesTrackers/Tests/.*\\.swift"
+
+  w1_nonisolated_unsafe:
+    name: "nonisolated(unsafe) in production"
+    regex: 'nonisolated\(unsafe\)'
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "nonisolated(unsafe) bypasses Swift isolation — prefer actor-isolated storage or per-call allocation (SWIFT-CONCURRENCY)"
+    severity: warning
+    excluded:
+      - "AIUsagesTrackers/Tests/.*\\.swift"
+
+  w3_task_sleep_literal_in_tests:
+    name: "Task.sleep with fixed literal in tests"
+    regex: 'Task\.sleep\([^)]*[0-9]'
+    message: "Task.sleep with a fixed literal is fragile under CI load — poll the observable state with the eventually() helper (SWIFT-TESTABILITY)"
+    severity: warning
+    included:
+      - "AIUsagesTrackers/Tests/.*\\.swift"
+
+  w4_unchecked_sendable:
+    name: "@unchecked Sendable"
+    regex: '@unchecked\s+Sendable'
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "@unchecked Sendable requires an adjacent justification comment describing the single-threaded contract (SWIFT-CONCURRENCY)"
+    severity: warning
+
+  w5_duration_literal_in_comment:
+    name: "Duration literal embedded in comment"
+    regex: '\b\d+\s*(hours?|days?|minutes?|seconds?|ms)\b'
+    match_kinds:
+      - comment
+    message: "Comment embeds a bare `N unit` duration — lift to a named constant whose declaration site carries the rationale (SWIFT-TESTABILITY §Comment WHY)"
+    severity: warning

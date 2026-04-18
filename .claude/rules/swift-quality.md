@@ -30,3 +30,29 @@ Before writing or modifying any Swift code, load and follow these docs:
 7. **Comment WHY, not WHAT** — no restating code in plain English. Extract magic numbers as named constants.
 
 8. **Wrap domain primitives in value objects** — never use raw `String` or `Int` for fields with a distinct identity (emails, vendor names, ISO dates, percentages, durations). See `docs/SWIFT-VALUE-OBJECTS.md` for the pattern.
+
+## Automated check via SwiftLint
+
+`AIUsagesTrackers/.swiftlint.yml` declares six custom rules enforced by
+SwiftLint, wired as a SwiftPM build tool plugin on every target. The rules
+run on every `swift build` (and inside Xcode). Findings surface with these
+codes — resolve errors before committing and avoid reintroducing warnings.
+
+| Code | Severity | Pattern | Rule source |
+|------|----------|---------|-------------|
+| E1   | error    | `try?` on `createDirectory` / `moveItem` / `copyItem` / `setAttributes` | SWIFT-ERROR-HANDLING §1 |
+| E2   | error    | `flock(..., LOCK_EX)` in production code without `LOCK_NB` | SWIFT-CONCURRENCY + SWIFT-IO-ROBUSTNESS |
+| W1   | warning  | `nonisolated(unsafe)` in production sources | SWIFT-CONCURRENCY |
+| W3   | warning  | `Task.sleep(literal)` in tests — prefer an `eventually()` poll-helper | SWIFT-TESTABILITY |
+| W4   | warning  | `@unchecked Sendable` without an adjacent justification comment | SWIFT-CONCURRENCY |
+| W5   | warning  | Comment embeds a bare `N unit` duration — drift risk after constant extraction | SWIFT-TESTABILITY §Comment WHY |
+
+Violations already present when the rules were introduced are recorded in
+`AIUsagesTrackers/.swiftlint.baseline` and do not fail the build; new
+violations matching the same rules do. When a finding fires on a file you
+did not author, fix it under the same change rather than leaving drift
+behind, and regenerate the baseline with:
+
+```
+cd AIUsagesTrackers && swift package plugin --allow-writing-to-package-directory swiftlint lint --write-baseline .swiftlint.baseline
+```
