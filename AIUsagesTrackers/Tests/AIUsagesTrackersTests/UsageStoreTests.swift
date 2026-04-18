@@ -418,11 +418,11 @@ struct UsageStoreRemainingTimeTests {
         store.start()
 
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "daily", resetAt: "2026-04-18T00:00:00Z", usagePercent: 0),
+            timeWindowMetric(name: "weekly", resetAt: "2026-04-18T00:00:00Z", usagePercent: 0),
         ])
         watcher.send(data)
         try await eventually { store.menuBarText != "--" }
-        #expect(store.menuBarText == "D 0% 1d")
+        #expect(store.menuBarText == "W 0% 1d")
         store.stop()
     }
 
@@ -595,6 +595,28 @@ struct UsageStoreEntryTests {
         watcher.send(data)
         try await eventually { store.menuBarText != "--" }
         #expect(store.menuBarText == "S 10% 1h")
+        store.stop()
+    }
+
+    @MainActor
+    @Test("per-model weekly metrics are excluded from menu bar")
+    func perModelMetricsExcluded() async throws {
+        let watcher = MockFileWatcher()
+        let f = ISO8601DateFormatter()
+        let clock = FixedClock(f.date(from: "2026-04-17T12:00:00Z")!)
+        let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
+        store.start()
+
+        // weekly_sonnet and weekly_opus are per-model breakdowns; only session and weekly appear in the menu bar
+        let data = try makeUsagesJSON(metrics: [
+            timeWindowMetric(name: "session",       resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
+            timeWindowMetric(name: "weekly",        resetAt: "2026-04-17T14:00:00Z", usagePercent: 50),
+            timeWindowMetric(name: "weekly_sonnet", resetAt: "2026-04-17T14:00:00Z", usagePercent: 30),
+            timeWindowMetric(name: "weekly_opus",   resetAt: "2026-04-17T14:00:00Z", usagePercent: 20),
+        ])
+        watcher.send(data)
+        try await eventually { store.menuBarText == "S 10% 1h | W 50% 2h" }
+        #expect(store.menuBarText == "S 10% 1h | W 50% 2h")
         store.stop()
     }
 

@@ -37,6 +37,8 @@ public final class UsageStore {
     public static let defaultCountdownRefreshSeconds: UInt64 = 60
     private static let fallbackText = "--"
     private static let targetVendor: Vendor = .claude
+    // Only top-level aggregate metrics belong in the compact menu bar label; per-model breakdowns live in the popover only
+    private static let menuBarMetricNames: Set<String> = ["session", "weekly"]
 
     // Latest decoded file kept for countdown refresh without re-reading disk
     private var lastFile: UsagesFile?
@@ -137,6 +139,7 @@ public final class UsageStore {
         guard case let .timeWindow(name, resetAt, _, usagePercent) = metric else {
             return nil
         }
+        guard Self.menuBarMetricNames.contains(name) else { return nil }
 
         let abbreviation = name.prefix(1).uppercased()
         // A metric with an empty name cannot be abbreviated — skip to avoid a leading space in output

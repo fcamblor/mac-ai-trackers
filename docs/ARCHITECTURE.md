@@ -13,7 +13,7 @@ The Swift package is split into a library target and an executable target, plus 
 
 ## Usage-fetching pipeline
 
-A `UsageConnector` protocol abstracts vendor-specific API access. Each connector resolves an active account and fetches usage data asynchronously. The first concrete implementation targets the Claude API via OAuth tokens stored in the macOS Keychain.
+A `UsageConnector` protocol abstracts vendor-specific API access. Each connector resolves an active account and fetches usage data asynchronously. A connector may also emit additional optional per-model `timeWindow` entries when the upstream API includes them — these travel through the same persistence and display pipeline as the mandatory session and weekly aggregates, and are silently omitted when the API does not provide them. The first concrete implementation targets the Claude API via OAuth tokens stored in the macOS Keychain.
 
 A polling actor periodically invokes all registered connectors in parallel and merges results into a shared JSON file.
 

@@ -123,8 +123,8 @@ public actor ClaudeCodeConnector: UsageConnector {
 
         do {
             let usage = try parseAPIResponse(data)
-            logger.log(.info, "Fetched successfully: session=\(usage.sessionPercent)% weekly=\(usage.weeklyPercent)%")
-            let metrics: [UsageMetric] = [
+            logger.log(.info, "Fetched successfully: session=\(usage.sessionPercent)% weekly=\(usage.weeklyPercent)% sonnet=\(usage.sonnetWeekly.map { "\($0.percent)%" } ?? "nil") opus=\(usage.opusWeekly.map { "\($0.percent)%" } ?? "nil")")
+            var metrics: [UsageMetric] = [
                 .timeWindow(
                     name: "session",
                     resetAt: usage.sessionResetAt,
@@ -138,6 +138,21 @@ public actor ClaudeCodeConnector: UsageConnector {
                     usagePercent: UsagePercent(rawValue: usage.weeklyPercent)
                 ),
             ]
+            // Per-model weekly metrics are purely additive — absent keys are silently skipped
+            let perModelDefs: [(metric: ModelWeeklyMetric?, name: String)] = [
+                (usage.sonnetWeekly, "Weekly Sonnet"),
+                (usage.opusWeekly, "Weekly Opus"),
+            ]
+            for def in perModelDefs {
+                if let m = def.metric {
+                    metrics.append(.timeWindow(
+                        name: def.name,
+                        resetAt: m.resetAt,
+                        windowDuration: Self.weeklyWindowMinutes,
+                        usagePercent: UsagePercent(rawValue: m.percent)
+                    ))
+                }
+            }
             lastKnownMetrics = metrics
             return [VendorUsageEntry(
                 vendor: vendor,
@@ -256,11 +271,19 @@ public actor ClaudeCodeConnector: UsageConnector {
         return result
     }
 
+    private struct ModelWeeklyMetric {
+        let percent: Int
+        let resetAt: ISODate
+    }
+
     private struct ParsedUsage {
         let sessionPercent: Int
         let sessionResetAt: ISODate
         let weeklyPercent: Int
         let weeklyResetAt: ISODate
+        // Per-model weekly metrics — present only when the API includes them with valid resets_at
+        let sonnetWeekly: ModelWeeklyMetric?
+        let opusWeekly: ModelWeeklyMetric?
     }
 
     private func parseAPIResponse(_ data: Data) throws -> ParsedUsage {
@@ -276,12 +299,31 @@ public actor ClaudeCodeConnector: UsageConnector {
               let weeklyReset = sevenDay["resets_at"] as? String else {
             throw ConnectorError.unexpectedAPIFormat(receivedKeys: Array(json.keys))
         }
+        let sonnet = extractOptionalModelMetric(from: json, key: "seven_day_sonnet")
+        let opus = extractOptionalModelMetric(from: json, key: "seven_day_opus")
+
         return ParsedUsage(
             sessionPercent: Int(sessionUtil.rounded()),
             sessionResetAt: normalizeISO8601(sessionReset),
             weeklyPercent: Int(weeklyUtil.rounded()),
-            weeklyResetAt: normalizeISO8601(weeklyReset)
+            weeklyResetAt: normalizeISO8601(weeklyReset),
+            sonnetWeekly: sonnet.map { ModelWeeklyMetric(percent: $0.percent, resetAt: normalizeISO8601($0.resetAt)) },
+            opusWeekly: opus.map { ModelWeeklyMetric(percent: $0.percent, resetAt: normalizeISO8601($0.resetAt)) }
         )
+    }
+
+    /// Per-model keys are optional in the API contract — a missing or malformed block
+    /// must be silently skipped, not propagate an error through the whole fetch.
+    private func extractOptionalModelMetric(from json: [String: Any], key: String) -> (percent: Int, resetAt: String)? {
+        guard let block = json[key] as? [String: Any] else {
+            return nil
+        }
+        guard let util = block["utilization"] as? Double,
+              let resetAt = block["resets_at"] as? String else {
+            logger.log(.debug, "Per-model block '\(key)' present but extraction failed — unexpected format")
+            return nil
+        }
+        return (percent: Int(util.rounded()), resetAt: resetAt)
     }
 
     /// Strips sub-second precision from API-provided ISO8601 strings so downstream
