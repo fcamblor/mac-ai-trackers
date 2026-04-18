@@ -1,0 +1,6 @@
+fais en sorte de n'afficher que la metrique session et weekly (pas la weekly sonnet) dans la menubar
+
+---
+
+fais en sorte de n'afficher que la metrique session et weekly (pas la weekly sonnet) dans la menubar
+en revanche, dans la popover, on affiche toutes les metriques
