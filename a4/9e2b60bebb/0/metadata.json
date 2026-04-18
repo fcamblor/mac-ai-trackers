@@ -1,0 +1,46 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "a49e2b60bebb",
+  "session_id": "d4b25eaf-90b9-4765-a230-dc0c53b8519e",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-18T20:38:16.906525Z",
+  "branch": "archon/task-fix-overflow-color-purple",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/App/Views/ConsumptionTierColor.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "31f9ee8f8926",
+  "token_usage": {
+    "input_tokens": 17,
+    "cache_creation_tokens": 23965,
+    "cache_read_tokens": 369981,
+    "output_tokens": 4378,
+    "api_call_count": 16
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-18T20:38:16.855083Z",
+    "agent_lines": 3,
+    "agent_removed": 2,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 3,
+    "total_lines_changed": 5,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
