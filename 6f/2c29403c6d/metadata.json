@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "6f2c29403c6d",
+  "strategy": "manual-commit",
+  "branch": "archon/task-feat-settings-window",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "docs/ARCHITECTURE.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/6f/2c29403c6d/0/metadata.json",
+      "transcript": "/6f/2c29403c6d/0/full.jsonl",
+      "content_hash": "/6f/2c29403c6d/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 5,
+    "cache_creation_tokens": 3919,
+    "cache_read_tokens": 444653,
+    "output_tokens": 1409,
+    "api_call_count": 5
+  }
+}
