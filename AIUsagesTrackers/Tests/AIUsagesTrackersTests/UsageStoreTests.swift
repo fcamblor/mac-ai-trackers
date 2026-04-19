@@ -1066,6 +1066,57 @@ struct UsageStoreMenuBarTierTests {
     }
 }
 
+// MARK: - Outage round-trip integration
+
+@Suite("UsageStore outage change round-trip")
+struct UsageStoreOutageRoundTripTests {
+
+    @MainActor
+    @Test("outage change is reflected in store after file update")
+    func outageChangeRoundTrip() async throws {
+        let watcher = MockFileWatcher()
+        let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
+        store.start()
+
+        // Step 1: file with no outages
+        let noOutageData = try makeV2UsagesJSON(
+            metrics: [timeWindowMetric()],
+            outages: []
+        )
+        watcher.send(noOutageData)
+        try await eventually { store.dataProcessedCount == 1 }
+        #expect(store.outagesByVendor.isEmpty)
+        #expect(store.entries.count == 1)
+
+        // Step 2: upstream writes an outage into the file
+        let withOutageData = try makeV2UsagesJSON(
+            metrics: [timeWindowMetric()],
+            outages: [outageJSON(id: "inc-42", title: "Messages API latency spike", severity: "critical",
+                                 affectedComponents: ["Claude API"])]
+        )
+        watcher.send(withOutageData)
+        try await eventually { !store.outagesByVendor.isEmpty }
+
+        let outages = store.outagesByVendor[.claude]
+        #expect(outages?.count == 1)
+        #expect(outages?[0].id == OutageId(rawValue: "inc-42"))
+        #expect(outages?[0].severity == .critical)
+
+        // Step 3: upstream resolves the incident
+        let resolvedData = try makeV2UsagesJSON(
+            metrics: [timeWindowMetric()],
+            outages: []
+        )
+        watcher.send(resolvedData)
+        try await eventually { store.outagesByVendor.isEmpty }
+        #expect(store.outagesByVendor.isEmpty)
+        // Usage entries remain unaffected
+        #expect(store.entries.count == 1)
+
+        store.stop()
+    }
+}
+
 // MARK: - outagesByVendor tests
 
 @Suite("UsageStore outagesByVendor")
