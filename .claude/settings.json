@@ -85,25 +85,25 @@
           },
           {
             "type": "command",
-            "command": "npx @fcamblor/gitdiff-watcher@0.2.0 --on '**/CLAUDE.md' --files-separator ',' --exec '.claude/scripts/check-claude-md-lines.sh {{ON_CHANGES_RUN_CHANGED_FILES}}'",
+            "command": "npx -y -p @fcamblor/gitdiff-watcher@0.2.0 gitdiff-watcher --on '**/CLAUDE.md' --files-separator ',' --exec '.claude/scripts/check-claude-md-lines.sh {{ON_CHANGES_RUN_CHANGED_FILES}}'",
             "timeout": 10,
             "statusMessage": "Checking CLAUDE.md file sizes..."
           },
           {
             "type": "command",
-            "command": "npx @fcamblor/gitdiff-watcher@0.2.0 --on 'AIUsagesTrackers/Sources/**/*.swift' --on 'AIUsagesTrackers/Package.swift' --exec 'cd AIUsagesTrackers && swift build'",
+            "command": "npx -y -p @fcamblor/gitdiff-watcher@0.2.0 gitdiff-watcher --on 'AIUsagesTrackers/**/*.swift' --exec 'cd AIUsagesTrackers && swift build'",
             "timeout": 180,
             "statusMessage": "Building Swift package (incl. SwiftLint)..."
           },
           {
             "type": "command",
-            "command": "npx @fcamblor/gitdiff-watcher@0.2.0 --on 'AIUsagesTrackers/Sources/**/*.swift' --on 'AIUsagesTrackers/Tests/**/*.swift' --on 'AIUsagesTrackers/Package.swift' --exec 'cd AIUsagesTrackers && swift test'",
+            "command": "npx -y -p @fcamblor/gitdiff-watcher@0.2.0 gitdiff-watcher --on 'AIUsagesTrackers/**/*.swift' --exec 'cd AIUsagesTrackers && swift test'",
             "timeout": 180,
             "statusMessage": "Running Swift tests..."
           },
           {
             "type": "command",
-            "command": "npx @fcamblor/gitdiff-watcher@0.2.0 --on 'AIUsagesTrackers/Package.swift' --exec 'cd AIUsagesTrackers && swift package describe > /dev/null'",
+            "command": "npx -y -p @fcamblor/gitdiff-watcher@0.2.0 gitdiff-watcher --on 'AIUsagesTrackers/Package.swift' --exec 'cd AIUsagesTrackers && swift package describe > /dev/null'",
             "timeout": 30,
             "statusMessage": "Validating Package.swift..."
           }
