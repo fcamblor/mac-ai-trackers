@@ -14,7 +14,15 @@ struct TimeWindowMetricRow: View {
     }
 
     var body: some View {
-        let now = Date()
+        // TimelineView re-renders every minute so remaining time and theoretical
+        // consumption stay accurate even when no network refresh occurs.
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            content(now: context.date)
+        }
+    }
+
+    @ViewBuilder
+    private func content(now: Date) -> some View {
         let isExpired = resetAt.date.map { now > $0 } ?? false
         let theoretical = isExpired ? 0.0 : theoreticalFraction(resetAt: resetAt, windowDuration: windowDuration, now: now)
         let tier = consumptionRatio(actualPercent: usagePercent, theoreticalFraction: theoretical)
