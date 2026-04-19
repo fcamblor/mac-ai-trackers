@@ -100,7 +100,7 @@ struct OutageCodableTests {
             affectedComponents: ["Claude API", "Console"],
             status: "investigating",
             startedAt: "2026-04-19T11:32:00Z",
-            url: "https://status.claude.com/incidents/abcd-1234"
+            url: URL(string: "https://status.claude.com/incidents/abcd-1234")!
         )
         let data = try encoder.encode(outage)
         let decoded = try decoder.decode(Outage.self, from: data)

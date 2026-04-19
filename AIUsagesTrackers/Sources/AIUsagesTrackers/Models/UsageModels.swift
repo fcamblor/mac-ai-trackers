@@ -226,7 +226,7 @@ public struct Outage: Codable, Equatable, Sendable, Identifiable {
     public let affectedComponents: [String]
     public let status: String?
     public let startedAt: ISODate?
-    public let url: String?
+    public let url: URL?
 
     public init(
         id: OutageId,
@@ -235,7 +235,7 @@ public struct Outage: Codable, Equatable, Sendable, Identifiable {
         affectedComponents: [String] = [],
         status: String? = nil,
         startedAt: ISODate? = nil,
-        url: String? = nil
+        url: URL? = nil
     ) {
         self.id = id
         self.title = title
@@ -258,7 +258,16 @@ public struct Outage: Codable, Equatable, Sendable, Identifiable {
         affectedComponents = try container.decodeIfPresent([String].self, forKey: .affectedComponents) ?? []
         status = try container.decodeIfPresent(String.self, forKey: .status)
         startedAt = try container.decodeIfPresent(ISODate.self, forKey: .startedAt)
-        url = try container.decodeIfPresent(String.self, forKey: .url)
+        if let urlString = try container.decodeIfPresent(String.self, forKey: .url) {
+            guard let parsed = URL(string: urlString) else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .url, in: container,
+                    debugDescription: "Invalid URL string: \(urlString)")
+            }
+            url = parsed
+        } else {
+            url = nil
+        }
     }
 }
 
