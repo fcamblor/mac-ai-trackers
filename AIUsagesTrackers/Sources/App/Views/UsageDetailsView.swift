@@ -11,14 +11,26 @@ struct UsageDetailsView: View {
     let onQuit: () -> Void
 
 
-    private static let maxPopoverHeight: CGFloat = 480
     private static let popoverWidth: CGFloat = 320
+    private static let maxScreenHeightRatio: CGFloat = 0.9
+    private static let fallbackScreenHeight: CGFloat = 800
+    /// Reserved for header + footer + dividers so the full popover stays within the ratio cap.
+    private static let chromeHeightReserve: CGFloat = 80
+
+    private var maxScrollHeight: CGFloat {
+        let screenHeight = NSScreen.main?.visibleFrame.height ?? Self.fallbackScreenHeight
+        return screenHeight * Self.maxScreenHeightRatio - Self.chromeHeightReserve
+    }
 
     var body: some View {
         let sorted = store.entries.sortedForDisplay()
         let multiVendors = store.entries.vendorsWithMultipleAccounts()
 
         VStack(spacing: 0) {
+            header
+
+            Divider()
+
             if sorted.isEmpty {
                 emptyState
             } else {
@@ -37,7 +49,7 @@ struct UsageDetailsView: View {
                     }
                     .padding(12)
                 }
-                .frame(maxHeight: Self.maxPopoverHeight)
+                .frame(maxHeight: maxScrollHeight)
                 .background(Color(NSColor.windowBackgroundColor).opacity(0.4))
             }
 
@@ -50,27 +62,9 @@ struct UsageDetailsView: View {
 
     // MARK: - Subviews
 
-    private var emptyState: some View {
-        VStack(spacing: 8) {
-            Text("No usage data")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
-            Text("Waiting for data...")
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 32)
-    }
-
-    private var footer: some View {
+    private var header: some View {
         let refreshing = !refreshState.inFlight.isEmpty
         return HStack(spacing: 8) {
-            Text("AI Usages Tracker")
-                .font(.system(size: 10))
-                .foregroundStyle(.tertiary)
-            Spacer()
-
             Button {
                 onOpenSettings()
             } label: {
@@ -82,6 +76,14 @@ struct UsageDetailsView: View {
             .help("Settings")
             .keyboardShortcut(",", modifiers: .command)
             .focusable(false)
+
+            Spacer()
+
+            Text("AI Usages Tracker")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+
+            Spacer()
 
             Button {
                 guard !refreshing else { return }
@@ -104,7 +106,27 @@ struct UsageDetailsView: View {
             .help("Refresh usage data")
             .keyboardShortcut("r")
             .focusable(false)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
 
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Text("No usage data")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+            Text("Waiting for data...")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 32)
+    }
+
+    private var footer: some View {
+        HStack {
+            Spacer()
             Button("Quit") {
                 onQuit()
             }
