@@ -3,7 +3,7 @@
   "checkpoint_id": "da997dfadee4",
   "strategy": "manual-commit",
   "branch": "archon/task-feat-log-cleanup",
-  "checkpoints_count": 1,
+  "checkpoints_count": 0,
   "files_touched": [
     "AIUsagesTrackers/Tests/AIUsagesTrackersTests/LoggerTests.swift"
   ],
@@ -16,10 +16,10 @@
     }
   ],
   "token_usage": {
-    "input_tokens": 34,
-    "cache_creation_tokens": 77592,
-    "cache_read_tokens": 1497176,
-    "output_tokens": 18290,
-    "api_call_count": 30
+    "input_tokens": 9,
+    "cache_creation_tokens": 8671,
+    "cache_read_tokens": 635932,
+    "output_tokens": 2068,
+    "api_call_count": 9
   }
 }
