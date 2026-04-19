@@ -2,7 +2,8 @@ import Foundation
 import Testing
 @testable import AIUsagesTrackersLib
 
-// Guarded by NSLock — all access goes through lock/unlock // justification: test-only counter
+// @unchecked Sendable: all mutations go through NSLock; test-only,
+// never escapes the test suite
 private final class AtomicCounter: @unchecked Sendable {
     private let lock = NSLock()
     private var _value = 0
@@ -18,6 +19,20 @@ private final class AtomicCounter: @unchecked Sendable {
         _value += 1
         lock.unlock()
     }
+}
+
+/// Polls `condition` until true or `timeout` elapses. Returns whether the condition was met.
+/// Centralises timing so individual tests avoid bare `Task.sleep` literals (W3).
+private func eventually(
+    timeout: TimeInterval = 1.0,
+    _ condition: @Sendable () -> Bool
+) async -> Bool {
+    let deadline = Date().addingTimeInterval(timeout)
+    while !condition() {
+        guard Date() < deadline else { return false }
+        try? await Task.sleep(for: .milliseconds(5))
+    }
+    return true
 }
 
 @Suite("LogCleaner")
@@ -77,12 +92,13 @@ struct LogCleanerTests {
         )
 
         await cleaner.start()
-        await cleaner.start() // second call — should be no-op
+        await cleaner.start()
 
-        try await Task.sleep(for: .milliseconds(100))
+        let reached = await eventually { counter.value >= 5 }
+        #expect(reached, "Cleaner did not tick at least 5 times")
 
         let count = counter.value
-        // If two tasks were spawned, count would roughly double.
+        // One tick per 10 ms over ~50-100 ms ≈ 5-10; two tasks would roughly double
         #expect(count < 20, "Too many sleep calls (\(count)), likely two tasks running")
 
         await cleaner.stop()
@@ -105,22 +121,19 @@ struct LogCleanerTests {
         )
 
         await cleaner.start()
-        try await Task.sleep(for: .milliseconds(50))
+        let _ = await eventually { counter.value >= 3 }
         await cleaner.stop()
 
         let countAfterStop = counter.value
 
-        try await Task.sleep(for: .milliseconds(50))
-        let countLater = counter.value
-        #expect(countLater == countAfterStop, "Ticks continued after stop")
+        // Verify ticks stopped — poll briefly, expect no increase
+        let increased = await eventually(timeout: 0.05) { counter.value > countAfterStop }
+        #expect(!increased, "Ticks continued after stop")
 
-        // Restart should work
         await cleaner.start()
-        try await Task.sleep(for: .milliseconds(50))
+        let restarted = await eventually { counter.value > countAfterStop }
+        #expect(restarted, "No ticks after restart")
         await cleaner.stop()
-
-        let countAfterRestart = counter.value
-        #expect(countAfterRestart > countAfterStop, "No ticks after restart")
     }
 
     @Test("cleanOnce handles missing files without crash")
@@ -156,5 +169,44 @@ struct LogCleanerTests {
 
         let content = try String(contentsOfFile: logger.filePath, encoding: .utf8)
         #expect(content == "[\(kept)] [INFO] kept\n")
+    }
+
+    @Test("cleanOnce continues to next logger after purge failure")
+    func cleanOnceContinuesAfterFailure() async throws {
+        let failLogger = makeTempLogger()
+        let goodLogger = makeTempLogger()
+        let fmt = ISO8601DateFormatter()
+        let fixedNow = Date()
+        let eightDaysAgo = fixedNow.addingTimeInterval(-8 * 24 * 60 * 60)
+        let old = fmt.string(from: eightDaysAgo)
+
+        try writeLines("[\(old)] [INFO] old\n", to: failLogger)
+        try writeLines("[\(old)] [INFO] old\n", to: goodLogger)
+
+        // Make the first logger's file unreadable to trigger readFailed
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o000], ofItemAtPath: failLogger.filePath
+        )
+        defer {
+            do {
+                try FileManager.default.setAttributes(
+                    [.posixPermissions: 0o644], ofItemAtPath: failLogger.filePath
+                )
+            } catch {
+                Issue.record("Failed to restore permissions: \(error)")
+            }
+        }
+
+        let appLogger = makeTempLogger()
+        let cleaner = LogCleaner(
+            loggers: [failLogger, goodLogger],
+            now: { fixedNow },
+            logger: appLogger
+        )
+        await cleaner.cleanOnce()
+
+        // Good logger should still be purged despite failure on first
+        let content = try String(contentsOfFile: goodLogger.filePath, encoding: .utf8)
+        #expect(content == "")
     }
 }
