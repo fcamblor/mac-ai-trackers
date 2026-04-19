@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "c0409f458bec",
+  "strategy": "manual-commit",
+  "branch": "archon/task-feat-vendor-status-monitor",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/App/Views/UsageDetailsView.swift",
+    "AIUsagesTrackers/Sources/App/Views/VendorStatusBanner.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/c0/409f458bec/0/metadata.json",
+      "transcript": "/c0/409f458bec/0/full.jsonl",
+      "content_hash": "/c0/409f458bec/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 9,
+    "cache_creation_tokens": 3595,
+    "cache_read_tokens": 1363806,
+    "output_tokens": 2752,
+    "api_call_count": 9
+  }
+}
