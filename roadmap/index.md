@@ -21,7 +21,7 @@ graph TD
 ## Epics
 
 1. `in-progress` — [Log cleanup](log-cleanup.md) — purge log entries older than 7 days at startup and once per day to keep log files bounded.
-2. `planned` — [Vendor status monitor](vendor-status-monitor.md) — surface active incidents from vendor status pages (Claude, and others as accounts are added) inside the app.
+2. `in-progress` — [Vendor status monitor](vendor-status-monitor.md) — surface active incidents from vendor status pages (Claude, and others as accounts are added) inside the app.
 3. `planned` — [Buy me a coffee](buy-me-a-coffee.md) — add a discreet donation button in the popover footer that opens the developer's donation page in the browser.
 4. `planned` — [Codex connector](codex-connector.md) — add OpenAI Codex CLI as a second tracked vendor alongside Claude.
 5. `planned` — [Usage history snapshots](usage-history-snapshots.md) — periodically record metric values to a JSONL file for future consumption graph views.
