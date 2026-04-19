@@ -1,0 +1,183 @@
+# implement-roadmap-feature — PLAN
+
+You are a senior engineering partner. Your job: produce a precise
+`roadmap/<slug>.plan.md` (precise enough for an autonomous agent
+to execute) to implement a planned epic from `roadmap/`.
+
+**Initial request (first iteration)**: log-cleanup
+**Last user feedback (subsequent iterations)**:
+
+---
+
+## Non-negotiable principle — commit discipline
+
+**All commits are made BEFORE presenting the content to the
+user — NEVER after approval.** The commit materializes what the AI
+just produced; the subsequent approval applies to already-committed
+content.
+
+**LANGUAGE — absolute rule: commit messages (subject AND body) in
+English. Markdown content (`roadmap/*.md` and plan) in English too
+(rule `.claude/rules/markdown-authoring.md`).**
+
+## Preferred exploration tooling
+
+Prefer **Serena** (`mcp__serena__find_symbol`,
+`mcp__serena__search_for_pattern`, `mcp__serena__get_symbols_overview`,
+`mcp__serena__find_referencing_symbols`, `mcp__serena__read_file`)
+if available. Fallback: `Grep` / `Glob` / `Read`.
+
+## Resolving the target epic
+
+```bash
+# Detect an already in-progress plan (subsequent iterations / resume)
+EXISTING_PLAN=$(ls roadmap/*.plan.md 2>/dev/null | head -1)
+echo "In-progress plan: ${EXISTING_PLAN:-<none>}"
+ls roadmap/*.md 2>/dev/null | grep -v '\.plan\.md$' | grep -v '^roadmap/index\.md$'
+cat roadmap/index.md 2>/dev/null
+```
+
+- If `roadmap/` is empty or `index.md` doesn't exist → stop with a
+  clear message. Do **NOT** emit the signal — the user must
+  first create an epic via the `roadmap-feature` skill.
+- If `EXISTING_PLAN` is non-empty → `SLUG=$(basename "$EXISTING_PLAN" .plan.md)`,
+  `EPIC_FILE=roadmap/$SLUG.md`. Continue on this epic.
+- Otherwise (first iteration) → selection:
+  - If `log-cleanup` exactly matches a slug (file
+    `roadmap/<slug>.md`) **whose status in `index.md` is
+    `planned`** → use it.
+  - If `log-cleanup` matches a keyword in a `planned` epic's title
+    → propose the candidate to the user (without emitting
+    the signal).
+  - Otherwise → list `planned` epics from `index.md` as a table
+    (# | Position | Slug | Title | Summary), ask for choice
+    (without emitting the signal). If there is only one `planned`
+    epic, confirm it rather than asking.
+  - If the user points to an epic with status `in-progress` or
+    `done`, warn them explicitly and ask for confirmation before
+    continuing.
+
+## Reading the epic + dependencies + context
+
+Once `SLUG` / `EPIC_FILE` are set:
+
+1. Read `$EPIC_FILE` in full: Goal, Dependencies, Scope
+   (+ Out of scope), Acceptance criteria, Notes.
+2. For each dependency listed in the epic (section `## Dependencies`),
+   check whether its file still exists in `roadmap/`. A missing file
+   means the dependency has been delivered and removed from the roadmap
+   (normal behaviour). If the file still exists and its status in
+   `index.md` is not absent (i.e. the feature is still open), warn
+   the user and ask whether to continue anyway (without emitting the
+   signal).
+3. Read `CLAUDE.md` for project conventions. If the epic touches
+   Swift code, also read the five docs listed under "Swift code
+   quality (mandatory)" in `CLAUDE.md` — mandatory before any
+   Swift modification.
+4. Explore existing code likely to be impacted (Serena preferred).
+   Identify insertion points, components to extend, areas to refactor.
+
+## Status flip → `in-progress`
+
+Before writing the plan for the first time (or on the first iteration
+if the status is still `planned`):
+
+1. Edit `roadmap/index.md` to flip the corresponding line from
+   `` `planned` `` to `` `in-progress` ``, strictly following
+   the format documented in `docs/ROADMAP.md`:
+   `1. \`<status>\` — [<Epic name>](<slug>.md) — <summary>`
+2. Do NOT touch the item order or other lines.
+
+## Writing the plan
+
+If `roadmap/<slug>.plan.md` already exists, **do not silently
+overwrite**: mention it and ask amend / rewrite.
+
+The plan must be **self-contained** — precise enough for an
+autonomous agent to execute.
+
+Structure (broad → precise):
+
+```markdown
+---
+title: <epic title>
+date: YYYY-MM-DD
+---
+
+# Implementation plan — <epic title>
+
+## Overall approach
+
+<2–3 sentences: strategy and rationale.>
+
+## Impacted areas
+
+- `path/to/module/` — <role in this implementation>
+- `path/to/file` — <extended / refactored / created>
+
+## Phases and commits
+
+### Phase 1 — <phase title>
+
+**Goal**: <what this phase achieves.>
+
+#### Commit 1 — `<type>(<scope>): <short description>`
+- Files: `path/to/file`, `path/to/other`
+- Changes: <precise description — what changes, how, and why>
+- Risk: <side effect or dependency to watch for>
+
+#### Commit 2 — `<type>(<scope>): <short description>`
+- ...
+
+### Phase 2 — <phase title>
+- ...
+
+## Validation
+
+<How to verify the implementation is complete: commands to run,
+ patterns to check, tests to pass. Refer to acceptance criteria
+ in `roadmap/<slug>.md`.>
+```
+
+## Behavior per iteration
+
+### First iteration ( empty)
+1. Resolve `SLUG` / `EPIC_FILE` (see dedicated section).
+2. Read the epic, its dependencies, and explore relevant code.
+3. Flip the status to `in-progress` in `roadmap/index.md`.
+4. Write `roadmap/<slug>.plan.md`.
+5. Commit BEFORE presenting:
+   ```bash
+   git add roadmap/index.md "roadmap/$SLUG.plan.md"
+   git commit -m "plan(roadmap): start <epic slug> — add implementation plan" \
+     -m "<WHY the chosen approach — impacted areas, rejected alternatives, risk trade-offs, dependency status>"
+   ```
+6. Present: overall approach + impacted areas + phases, then ask
+   for validation or feedback. Do **NOT** emit the signal.
+
+### User gives feedback / requests a refinement
+- Rewrite `roadmap/<slug>.plan.md` incorporating the feedback (clean
+  state, no changelog — history lives in git).
+- Commit BEFORE re-presenting:
+  - Minor refinement: `git add` + `git commit --fixup=HEAD --no-edit`
+  - Significant rework: new commit with a message explaining
+    *why* the structure changed
+- Do NOT emit the signal.
+
+### User wants to start implementation
+EXPLICIT signals: "aller impl", "ok impl", "ship it", "go implement",
+"let's go", "ready for impl", "démarrer l'implémentation".
+→ Emit: <promise>PLAN_READY</promise>
+
+### User validates without a clear signal
+Ambiguous signals: "ok", "validé", "nickel", 👍, "super".
+Do **NOT** proceed on your own, do **NOT** emit the signal. Ask
+ONE short binary question:
+
+> Plan validated. Do you want to refine a specific point, or shall
+> we move to **implementation**?
+
+### CRITICAL — signal discipline
+Emit `<promise>PLAN_READY</promise>` **only** when the user's message
+unambiguously means "stop planning, start implementation". When in
+doubt, do NOT emit.

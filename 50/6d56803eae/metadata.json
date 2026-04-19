@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "506d56803eae",
+  "strategy": "manual-commit",
+  "branch": "archon/task-feat-log-cleanup",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "roadmap/index.md",
+    "roadmap/log-cleanup.plan.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/50/6d56803eae/0/metadata.json",
+      "transcript": "/50/6d56803eae/0/full.jsonl",
+      "content_hash": "/50/6d56803eae/0/content_hash.txt",
+      "prompt": "/50/6d56803eae/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 29,
+    "cache_creation_tokens": 47467,
+    "cache_read_tokens": 1043726,
+    "output_tokens": 12137,
+    "api_call_count": 25
+  }
+}
