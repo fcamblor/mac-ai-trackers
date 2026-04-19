@@ -334,7 +334,7 @@ struct UsagesFileManagerTests {
         await mgr.update(with: [VendorUsageEntry(vendor: "claude", account: "a@b.com")])
         let raw = try! String(contentsOfFile: mgr.filePath, encoding: .utf8)
         #expect(raw.contains("\n"))
-        #expect(raw.contains("\"vendor\""))
+        #expect(raw.contains("\"vendors\""))
     }
 
     // MARK: - updateIsActive

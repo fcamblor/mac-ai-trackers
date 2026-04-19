@@ -186,11 +186,18 @@ struct VendorUsageEntryTests {
 
 @Suite("UsagesFile Codable")
 struct UsagesFileTests {
+    let encoder: JSONEncoder = {
+        let e = JSONEncoder()
+        e.outputFormatting = [.sortedKeys]
+        return e
+    }()
+    let decoder = JSONDecoder()
+
     @Test("empty file round-trips")
     func emptyRoundTrip() throws {
         let file = UsagesFile()
-        let data = try JSONEncoder().encode(file)
-        let decoded = try JSONDecoder().decode(UsagesFile.self, from: data)
+        let data = try encoder.encode(file)
+        let decoded = try decoder.decode(UsagesFile.self, from: data)
         #expect(decoded.usages.isEmpty)
     }
 
@@ -205,9 +212,102 @@ struct UsagesFileTests {
                 .payAsYouGo(name: "monthly", currentAmount: 5.0, currency: "USD"),
             ]),
         ])
-        let data = try JSONEncoder().encode(file)
-        let decoded = try JSONDecoder().decode(UsagesFile.self, from: data)
-        #expect(decoded == file)
+        let data = try encoder.encode(file)
+        let decoded = try decoder.decode(UsagesFile.self, from: data)
         #expect(decoded.usages.count == 2)
+        // Entries are the same but order may differ (dictionary iteration)
+        #expect(Set(decoded.usages.map(\.id)) == Set(file.usages.map(\.id)))
+    }
+
+    @Test("legacy v1 shape decodes transparently")
+    func legacyV1Decode() throws {
+        let json = """
+        {"usages":[{"vendor":"claude","account":"a@b.com","isActive":true,"metrics":[]}]}
+        """.data(using: .utf8)!
+        let file = try decoder.decode(UsagesFile.self, from: json)
+        #expect(file.usages.count == 1)
+        #expect(file.usages[0].vendor == .claude)
+        #expect(file.usages[0].account == AccountEmail(rawValue: "a@b.com"))
+        // No outages from legacy shape
+        #expect(file.outagesByVendor.isEmpty)
+    }
+
+    @Test("v2 shape with outages decodes correctly")
+    func v2WithOutages() throws {
+        let json = """
+        {
+          "schemaVersion": 2,
+          "vendors": {
+            "claude": {
+              "accounts": [
+                {"account":"a@b.com","isActive":true,"metrics":[]}
+              ],
+              "outages": [
+                {"id":"inc-1","title":"API issues","severity":"major"}
+              ]
+            }
+          }
+        }
+        """.data(using: .utf8)!
+        let file = try decoder.decode(UsagesFile.self, from: json)
+        #expect(file.usages.count == 1)
+        #expect(file.usages[0].vendor == .claude)
+        #expect(file.outagesByVendor[.claude]?.count == 1)
+        #expect(file.outagesByVendor[.claude]?[0].title == "API issues")
+    }
+
+    @Test("encode always emits v2 with schemaVersion")
+    func encodeAlwaysV2() throws {
+        let file = UsagesFile(usages: [
+            VendorUsageEntry(vendor: "claude", account: "a@b.com"),
+        ])
+        let data = try encoder.encode(file)
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        #expect(json["schemaVersion"] as? Int == 2)
+        #expect(json["vendors"] != nil)
+        #expect(json["usages"] == nil)
+    }
+
+    @Test("legacy decode then encode produces v2 shape")
+    func legacyMigrationOnEncode() throws {
+        let v1 = """
+        {"usages":[{"vendor":"claude","account":"a@b.com","isActive":true,"metrics":[]}]}
+        """.data(using: .utf8)!
+        let file = try decoder.decode(UsagesFile.self, from: v1)
+        let encoded = try encoder.encode(file)
+        let json = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+        #expect(json["schemaVersion"] as? Int == 2)
+        #expect(json["usages"] == nil)
+    }
+
+    @Test("outagesByVendor omits vendors with no outages")
+    func outagesByVendorFiltering() {
+        let file = UsagesFile(vendors: [
+            .claude: VendorSection(
+                accounts: [VendorAccountEntry(account: "a@b.com")],
+                outages: [Outage(id: "x", title: "T", severity: .minor)]
+            ),
+            Vendor(rawValue: "codex"): VendorSection(
+                accounts: [VendorAccountEntry(account: "c@d.com")],
+                outages: []
+            ),
+        ])
+        #expect(file.outagesByVendor.count == 1)
+        #expect(file.outagesByVendor[.claude] != nil)
+    }
+
+    @Test("usages setter preserves existing outages")
+    func usagesSetterPreservesOutages() {
+        var file = UsagesFile(vendors: [
+            .claude: VendorSection(
+                accounts: [VendorAccountEntry(account: "a@b.com")],
+                outages: [Outage(id: "x", title: "T", severity: .major)]
+            ),
+        ])
+        // Overwriting usages should keep outages
+        file.usages = [VendorUsageEntry(vendor: "claude", account: "new@b.com")]
+        #expect(file.outagesByVendor[.claude]?.count == 1)
+        #expect(file.usages.count == 1)
+        #expect(file.usages[0].account == AccountEmail(rawValue: "new@b.com"))
     }
 }
