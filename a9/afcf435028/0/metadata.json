@@ -1,0 +1,41 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "a9afcf435028",
+  "session_id": "f72e2280-c86f-4651-97cc-18d665e04053",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-19T14:22:44.43333Z",
+  "branch": "archon/task-feat-vendor-status-monitor",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/UsageModels.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/UsagesFileManager.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsagesFileManagerTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageStoreTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/ClaudeCodeConnectorTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageModelsTests.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "93a5a8fc5d96",
+  "checkpoint_transcript_start": 63,
+  "transcript_lines_at_start": 63,
+  "token_usage": {
+    "input_tokens": 79,
+    "cache_creation_tokens": 62637,
+    "cache_read_tokens": 8718299,
+    "output_tokens": 24397,
+    "api_call_count": 79
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-19T14:22:43.340488Z",
+    "agent_lines": 363,
+    "agent_removed": 91,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 363,
+    "total_lines_changed": 454,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}
