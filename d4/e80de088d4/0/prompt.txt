@@ -1,0 +1,15 @@
+dans le cas où on reçoit de l'API quelque chose comme:
+  "five_hour": {
+    "utilization": 0.0,
+    "resets_at": null
+  },
+
+alors actuellement, il semble que l'entrée "5h sessions (all models)" soit supprimée du usages.json
+
+J'aimerais que ce ne soit pas le cas et qu'on tombe plutôt dans le cas où on affiche la métrique "5h sessions (all models)" mais avec des "???" (comme si la date était expired)
+
+À appliquer à toutes les métriques supportées (pas juste au "5h sessions (all models)")
+
+---
+
+utilise entire pour comprendre le contexte de l'ajout de ces tests afin de décider si ta correction a été pertinente
