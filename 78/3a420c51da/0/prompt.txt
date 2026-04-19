@@ -1,0 +1,8 @@
+j'aimerais que lorsque la date courante est ultérieure à la date de reset d'une métrique, alors on affiche:
+- "???" à la date de reset
+- "???" au pourcentage
+- une progress bar remplie à 0, sans indicateur de temps théorique d'utilisation
+
+---
+
+au niveau du texte du temps restant, au lieu de mettre 0m, mettre "???"

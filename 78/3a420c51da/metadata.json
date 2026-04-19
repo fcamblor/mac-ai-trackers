@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "783a420c51da",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/App/Views/TimeWindowMetricRow.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/78/3a420c51da/0/metadata.json",
+      "transcript": "/78/3a420c51da/0/full.jsonl",
+      "content_hash": "/78/3a420c51da/0/content_hash.txt",
+      "prompt": "/78/3a420c51da/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 28,
+    "cache_creation_tokens": 85655,
+    "cache_read_tokens": 266471,
+    "output_tokens": 4337,
+    "api_call_count": 10
+  }
+}
