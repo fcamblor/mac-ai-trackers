@@ -4,6 +4,7 @@ import AIUsagesTrackersLib
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var logCleaner: LogCleaner?
     private var poller: UsagePoller?
     private var accountMonitor: ClaudeActiveAccountMonitor?
     private var pidGuard: AppPidGuard?
@@ -50,6 +51,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await poller?.pollOnce(force: true)
             }
         )
+        let logCleaner = LogCleaner()
+        self.logCleaner = logCleaner
         self.poller = poller
         self.accountMonitor = accountMonitor
         self.refreshState = refreshState
@@ -63,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         trackStoreChanges(store: store)
 
         Task {
+            await logCleaner.start()
             store.start()
             await poller.start()
             await accountMonitor.start()
@@ -150,9 +154,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Quit
 
     private func quit() {
+        let logCleanerRef = logCleaner
         let pollerRef = poller
         let monitorRef = accountMonitor
         Task {
+            await logCleanerRef?.stop()
             await pollerRef?.stop()
             await monitorRef?.stop()
         }

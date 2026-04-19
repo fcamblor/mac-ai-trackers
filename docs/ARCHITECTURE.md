@@ -37,6 +37,6 @@ A separate monitoring actor polls the vendor's local config file at a short fixe
 
 ## Logging
 
-Two log files live under `~/.cache/ai-usages-tracker/`: one for the app lifecycle and poller events, another for connector-specific activity. Log level is configurable via the `AI_TRACKER_LOG_LEVEL` environment variable. Size-based rotation keeps each file under 5 MB with one backup.
+Two log files live under `~/.cache/ai-usages-tracker/`: one for the app lifecycle and poller events, another for connector-specific activity. Log level is configurable via the `AI_TRACKER_LOG_LEVEL` environment variable. Size-based rotation keeps each file under 5 MB with one backup. A retention purge removes entries older than 7 days from all managed log files at startup and every 24 hours, using atomic rewrites so a crash mid-cleanup leaves the previous file intact.
 
 For authoritative details (Swift tools version, platform minimums, target layout), read the package manifest rather than mirroring them here.

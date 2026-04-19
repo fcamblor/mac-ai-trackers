@@ -1,5 +1,10 @@
 import Foundation
 
+public enum LogPurgeError: Error {
+    case readFailed(path: String, underlying: any Error)
+    case writeFailed(path: String, underlying: any Error)
+}
+
 public enum LogLevel: Int, Comparable, Sendable {
     case debug = 0, info, warning, error
 
@@ -52,7 +57,91 @@ public final class FileLogger: Sendable {
         queue.sync {}
     }
 
+    // MARK: - Purge
+
+    /// Removes log lines whose leading ISO 8601 timestamp is older than `cutoff`.
+    /// Lines without a parseable timestamp (continuation / malformed) follow the
+    /// fate of the preceding timestamped line.
+    ///
+    /// **Must not** be called from within `queue` — it dispatches synchronously
+    /// to `queue` internally and would deadlock.
+    public func purgeEntries(olderThan cutoff: Date) throws {
+        var captured: (any Error)?
+        queue.sync {
+            do {
+                try self.purgeFile(atPath: self.filePath, cutoff: cutoff)
+                let backup = self.filePath + ".1"
+                if FileManager.default.fileExists(atPath: backup) {
+                    try self.purgeFile(atPath: backup, cutoff: cutoff)
+                }
+            } catch {
+                captured = error
+            }
+        }
+        if let captured { throw captured }
+    }
+
     // MARK: - Private
+
+    private func purgeFile(atPath path: String, cutoff: Date) throws {
+        guard FileManager.default.fileExists(atPath: path) else { return }
+
+        let original: String
+        do {
+            // WHY: reading into memory is acceptable — rotation caps files at 5 MB
+            original = try String(contentsOfFile: path, encoding: .utf8)
+        } catch {
+            throw LogPurgeError.readFailed(path: path, underlying: error)
+        }
+
+        let formatter = ISO8601DateFormatter()
+        let lines = original.split(separator: "\n", omittingEmptySubsequences: false)
+        var kept: [Substring] = []
+        var keepingContinuation = true
+
+        for line in lines {
+            if let date = parseLeadingTimestamp(from: line, formatter: formatter) {
+                if date >= cutoff {
+                    kept.append(line)
+                    keepingContinuation = true
+                } else {
+                    keepingContinuation = false
+                }
+            } else {
+                // Continuation / malformed line — follows fate of preceding timestamped line
+                if keepingContinuation {
+                    kept.append(line)
+                }
+            }
+        }
+
+        let result = kept.joined(separator: "\n")
+        guard result != original else { return }
+
+        let url = URL(fileURLWithPath: path)
+        guard let data = result.data(using: .utf8) else {
+            throw LogPurgeError.writeFailed(
+                path: path,
+                underlying: NSError(domain: "FileLogger", code: -1, userInfo: [
+                    NSLocalizedDescriptionKey: "UTF-8 encoding round-trip failed"
+                ])
+            )
+        }
+        do {
+            try data.write(to: url, options: .atomic)
+        } catch {
+            throw LogPurgeError.writeFailed(path: path, underlying: error)
+        }
+    }
+
+    private func parseLeadingTimestamp(from line: Substring, formatter: ISO8601DateFormatter) -> Date? {
+        guard let open = line.firstIndex(of: "["),
+              let close = line[line.index(after: open)...].firstIndex(of: "]") else {
+            return nil
+        }
+        let stamp = String(line[line.index(after: open)..<close])
+        return formatter.date(from: stamp)
+    }
 
     private func append(level: LogLevel, message: String) {
         queue.async { [self] in
@@ -103,4 +192,6 @@ public enum Loggers {
 
     public static let app = FileLogger(filePath: "\(cacheDir)/app.log", minLevel: level)
     public static let claude = FileLogger(filePath: "\(cacheDir)/claude-usages-connector.log", minLevel: level)
+
+    public static let managed: [FileLogger] = [app, claude]
 }
