@@ -19,8 +19,10 @@ description: |
     3. CREATE-PR (draft) — body synthesized from epic + plan + commits
     4. REVIEWS (5 parallel axes: code quality, error handling,
        test coverage, comment quality, doc impact)
-    5. AGGREGATE-APPLY (interactive loop) — HITL cherry-pick, fixup commits,
-       re-gate after each block
+    5. AGGREGATE-APPLY (loop) — automatic triage on first iteration:
+       apply CRITICAL+HIGH as fixup commits and record MED+LOW as
+       thematically-grouped `tech-debt/` entries. HITL only for overrides,
+       re-run, or the final ship signal.
     6. VALIDATE — checks acceptance criteria from the epic one by one,
        explicit PASS/FAIL
     7. CLOSE — flip `in-progress` → `done` in `roadmap/index.md`,
@@ -589,37 +591,106 @@ nodes:
 
         ---
 
-        ## First iteration ($LOOP_USER_INPUT empty)
+        ## First iteration ($LOOP_USER_INPUT empty) — AUTOMATIC TRIAGE
 
-        1. Consolidate the 5 reviews into a single numbered action plan
-           (deduplicate across axes, priority CRITICAL > HIGH > MED > LOW).
-           Format:
-           ```
-           N. [priority] [axis] [file:line] <recommendation>
-           ```
-        2. Present it. Ask: `all` / `none` / `1,3,5` / free text.
-        3. Do **NOT** emit the signal.
+        This iteration runs the standard triage practice without asking
+        the user. The split CRITICAL+HIGH ⇒ fixup / MED+LOW ⇒ tech-debt
+        entries is the house default; the user only intervenes on the
+        next iteration to ship, re-run reviews, or override.
+
+        ### Step 1 — Consolidate and prioritise
+        Merge the 5 review outputs into a deduplicated action list,
+        ordered CRITICAL > HIGH > MED > LOW. Format:
+        ```
+        N. [priority] [axis] [file:line] <recommendation>
+        ```
+        If the list is empty (all reviews clean), skip to Step 5 with an
+        empty report.
+
+        ### Step 2 — Apply CRITICAL+HIGH findings as fixups
+        For each CRITICAL or HIGH item:
+        1. Identify the source commit
+           (`git log --oneline origin/$BASE_BRANCH..HEAD -- <files>`).
+        2. Apply the recommendation surgically.
+        3. Commit with `git commit --fixup=<source_hash>` — one fixup per
+           source commit. A block touching multiple sources yields one
+           fixup per source. History must stay squashable with
+           `git rebase --autosquash`.
+
+        If NO CRITICAL+HIGH items exist, skip this step.
+
+        ### Step 3 — Record MED+LOW findings as tech-debt entries
+        Group the remaining MED+LOW items thematically. Typical themes
+        (use only those with ≥ 1 item):
+        - `missing-tests` — uncovered branches, missing round-trips, absent
+          error-path tests.
+        - `code-hygiene` — dead code, minor perf, non-deterministic ordering,
+          small structural issues.
+        - `comments-docs` — WHAT-style comments, stale `docs/*.md`, doc drift.
+        - `error-ux-polish` — silent discards, vague errors, toggle UX,
+          sentinels.
+
+        For each retained theme, create ONE tech-debt entry following the
+        spec in `.claude/skills/tech-debt/SKILL.md` (that spec is
+        authoritative — read it before writing). Key rules:
+        - Directory name:
+          `tech-debt/<yyyymmdd>_<criticality>_<size>_<slug>-<theme>/`
+          where `<slug>` is the epic slug (e.g. `log-cleanup`) and
+          `<yyyymmdd>` is today's date.
+        - `criticality` / `size` defaults per theme (override if justified):
+          - `missing-tests` → `medium` / `S`
+          - `code-hygiene` → `low` / `S`
+          - `comments-docs` → `low` / `XS`
+          - `error-ux-polish` → `medium` / `S`
+        - Use the `debt.md` template from the skill spec. List each
+          finding with its `file:line` and the review axis.
+        - Before creating a new entry, `ls tech-debt/` and check for
+          semantic overlap with existing directory names. If an existing
+          entry covers the same theme, enrich it instead of creating a
+          duplicate.
+
+        Commit all new tech-debt files in one commit:
+        ```bash
+        git add tech-debt/
+        git commit -m "feat(tech-debt): record <slug> MED/LOW review findings"
+        ```
+
+        If NO MED+LOW items exist, skip this step.
+
+        ### Step 4 — Run the deterministic gate
+        ```bash
+        bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
+        ```
+        If failure, fix BEFORE reporting. Do NOT report "triage done"
+        until the gate is green.
+
+        ### Step 5 — Report, then pause
+        Present:
+        - Applied CRITICAL+HIGH (n): one line per fixup with the target
+          source commit.
+        - Tech-debt created (m): one line per new directory with the
+          count of findings folded in.
+        - Diff stat vs base branch.
+        - Gate status.
+
+        Then ask: "ship it / re-run reviews / manual override?".
+        Do **NOT** emit the signal on this iteration.
 
         ## Subsequent iterations
 
-        ### "none" / "skip" / "ship it" / "finaliser"
+        ### "ship it" / "none" / "skip" / "finaliser"
         → Emit: <promise>REVIEWS_DONE</promise>
 
-        ### Selection (`all`, `1,3,5`, etc.)
-        1. Apply each recommendation. Be surgical.
+        ### Manual override (`all`, `1,3,5`, `only LOW`, etc.)
+        1. Apply each selected recommendation. Be surgical.
         2. Commit per logical block WITH `--fixup`.
-        3. Run the shared gate:
-           ```bash
-           bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
-           ```
-           If failure, fix BEFORE presenting. Do NOT present "apply done"
-           until the gate is green.
-        4. Report: applied / remaining / diff stat.
-        5. Ask: "apply more / re-run reviews / ship it ?" — do NOT
-           emit the signal.
+        3. Run the gate.
+        4. Report applied / remaining / diff stat.
+        5. Ask "apply more / re-run / ship it?" — do NOT emit the signal.
 
         ### "re-run reviews"
-        The re-run runs **on the current state** (fixups included).
+        The re-run runs **on the current state** (fixups + any tech-debt
+        entries included).
 
         Launch **5 Tasks in parallel** in ONE SINGLE message (tool `Agent`
         with `subagent_type: general-purpose`), each prompt starting with
@@ -627,19 +698,21 @@ nodes:
         axis (see phase 4). Strict response format
         `[file:line] recommendation`.
 
-        Re-aggregate, re-prioritize, present, ask
-        "apply more / re-run / ship it ?" again. Do NOT emit the signal.
+        Then re-run the automatic triage flow (Steps 1-5 above) on the
+        fresh findings.
 
         ### CRITICAL — signal discipline
         Emit `<promise>REVIEWS_DONE</promise>` **only** on an explicit
-        closure signal.
+        closure signal from the user. The automatic triage alone does
+        NOT trigger the signal.
 
       until: REVIEWS_DONE
       max_iterations: 15
       interactive: true
       gate_message: |
-        Select (all / none / 1,3,5), ask "re-run reviews", or say
-        "ship it" to finalize.
+        Triage done (CRITICAL+HIGH applied, MED+LOW filed as tech-debt).
+        Say "ship it" to finalize, "re-run reviews", or give a manual
+        override (all / 1,3,5 / only LOW / etc.).
 
   # ═══════════════════════════════════════════════════════════════════════════
   # PHASE 6 — VALIDATE acceptance criteria
