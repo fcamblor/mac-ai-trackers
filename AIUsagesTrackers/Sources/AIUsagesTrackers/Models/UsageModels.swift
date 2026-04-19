@@ -82,7 +82,11 @@ extension UsagesFile: Codable {
             let entries = try container.decode([VendorUsageEntry].self, forKey: .usages)
             self.init(usages: entries)
         } else {
-            self.init()
+            // Neither v2 sentinel nor v1 usages key — payload is corrupt or unrecognised
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(
+                    codingPath: container.codingPath,
+                    debugDescription: "Expected 'schemaVersion' (v2) or 'usages' (v1) key"))
         }
     }
 
