@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "0e6c804a86e2",
+  "session_id": "d6175b83-a09f-4ef3-90d6-0e47a9c7b809",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-19T14:19:43.008761Z",
+  "branch": "archon/task-feat-log-cleanup",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/LogCleanerTests.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "5350a0ea6897",
+  "checkpoint_transcript_start": 73,
+  "transcript_lines_at_start": 73,
+  "token_usage": {
+    "input_tokens": 12,
+    "cache_creation_tokens": 6776,
+    "cache_read_tokens": 741543,
+    "output_tokens": 5274,
+    "api_call_count": 12
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-19T14:19:42.856227Z",
+    "agent_lines": 65,
+    "agent_removed": 13,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 65,
+    "total_lines_changed": 78,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}
