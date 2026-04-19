@@ -80,7 +80,7 @@ private func makeUsagesJSON(
 }
 
 private func timeWindowMetric(
-    name: String = "session",
+    name: String = "5h sessions (all models)",
     resetAt: String = "2026-04-17T15:00:00Z",
     windowDurationMinutes: Int = 300,
     usagePercent: Int = 42
@@ -132,7 +132,7 @@ struct UsageStoreFormattingTests {
 
         // resetAt is 2h13m in the future from Self.referenceDate
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", usagePercent: 48),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T15:00:00Z", usagePercent: 48),
         ])
         watcher.send(data)
         try await eventually { store.menuBarText == "S 48% 2h 13m" }
@@ -149,8 +149,8 @@ struct UsageStoreFormattingTests {
         store.start()
 
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", usagePercent: 48),
-            timeWindowMetric(name: "weekly", resetAt: "2026-04-23T21:00:00Z", usagePercent: 7),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T15:00:00Z", usagePercent: 48),
+            timeWindowMetric(name: "Weekly (all models)", resetAt: "2026-04-23T21:00:00Z", usagePercent: 7),
         ])
         watcher.send(data)
         try await eventually { store.menuBarText == "S 48% 2h 13m | W 7% 6d 8h 13m" }
@@ -185,7 +185,7 @@ struct UsageStoreFormattingTests {
         store.start()
 
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", usagePercent: 48),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T15:00:00Z", usagePercent: 48),
             payAsYouGoMetric(),
         ])
         watcher.send(data)
@@ -203,7 +203,7 @@ struct UsageStoreFormattingTests {
         store.start()
 
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T10:00:00Z", usagePercent: 100),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T10:00:00Z", usagePercent: 100),
         ])
         watcher.send(data)
         try await eventually { store.menuBarText != "--" }
@@ -220,7 +220,7 @@ struct UsageStoreFormattingTests {
         store.start()
 
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T12:47:00Z", usagePercent: 50),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T12:47:00Z", usagePercent: 50),
         ])
         watcher.send(data)
         try await eventually { store.menuBarText != "--" }
@@ -305,7 +305,7 @@ struct UsageStoreDegradationTests {
         #expect(store.menuBarText == "--")
 
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
         ])
         watcher.send(data)
         try await eventually { store.dataProcessedCount == 2 }
@@ -328,7 +328,7 @@ struct UsageStoreLifecycleTests {
         store.start()
         store.start() // second call should be no-op; data must still flow
         watcher.send(try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
         ]))
         try await eventually { store.menuBarText != "--" }
         #expect(store.menuBarText == "S 10% 1h")
@@ -369,7 +369,7 @@ struct UsageStoreLifecycleTests {
 
         store.start()
         watcher.send(try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
         ]))
         try await eventually { store.menuBarText != "--" }
         #expect(store.menuBarText == "S 10% 1h")
@@ -377,7 +377,7 @@ struct UsageStoreLifecycleTests {
 
         store.start()
         watcher.send(try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "weekly", resetAt: "2026-04-17T14:00:00Z", usagePercent: 50),
+            timeWindowMetric(name: "Weekly (all models)", resetAt: "2026-04-17T14:00:00Z", usagePercent: 50),
         ]))
         try await eventually { store.menuBarText == "W 50% 2h" }
         #expect(store.menuBarText == "W 50% 2h")
@@ -398,7 +398,7 @@ struct UsageStoreRemainingTimeTests {
         store.start()
 
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "weekly", resetAt: "2026-04-18T00:00:00Z", usagePercent: 0),
+            timeWindowMetric(name: "Weekly (all models)", resetAt: "2026-04-18T00:00:00Z", usagePercent: 0),
         ])
         watcher.send(data)
         try await eventually { store.menuBarText != "--" }
@@ -417,7 +417,7 @@ struct UsageStoreRemainingTimeTests {
 
         // resetAt is several days ahead — verifies d/h/m rendering
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "weekly", resetAt: "2026-04-20T05:30:00Z", usagePercent: 15),
+            timeWindowMetric(name: "Weekly (all models)", resetAt: "2026-04-20T05:30:00Z", usagePercent: 15),
         ])
         watcher.send(data)
         try await eventually { store.menuBarText != "--" }
@@ -435,7 +435,7 @@ struct UsageStoreRemainingTimeTests {
         store.start()
 
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T14:50:00Z", usagePercent: 95),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T14:50:00Z", usagePercent: 95),
         ])
         watcher.send(data)
         try await eventually { store.menuBarText != "--" }
@@ -451,7 +451,7 @@ struct UsageStoreRemainingTimeTests {
         store.start()
 
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "not-a-date", usagePercent: 50),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "not-a-date", usagePercent: 50),
         ])
         watcher.send(data)
         // Store's formatRemainingTime returns "--" for unparseable dates (with a warning log)
@@ -470,7 +470,7 @@ struct UsageStoreRemainingTimeTests {
         store.start()
 
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T14:00:00Z", usagePercent: 42),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T14:00:00Z", usagePercent: 42),
         ])
         watcher.send(data)
         try await eventually { store.menuBarText != "--" }
@@ -490,7 +490,7 @@ struct UsageStoreRemainingTimeTests {
 
         // resetAt less than one minute ahead — verifies "0m" floor
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T12:00:30Z", usagePercent: 99),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T12:00:30Z", usagePercent: 99),
         ])
         watcher.send(data)
         try await eventually { store.menuBarText != "--" }
@@ -515,7 +515,7 @@ struct UsageStoreCountdownTests {
 
         // 3h remaining at initial clock
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", usagePercent: 42),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T15:00:00Z", usagePercent: 42),
         ])
         watcher.send(data)
         try await eventually { store.menuBarText == "S 42% 3h" }
@@ -566,10 +566,10 @@ struct UsageStoreEntryTests {
         // Two active Claude entries — only the first is rendered per first(where:) semantics
         let root: [String: Any] = ["usages": [
             ["vendor": "claude", "account": "first@example.com", "isActive": true, "metrics": [
-                timeWindowMetric(name: "session", resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
+                timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
             ]],
             ["vendor": "claude", "account": "second@example.com", "isActive": true, "metrics": [
-                timeWindowMetric(name: "weekly", resetAt: "2026-04-17T14:00:00Z", usagePercent: 50),
+                timeWindowMetric(name: "Weekly (all models)", resetAt: "2026-04-17T14:00:00Z", usagePercent: 50),
             ]],
         ]]
         let data = try JSONSerialization.data(withJSONObject: root)
@@ -590,8 +590,8 @@ struct UsageStoreEntryTests {
 
         // weekly_sonnet and weekly_opus are per-model breakdowns; only session and weekly appear in the menu bar
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session",       resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
-            timeWindowMetric(name: "weekly",        resetAt: "2026-04-17T14:00:00Z", usagePercent: 50),
+            timeWindowMetric(name: "5h sessions (all models)",       resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
+            timeWindowMetric(name: "Weekly (all models)",        resetAt: "2026-04-17T14:00:00Z", usagePercent: 50),
             timeWindowMetric(name: "weekly_sonnet", resetAt: "2026-04-17T14:00:00Z", usagePercent: 30),
             timeWindowMetric(name: "weekly_opus",   resetAt: "2026-04-17T14:00:00Z", usagePercent: 20),
         ])
@@ -632,7 +632,7 @@ struct UsageStoreEntryTests {
         // and is silently skipped by formatTimeWindowSegment, so only the known metric renders.
         let root: [String: Any] = ["usages": [
             ["vendor": "claude", "account": "user@example.com", "isActive": true, "metrics": [
-                timeWindowMetric(name: "session", resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
+                timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
                 ["type": "unknown-future-type", "name": "x"],
             ]],
         ]]
@@ -669,7 +669,7 @@ struct UsageStoreEntriesTests {
             vendor: "claude",
             account: "a@b.com",
             isActive: true,
-            metrics: [timeWindowMetric(name: "session", usagePercent: 42)]
+            metrics: [timeWindowMetric(name: "5h sessions (all models)", usagePercent: 42)]
         )
         watcher.send(data)
         try await eventually { store.entries.count == 1 }
@@ -713,7 +713,7 @@ struct UsageStoreEntriesTests {
             "vendor": "claude",
             "account": "a@b.com",
             "isActive": true,
-            "metrics": [timeWindowMetric(name: "session", usagePercent: 48)],
+            "metrics": [timeWindowMetric(name: "5h sessions (all models)", usagePercent: 48)],
         ]
         let entry2: [String: Any] = [
             "vendor": "claude",
@@ -747,7 +747,7 @@ struct UsageStoreEntriesTests {
                 "vendor": "claude",
                 "account": "good@example.com",
                 "isActive": true,
-                "metrics": [timeWindowMetric(name: "session", usagePercent: 42)],
+                "metrics": [timeWindowMetric(name: "5h sessions (all models)", usagePercent: 42)],
             ],
             [
                 "vendor": "claude",
@@ -811,7 +811,7 @@ struct UsageStoreMenuBarSegmentsTests {
         store.start()
 
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 48),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 48),
         ])
         watcher.send(data)
         try await eventually { store.menuBarSegments.count == 1 }
@@ -831,8 +831,8 @@ struct UsageStoreMenuBarSegmentsTests {
         store.start()
 
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 10),
-            timeWindowMetric(name: "weekly",  resetAt: "2026-04-23T21:00:00Z", windowDurationMinutes: 10080, usagePercent: 80),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 10),
+            timeWindowMetric(name: "Weekly (all models)",  resetAt: "2026-04-23T21:00:00Z", windowDurationMinutes: 10080, usagePercent: 80),
         ])
         watcher.send(data)
         try await eventually { store.menuBarSegments.count == 2 }
@@ -852,7 +852,7 @@ struct UsageStoreMenuBarSegmentsTests {
         store.start()
 
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 50),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 50),
         ])
         watcher.send(data)
         try await eventually { store.menuBarSegments.count == 1 }
@@ -870,7 +870,7 @@ struct UsageStoreMenuBarSegmentsTests {
         store.start()
 
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 48),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 48),
         ])
         watcher.send(data)
         try await eventually { store.menuBarSegments.count == 1 }
@@ -898,7 +898,7 @@ struct UsageStoreMenuBarTierTests {
         store.start()
 
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 80),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 80),
         ])
         watcher.send(data)
         try await eventually { store.menuBarText != "--" }
@@ -917,7 +917,7 @@ struct UsageStoreMenuBarTierTests {
         store.start()
 
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 10),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 10),
         ])
         watcher.send(data)
         try await eventually { store.menuBarText != "--" }
@@ -936,8 +936,8 @@ struct UsageStoreMenuBarTierTests {
         store.start()
 
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 10),
-            timeWindowMetric(name: "weekly", resetAt: "2026-04-23T21:00:00Z", windowDurationMinutes: 10080, usagePercent: 80),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 10),
+            timeWindowMetric(name: "Weekly (all models)", resetAt: "2026-04-23T21:00:00Z", windowDurationMinutes: 10080, usagePercent: 80),
         ])
         watcher.send(data)
         try await eventually { store.menuBarText.contains("|") }
@@ -958,7 +958,7 @@ struct UsageStoreMenuBarTierTests {
         store.start()
 
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 50),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 50),
         ])
         watcher.send(data)
         try await eventually { store.menuBarText != "--" }
@@ -991,7 +991,7 @@ struct UsageStoreMenuBarTierTests {
 
         // First: valid data that sets a tier
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 80),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 80),
         ])
         watcher.send(data)
         try await eventually { store.menuBarTier != nil }
@@ -1015,7 +1015,7 @@ struct UsageStoreMenuBarTierTests {
         // Session: 300 min, reset 15:00, window start 10:00. At 10:01 → ~0.3% elapsed
         // 50% usage at 0.3% elapsed → very high ratio → exhausted
         let data = try makeUsagesJSON(metrics: [
-            timeWindowMetric(name: "session", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 50),
+            timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 50),
         ])
         watcher.send(data)
         try await eventually { store.menuBarTier == .exhausted }

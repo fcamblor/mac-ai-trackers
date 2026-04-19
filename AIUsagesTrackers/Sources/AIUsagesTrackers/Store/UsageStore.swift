@@ -58,6 +58,11 @@ public final class UsageStore {
     private static let targetVendor: Vendor = .claude
     // Only top-level aggregate metrics belong in the compact menu bar label; per-model breakdowns live in the popover only
     private static let menuBarMetricNames: Set<String> = ["5h sessions (all models)", "Weekly (all models)"]
+    // Explicit short abbreviations for menu bar display — descriptive names start with digits or lowercase
+    private static let menuBarAbbreviations: [String: String] = [
+        "5h sessions (all models)": "S",
+        "Weekly (all models)": "W",
+    ]
 
     // Latest decoded file kept for countdown refresh without re-reading disk
     private var lastFile: UsagesFile?
@@ -183,7 +188,7 @@ public final class UsageStore {
         }
         guard Self.menuBarMetricNames.contains(name) else { return nil }
 
-        let abbreviation = name.prefix(1).uppercased()
+        let abbreviation = Self.menuBarAbbreviations[name] ?? String(name.prefix(1)).uppercased()
         // A metric with an empty name cannot be abbreviated — skip to avoid a leading space in output
         guard !abbreviation.isEmpty else { return nil }
 

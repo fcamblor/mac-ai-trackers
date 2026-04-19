@@ -131,13 +131,13 @@ struct ClaudeCodeConnectorFetchTests {
         #expect(entries[0].metrics.count == 2)
         // utilization is a Double from the API; connector rounds to nearest Int percent (42.0 → 42)
         if case .timeWindow(let name, _, _, let pct) = entries[0].metrics[0] {
-            #expect(name == "session")
+            #expect(name == "5h sessions (all models)")
             #expect(pct == 42)
         } else {
             Issue.record("Expected timeWindow metric for session")
         }
         if case .timeWindow(let name, _, let duration, let pct) = entries[0].metrics[1] {
-            #expect(name == "weekly")
+            #expect(name == "Weekly (all models)")
             #expect(pct == 8)
             #expect(duration == 10080)
         } else {
@@ -358,10 +358,10 @@ struct ClaudeCodeConnectorFetchTests {
         #expect(entries[0].lastError == nil)
         #expect(entries[0].metrics.count == 4)
 
-        if let session = requireTimeWindowMetric(named: "session", in: entries[0].metrics) {
+        if let session = requireTimeWindowMetric(named: "5h sessions (all models)", in: entries[0].metrics) {
             #expect(session.pct == 42)
         }
-        if let weekly = requireTimeWindowMetric(named: "weekly", in: entries[0].metrics) {
+        if let weekly = requireTimeWindowMetric(named: "Weekly (all models)", in: entries[0].metrics) {
             #expect(weekly.pct == 8)
         }
         if let sonnet = requireTimeWindowMetric(named: "Weekly Sonnet", in: entries[0].metrics) {
@@ -388,10 +388,10 @@ struct ClaudeCodeConnectorFetchTests {
         let entries = try await connector.fetchUsages()
 
         #expect(entries[0].metrics.count == 3)
-        if let session = requireTimeWindowMetric(named: "session", in: entries[0].metrics) {
+        if let session = requireTimeWindowMetric(named: "5h sessions (all models)", in: entries[0].metrics) {
             #expect(session.pct == 42)
         }
-        if let weekly = requireTimeWindowMetric(named: "weekly", in: entries[0].metrics) {
+        if let weekly = requireTimeWindowMetric(named: "Weekly (all models)", in: entries[0].metrics) {
             #expect(weekly.pct == 8)
         }
         if let sonnet = requireTimeWindowMetric(named: "Weekly Sonnet", in: entries[0].metrics) {
@@ -411,10 +411,10 @@ struct ClaudeCodeConnectorFetchTests {
         let entries = try await connector.fetchUsages()
 
         #expect(entries[0].metrics.count == 3)
-        if let session = requireTimeWindowMetric(named: "session", in: entries[0].metrics) {
+        if let session = requireTimeWindowMetric(named: "5h sessions (all models)", in: entries[0].metrics) {
             #expect(session.pct == 42)
         }
-        if let weekly = requireTimeWindowMetric(named: "weekly", in: entries[0].metrics) {
+        if let weekly = requireTimeWindowMetric(named: "Weekly (all models)", in: entries[0].metrics) {
             #expect(weekly.pct == 8)
         }
         if let opus = requireTimeWindowMetric(named: "Weekly Opus", in: entries[0].metrics) {
@@ -433,10 +433,10 @@ struct ClaudeCodeConnectorFetchTests {
         let entries = try await connector.fetchUsages()
 
         #expect(entries[0].metrics.count == 2)
-        if let session = requireTimeWindowMetric(named: "session", in: entries[0].metrics) {
+        if let session = requireTimeWindowMetric(named: "5h sessions (all models)", in: entries[0].metrics) {
             #expect(session.pct == 42)
         }
-        if let weekly = requireTimeWindowMetric(named: "weekly", in: entries[0].metrics) {
+        if let weekly = requireTimeWindowMetric(named: "Weekly (all models)", in: entries[0].metrics) {
             #expect(weekly.pct == 8)
         }
     }
