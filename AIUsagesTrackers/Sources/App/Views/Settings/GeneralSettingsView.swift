@@ -3,6 +3,9 @@ import AIUsagesTrackersLib
 
 struct GeneralSettingsView: View {
     let preferences: any AppPreferences
+    let launchAtLoginService: any LaunchAtLoginManaging
+
+    @State private var launchAtLoginError: String?
 
     var body: some View {
         Form {
@@ -30,6 +33,27 @@ struct GeneralSettingsView: View {
                 } maximumValueLabel: {
                     Text("\(RefreshInterval.maximumSeconds / 60)m")
                         .font(.caption)
+                }
+            }
+
+            Section("Startup") {
+                Toggle("Launch at login", isOn: Binding(
+                    get: { preferences.launchAtLogin },
+                    set: { newValue in
+                        do {
+                            try launchAtLoginService.setEnabled(newValue)
+                            preferences.launchAtLogin = newValue
+                            launchAtLoginError = nil
+                        } catch {
+                            launchAtLoginError = error.localizedDescription
+                        }
+                    }
+                ))
+
+                if let launchAtLoginError {
+                    Text(launchAtLoginError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
                 }
             }
         }

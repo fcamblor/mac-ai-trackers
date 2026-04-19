@@ -44,6 +44,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         Loggers.setPreferences(Self.sharedPreferences)
 
+        // Reconcile launch-at-login preference with system state — the user may
+        // have disabled the entry in System Settings > Login Items directly.
+        let launchService = LaunchAtLoginService.shared
+        if Self.sharedPreferences.launchAtLogin != launchService.isEnabled {
+            Self.sharedPreferences.launchAtLogin = launchService.isEnabled
+        }
+
         let fileManager = UsagesFileManager.shared
         let refreshState = RefreshState()
         let poller = UsagePoller(
