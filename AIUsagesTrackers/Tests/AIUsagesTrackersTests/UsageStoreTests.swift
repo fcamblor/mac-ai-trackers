@@ -79,6 +79,43 @@ private func makeUsagesJSON(
     return try JSONSerialization.data(withJSONObject: root)
 }
 
+/// Creates a v2 JSON payload with optional outages for a vendor.
+private func makeV2UsagesJSON(
+    vendor: String = "claude",
+    account: String = "user@example.com",
+    isActive: Bool = true,
+    metrics: [[String: Any]] = [],
+    outages: [[String: Any]] = []
+) throws -> Data {
+    let accountEntry: [String: Any] = [
+        "account": account,
+        "isActive": isActive,
+        "metrics": metrics,
+    ]
+    var vendorSection: [String: Any] = ["accounts": [accountEntry]]
+    if !outages.isEmpty {
+        vendorSection["outages"] = outages
+    }
+    let root: [String: Any] = [
+        "schemaVersion": 2,
+        "vendors": [vendor: vendorSection],
+    ]
+    return try JSONSerialization.data(withJSONObject: root)
+}
+
+private func outageJSON(
+    id: String = "inc-1",
+    title: String = "API issues",
+    severity: String = "major",
+    affectedComponents: [String] = []
+) -> [String: Any] {
+    var json: [String: Any] = ["id": id, "title": title, "severity": severity]
+    if !affectedComponents.isEmpty {
+        json["affectedComponents"] = affectedComponents
+    }
+    return json
+}
+
 private func timeWindowMetric(
     name: String = "5h sessions (all models)",
     resetAt: String = "2026-04-17T15:00:00Z",
@@ -1025,6 +1062,112 @@ struct UsageStoreMenuBarTierTests {
         clock.date = ISO8601DateFormatter().date(from: "2026-04-17T14:00:00Z")!
         try await eventually(timeout: 3.0) { store.menuBarTier == .comfortable }
         #expect(store.menuBarTier == .comfortable)
+        store.stop()
+    }
+}
+
+// MARK: - outagesByVendor tests
+
+@Suite("UsageStore outagesByVendor")
+struct UsageStoreOutagesTests {
+
+    @MainActor
+    @Test("outagesByVendor is empty by default")
+    func defaultIsEmpty() {
+        let watcher = MockFileWatcher()
+        let store = UsageStore(fileWatcher: watcher)
+        #expect(store.outagesByVendor.isEmpty)
+    }
+
+    @MainActor
+    @Test("outagesByVendor populated from v2 file with outages")
+    func populatedFromV2WithOutages() async throws {
+        let watcher = MockFileWatcher()
+        let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
+        store.start()
+
+        let data = try makeV2UsagesJSON(outages: [
+            outageJSON(id: "inc-1", title: "Elevated error rate", severity: "major",
+                       affectedComponents: ["Claude API", "Console"]),
+        ])
+        watcher.send(data)
+        try await eventually { !store.outagesByVendor.isEmpty }
+
+        let claudeOutages = store.outagesByVendor[.claude]
+        #expect(claudeOutages?.count == 1)
+        #expect(claudeOutages?[0].title == "Elevated error rate")
+        #expect(claudeOutages?[0].severity == .major)
+        #expect(claudeOutages?[0].affectedComponents == ["Claude API", "Console"])
+        store.stop()
+    }
+
+    @MainActor
+    @Test("outagesByVendor empty when v2 file has no outages")
+    func emptyWhenNoOutages() async throws {
+        let watcher = MockFileWatcher()
+        let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
+        store.start()
+
+        let data = try makeV2UsagesJSON(outages: [])
+        watcher.send(data)
+        try await eventually { store.dataProcessedCount == 1 }
+
+        #expect(store.outagesByVendor.isEmpty)
+        store.stop()
+    }
+
+    @MainActor
+    @Test("outagesByVendor empty when legacy v1 shape is loaded")
+    func emptyFromLegacyShape() async throws {
+        let watcher = MockFileWatcher()
+        let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
+        store.start()
+
+        let data = try makeUsagesJSON(metrics: [timeWindowMetric()])
+        watcher.send(data)
+        try await eventually { store.dataProcessedCount == 1 }
+
+        #expect(store.outagesByVendor.isEmpty)
+        store.stop()
+    }
+
+    @MainActor
+    @Test("outagesByVendor cleared on decode error")
+    func clearedOnDecodeError() async throws {
+        let watcher = MockFileWatcher()
+        let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
+        store.start()
+
+        // First: valid data with outages
+        let data = try makeV2UsagesJSON(outages: [outageJSON()])
+        watcher.send(data)
+        try await eventually { !store.outagesByVendor.isEmpty }
+        #expect(store.outagesByVendor[.claude] != nil)
+
+        // Then: malformed data
+        watcher.send("bad".data(using: .utf8)!)
+        try await eventually { store.outagesByVendor.isEmpty }
+        #expect(store.outagesByVendor.isEmpty)
+        store.stop()
+    }
+
+    @MainActor
+    @Test("clearing outages resets outagesByVendor")
+    func clearingOutagesResetsMap() async throws {
+        let watcher = MockFileWatcher()
+        let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
+        store.start()
+
+        // Send data with outages
+        let withOutages = try makeV2UsagesJSON(outages: [outageJSON()])
+        watcher.send(withOutages)
+        try await eventually { !store.outagesByVendor.isEmpty }
+
+        // Send data without outages
+        let withoutOutages = try makeV2UsagesJSON(outages: [])
+        watcher.send(withoutOutages)
+        try await eventually { store.outagesByVendor.isEmpty }
+        #expect(store.outagesByVendor.isEmpty)
         store.stop()
     }
 }
