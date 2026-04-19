@@ -2,13 +2,36 @@ import Foundation
 
 public actor UsagePoller {
     public let connectors: [any UsageConnector]
-    public let interval: Duration
     public let fileManager: UsagesFileManager
     private let logger: FileLogger
     private let refreshState: RefreshState?
+    // Set once at init and never mutated; nonisolated to allow cross-actor reads
+    // without sending through actor isolation (the @MainActor conformance of
+    // AppPreferences makes it Sendable).
+    private nonisolated let preferences: (any AppPreferences)?
+    /// Fallback interval used when no preferences store is injected (e.g. tests).
+    private let fixedInterval: Duration?
 
     private var pollingTask: Task<Void, Never>?
 
+    /// Production initializer — reads refresh interval from preferences on each tick
+    /// so changes take effect without restarting the poller.
+    public init(
+        connectors: [any UsageConnector],
+        fileManager: UsagesFileManager = UsagesFileManager.shared,
+        logger: FileLogger = Loggers.app,
+        refreshState: RefreshState? = nil,
+        preferences: any AppPreferences
+    ) {
+        self.connectors = connectors
+        self.fileManager = fileManager
+        self.logger = logger
+        self.refreshState = refreshState
+        self.preferences = preferences
+        self.fixedInterval = nil
+    }
+
+    /// Test/legacy initializer — uses a fixed interval instead of preferences.
     public init(
         connectors: [any UsageConnector],
         interval: Duration = .seconds(180),
@@ -17,10 +40,20 @@ public actor UsagePoller {
         refreshState: RefreshState? = nil
     ) {
         self.connectors = connectors
-        self.interval = interval
         self.fileManager = fileManager
         self.logger = logger
         self.refreshState = refreshState
+        self.preferences = nil
+        self.fixedInterval = interval
+    }
+
+    /// Resolves the current polling interval — reads from preferences (main actor hop)
+    /// or falls back to the fixed interval.
+    private func currentInterval() async -> Duration {
+        if let preferences {
+            return await MainActor.run { preferences.refreshInterval.duration }
+        }
+        return fixedInterval ?? .seconds(180)
     }
 
     public func start() {
@@ -28,13 +61,12 @@ public actor UsagePoller {
             logger.log(.warning, "Poller already running")
             return
         }
-        logger.log(.info, "Starting poller with interval \(interval)")
         pollingTask = Task {
             while !Task.isCancelled {
                 await self.pollOnce()
-                // Sleep-based cadence: effective period = poll duration + interval.
-                // This is intentional — avoids overlapping polls at the cost of slight drift.
-                try? await Task.sleep(for: self.interval)
+                // Re-read interval each tick so settings changes take effect immediately.
+                let sleepDuration = await self.currentInterval()
+                try? await Task.sleep(for: sleepDuration)
                 guard !Task.isCancelled else { break }
             }
         }
@@ -50,7 +82,8 @@ public actor UsagePoller {
         logger.log(.debug, "Poll tick — fetching from \(connectors.count) connector(s)\(force ? " (forced)" : "")")
 
         let existingFile = await fileManager.read()
-        let intervalSeconds = Double(interval.components.seconds)
+        let currentInterval = await self.currentInterval()
+        let intervalSeconds = Double(currentInterval.components.seconds)
         var skippedCount = 0
         let log = self.logger
 

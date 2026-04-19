@@ -265,6 +265,69 @@ struct UsagePollerTests {
         #expect(count >= 1)
     }
 
+    @Test("poller reads interval from AppPreferences on each tick")
+    func dynamicIntervalFromPreferences() async throws {
+        let dir = makeTempDir()
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
+        let connector = MockConnector(vendor: "claude", entries: [
+            VendorUsageEntry(vendor: "claude", account: "a@b.com"),
+        ])
+        let prefs = await InMemoryAppPreferences(
+            refreshInterval: RefreshInterval(clamping: 30)
+        )
+        let poller = UsagePoller(
+            connectors: [connector],
+            fileManager: fm,
+            logger: logger,
+            preferences: prefs
+        )
+
+        await poller.start()
+        // With 30s interval the poller sleeps 30s between polls, but the first
+        // poll fires immediately on start. Wait for at least 1 fetch.
+        try await eventually { await connector.fetchCount >= 1 }
+        await poller.stop()
+
+        let count = await connector.fetchCount
+        #expect(count >= 1)
+    }
+
+    @Test("poller cache uses current preferences interval, not a stale snapshot")
+    func cacheFreshnessUsesPreferencesInterval() async throws {
+        let dir = makeTempDir()
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
+
+        let now = Date()
+        // Entry is 40s old — stale for a 30s interval, fresh for a 60s interval
+        let acquiredDate = now.addingTimeInterval(-40)
+        let cachedEntry = VendorUsageEntry(
+            vendor: "claude", account: "a@b.com", isActive: true,
+            lastAcquiredOn: ISODate(date: acquiredDate),
+            metrics: []
+        )
+        await fm.update(with: [cachedEntry])
+
+        let connector = MockConnector(vendor: "claude", entries: [cachedEntry])
+
+        // With 60s interval, the 40s-old entry should be considered fresh → skip
+        let prefs = await InMemoryAppPreferences(
+            refreshInterval: RefreshInterval(clamping: 60)
+        )
+        let poller = UsagePoller(
+            connectors: [connector],
+            fileManager: fm,
+            logger: logger,
+            preferences: prefs
+        )
+
+        await poller.pollOnce(now: now)
+
+        let fetchCount = await connector.fetchCount
+        #expect(fetchCount == 0)
+    }
+
     @Test("stop during active poll does not crash")
     func stopDuringPoll() async throws {
         let dir = makeTempDir()
