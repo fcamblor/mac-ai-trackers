@@ -7,6 +7,7 @@ struct UsageDetailsView: View {
     let store: UsageStore
     let refreshState: RefreshState
     let onRefresh: () async -> Void
+    let onOpenSettings: () -> Void
     let onQuit: () -> Void
 
 
@@ -69,6 +70,19 @@ struct UsageDetailsView: View {
                 .font(.system(size: 10))
                 .foregroundStyle(.tertiary)
             Spacer()
+
+            Button {
+                onOpenSettings()
+            } label: {
+                Image(systemName: "gearshape")
+                    .frame(width: 16, height: 16)
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .help("Settings")
+            .keyboardShortcut(",", modifiers: .command)
+            .focusable(false)
+
             Button {
                 guard !refreshing else { return }
                 Task { await onRefresh() }
