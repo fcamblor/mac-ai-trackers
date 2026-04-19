@@ -42,6 +42,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         pidGuard = guard_
 
+        Loggers.setPreferences(Self.sharedPreferences)
+
         let fileManager = UsagesFileManager.shared
         let refreshState = RefreshState()
         let poller = UsagePoller(
