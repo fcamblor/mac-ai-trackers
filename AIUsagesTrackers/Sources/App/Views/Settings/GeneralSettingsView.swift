@@ -21,7 +21,7 @@ struct GeneralSettingsView: View {
                 Slider(
                     value: Binding(
                         get: { Double(currentSeconds) },
-                        set: { preferences.refreshInterval = RefreshInterval(clamping: Int($0)) }
+                        set: { preferences.refreshInterval = RefreshInterval(clamping: Int($0.rounded())) }
                     ),
                     in: Double(RefreshInterval.minimumSeconds)...Double(RefreshInterval.maximumSeconds),
                     step: 30
