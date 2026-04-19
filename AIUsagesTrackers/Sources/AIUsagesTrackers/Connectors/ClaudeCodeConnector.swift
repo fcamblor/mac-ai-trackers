@@ -123,21 +123,27 @@ public actor ClaudeCodeConnector: UsageConnector {
 
         do {
             let usage = try parseAPIResponse(data)
-            logger.log(.info, "Fetched successfully: session=\(usage.sessionPercent)% weekly=\(usage.weeklyPercent)% sonnet=\(usage.sonnetWeekly.map { "\($0.percent)%" } ?? "nil") opus=\(usage.opusWeekly.map { "\($0.percent)%" } ?? "nil")")
-            var metrics: [UsageMetric] = [
-                .timeWindow(
+            logger.log(.info, "Fetched successfully: session=\(usage.sessionPercent.map { "\($0)%" } ?? "nil") weekly=\(usage.weeklyPercent.map { "\($0)%" } ?? "nil") sonnet=\(usage.sonnetWeekly.map { "\($0.percent)%" } ?? "nil") opus=\(usage.opusWeekly.map { "\($0.percent)%" } ?? "nil")")
+            // A window is emitted only when both utilization and resets_at are known.
+            // Missing/null reset dates indicate "no active window yet" (fresh account,
+            // between cycles) — skipped silently rather than surfaced as a parse error.
+            var metrics: [UsageMetric] = []
+            if let percent = usage.sessionPercent, let resetAt = usage.sessionResetAt {
+                metrics.append(.timeWindow(
                     name: "5h sessions (all models)",
-                    resetAt: usage.sessionResetAt,
+                    resetAt: resetAt,
                     windowDuration: Self.sessionWindowMinutes,
-                    usagePercent: UsagePercent(rawValue: usage.sessionPercent)
-                ),
-                .timeWindow(
+                    usagePercent: UsagePercent(rawValue: percent)
+                ))
+            }
+            if let percent = usage.weeklyPercent, let resetAt = usage.weeklyResetAt {
+                metrics.append(.timeWindow(
                     name: "Weekly (all models)",
-                    resetAt: usage.weeklyResetAt,
+                    resetAt: resetAt,
                     windowDuration: Self.weeklyWindowMinutes,
-                    usagePercent: UsagePercent(rawValue: usage.weeklyPercent)
-                ),
-            ]
+                    usagePercent: UsagePercent(rawValue: percent)
+                ))
+            }
             // Per-model weekly metrics are purely additive — absent keys are silently skipped
             let perModelDefs: [(metric: ModelWeeklyMetric?, name: String)] = [
                 (usage.sonnetWeekly, "Weekly Sonnet"),
@@ -278,11 +284,13 @@ public actor ClaudeCodeConnector: UsageConnector {
     }
 
     private struct ParsedUsage {
-        let sessionPercent: Int
-        let sessionResetAt: ISODate
-        let weeklyPercent: Int
-        let weeklyResetAt: ISODate
-        // Per-model weekly metrics — present only when the API includes them with valid resets_at
+        // Every window is optional: a freshly provisioned account (or an account
+        // between reset cycles) returns `utilization: 0, resets_at: null` and must
+        // not be treated as a parse failure.
+        let sessionPercent: Int?
+        let sessionResetAt: ISODate?
+        let weeklyPercent: Int?
+        let weeklyResetAt: ISODate?
         let sonnetWeekly: ModelWeeklyMetric?
         let opusWeekly: ModelWeeklyMetric?
     }
@@ -292,39 +300,42 @@ public actor ClaudeCodeConnector: UsageConnector {
         guard let json = jsonObject as? [String: Any] else {
             throw ConnectorError.unexpectedAPIFormat(receivedKeys: [])
         }
-        guard let fiveHour = json["five_hour"] as? [String: Any],
-              let sevenDay = json["seven_day"] as? [String: Any],
-              let sessionUtil = fiveHour["utilization"] as? Double,
-              let sessionReset = fiveHour["resets_at"] as? String,
-              let weeklyUtil = sevenDay["utilization"] as? Double,
-              let weeklyReset = sevenDay["resets_at"] as? String else {
-            let fiveHour = json["five_hour"] as? [String: Any]
-            let sevenDay = json["seven_day"] as? [String: Any]
-            logger.log(.warning, "Parse fields: five_hour=\(fiveHour != nil) sevenDay=\(sevenDay != nil) sessionUtil=\(fiveHour?["utilization"] != nil) sessionReset=\(fiveHour?["resets_at"] != nil) weeklyUtil=\(sevenDay?["utilization"] != nil) weeklyReset=\(sevenDay?["resets_at"] != nil)")
-            throw ConnectorError.unexpectedAPIFormat(receivedKeys: Array(json.keys))
-        }
+        // Unknown top-level keys are ignored by design — the API evolves with experimental
+        // fields (e.g. `omelette_promotional`, `iguana_necktie`) and we only consume the
+        // windows we know about. Only a truly malformed payload (no known window at all)
+        // escalates to an error.
+        let session = extractOptionalModelMetric(from: json, key: "five_hour")
+        let weekly = extractOptionalModelMetric(from: json, key: "seven_day")
         let sonnet = extractOptionalModelMetric(from: json, key: "seven_day_sonnet")
         let opus = extractOptionalModelMetric(from: json, key: "seven_day_opus")
 
+        let hasFiveHourBlock = json["five_hour"] is [String: Any]
+        let hasSevenDayBlock = json["seven_day"] is [String: Any]
+        if !hasFiveHourBlock, !hasSevenDayBlock {
+            logger.log(.warning, "No known usage window in payload — top-level keys: \(Array(json.keys))")
+            throw ConnectorError.unexpectedAPIFormat(receivedKeys: Array(json.keys))
+        }
+
         return ParsedUsage(
-            sessionPercent: Int(sessionUtil.rounded()),
-            sessionResetAt: normalizeISO8601(sessionReset),
-            weeklyPercent: Int(weeklyUtil.rounded()),
-            weeklyResetAt: normalizeISO8601(weeklyReset),
+            sessionPercent: session.map { Int($0.percent) },
+            sessionResetAt: session.map { normalizeISO8601($0.resetAt) },
+            weeklyPercent: weekly.map { Int($0.percent) },
+            weeklyResetAt: weekly.map { normalizeISO8601($0.resetAt) },
             sonnetWeekly: sonnet.map { ModelWeeklyMetric(percent: $0.percent, resetAt: normalizeISO8601($0.resetAt)) },
             opusWeekly: opus.map { ModelWeeklyMetric(percent: $0.percent, resetAt: normalizeISO8601($0.resetAt)) }
         )
     }
 
-    /// Per-model keys are optional in the API contract — a missing or malformed block
-    /// must be silently skipped, not propagate an error through the whole fetch.
+    /// Every usage window block is optional — a missing key, a null `resets_at`
+    /// (fresh account, between cycles) or an unexpected shape is silently skipped
+    /// instead of propagating an error through the whole fetch.
     private func extractOptionalModelMetric(from json: [String: Any], key: String) -> (percent: Int, resetAt: String)? {
         guard let block = json[key] as? [String: Any] else {
             return nil
         }
         guard let util = block["utilization"] as? Double,
               let resetAt = block["resets_at"] as? String else {
-            logger.log(.debug, "Per-model block '\(key)' present but extraction failed — unexpected format")
+            logger.log(.debug, "Block '\(key)' present but utilization/resets_at missing or null — skipped")
             return nil
         }
         return (percent: Int(util.rounded()), resetAt: resetAt)

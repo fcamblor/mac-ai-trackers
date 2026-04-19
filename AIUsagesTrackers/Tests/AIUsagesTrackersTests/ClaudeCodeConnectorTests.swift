@@ -212,6 +212,30 @@ struct ClaudeCodeConnectorFetchTests {
         #expect(entries[0].lastError?.type == "parse_error")
     }
 
+    @Test("five_hour with null resets_at is silently skipped — only weekly metric emitted")
+    func fiveHourNullResetsAtSkipped() async throws {
+        let dir = makeTempDir()
+        // Payload observed after a fresh account switch: no active 5h session yet,
+        // `five_hour.resets_at` is null. Must not escalate to parse_error.
+        mockHTTP200(json: """
+        {"five_hour":{"utilization":0,"resets_at":null},
+         "seven_day":{"utilization":38,"resets_at":"2026-04-23T19:00:00+00:00"},
+         "omelette_promotional":null,"iguana_necktie":null}
+        """)
+        let connector = makeConnector(dir: dir) { "fake-token" }
+        let entries = try await connector.fetchUsages()
+
+        #expect(entries.count == 1)
+        #expect(entries[0].lastError == nil)
+        #expect(entries[0].isActive == true)
+        #expect(entries[0].metrics.count == 1)
+        if case .timeWindow(_, _, _, let pct) = entries[0].metrics[0] {
+            #expect(pct.rawValue == 38)
+        } else {
+            Issue.record("Expected a single weekly timeWindow metric")
+        }
+    }
+
     @Test("resets_at with fractional seconds is normalized to whole-second ISO8601")
     func resetsAtFractionalSecondsNormalized() async throws {
         let dir = makeTempDir()
