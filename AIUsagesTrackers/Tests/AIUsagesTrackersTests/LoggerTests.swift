@@ -3,7 +3,7 @@ import Testing
 @testable import AIUsagesTrackersLib
 
 /// Thread-safe mutable LogLevel for testing dynamic level resolution.
-private final class MutableLogLevel: @unchecked Sendable { // lock-free: only test code, single writer
+private final class MutableLogLevel: @unchecked Sendable { // @unchecked Sendable justified: NSLock guards _value; only this test file mutates it
     private let lock = NSLock()
     private var _value: LogLevel
     init(_ value: LogLevel) { _value = value }

@@ -1,4 +1,6 @@
 import Foundation
+import Observation
+import os
 
 public enum LogPurgeError: Error {
     case readFailed(path: String, underlying: any Error)
@@ -38,29 +40,23 @@ public final class FileLogger: Sendable {
     private let maxBytes: UInt64 = 5 * 1024 * 1024
     private let queue = DispatchQueue(label: "FileLogger.serialQueue")
 
+    /// When true, log directory creation failed; entries are written to stderr as a fallback.
+    private let fallbackToStderr: Bool
+
     public init(filePath: String, minLevel: LogLevel = .info) {
         self.filePath = filePath
         self.minLevel = minLevel
         self.dynamicLevel = nil
-        let dir = (filePath as NSString).deletingLastPathComponent
-        do {
-            try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true, attributes: nil)
-        } catch {
-            fputs("FileLogger: cannot create log directory \(dir): \(error)\n", stderr)
-        }
+        self.fallbackToStderr = !Self.ensureDirectory(for: filePath)
     }
 
-    /// Creates a logger whose effective level is resolved dynamically per call.
+    /// Used for process-wide singleton loggers whose level must track live
+    /// preferences changes without reconstructing the logger.
     init(filePath: String, dynamicLevel: @escaping @Sendable () -> LogLevel) {
         self.filePath = filePath
         self.minLevel = .info
         self.dynamicLevel = dynamicLevel
-        let dir = (filePath as NSString).deletingLastPathComponent
-        do {
-            try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true, attributes: nil)
-        } catch {
-            fputs("FileLogger: cannot create log directory \(dir): \(error)\n", stderr)
-        }
+        self.fallbackToStderr = !Self.ensureDirectory(for: filePath)
     }
 
     public var effectiveMinLevel: LogLevel {
@@ -69,6 +65,11 @@ public final class FileLogger: Sendable {
 
     public func log(_ level: LogLevel, _ message: String) {
         guard level >= effectiveMinLevel else { return }
+        if fallbackToStderr {
+            let timestamp = ISO8601DateFormatter().string(from: Date())
+            fputs("[\(timestamp)] [\(level.label)] \(message)\n", stderr)
+            return
+        }
         append(level: level, message: message)
     }
 
@@ -103,6 +104,18 @@ public final class FileLogger: Sendable {
     }
 
     // MARK: - Private
+
+    /// Returns `true` if the parent directory exists or was created successfully.
+    private static func ensureDirectory(for filePath: String) -> Bool {
+        let dir = (filePath as NSString).deletingLastPathComponent
+        do {
+            try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true, attributes: nil)
+            return true
+        } catch {
+            fputs("FileLogger: cannot create log directory \(dir): \(error)\n", stderr)
+            return false
+        }
+    }
 
     private func purgeFile(atPath path: String, cutoff: Date) throws {
         guard FileManager.default.fileExists(atPath: path) else { return }
@@ -164,6 +177,7 @@ public final class FileLogger: Sendable {
         return formatter.date(from: stamp)
     }
 
+
     private func append(level: LogLevel, message: String) {
         queue.async { [self] in
             // Per-call allocation — ISO8601DateFormatter is not thread-safe;
@@ -212,27 +226,33 @@ public enum Loggers {
         return LogLevel.from(string: raw)
     }()
 
-    /// Preferences store injected by AppDelegate at launch.
-    /// The loggers read it lazily; if never set, they fall back to the env var or `.info`.
-    // nonisolated(unsafe) because loggers are process-wide singletons accessed from
-    // any thread; the reference is written exactly once at app launch before any log
-    // call, so the race window is empty in practice. // swiftlint:disable:next nonisolated_unsafe
-    nonisolated(unsafe) private static var _preferences: (any AppPreferences)?
+    /// Cached log level from preferences, protected by a lock so `resolveLevel()`
+    /// can read it from any thread without hopping to the main actor.
+    private static let _cachedLevel = OSAllocatedUnfairLock<LogLevel?>(initialState: nil)
 
-    /// Called once from AppDelegate to wire preferences into the logging subsystem.
+    /// Must be called exactly once before the first log call — seeds the cached
+    /// level and arms observation so preference changes propagate immediately.
     @MainActor
     public static func setPreferences(_ prefs: any AppPreferences) {
-        _preferences = prefs
+        observeAndCacheLevel(from: prefs)
+    }
+
+    @MainActor
+    private static func observeAndCacheLevel(from prefs: any AppPreferences) {
+        withObservationTracking {
+            let level = prefs.logLevel
+            _cachedLevel.withLock { $0 = level }
+        } onChange: {
+            Task { @MainActor in
+                observeAndCacheLevel(from: prefs)
+            }
+        }
     }
 
     /// Resolution: env var (immutable, developer override) → preferences → .info default.
     private static func resolveLevel() -> LogLevel {
         if let envLevel { return envLevel }
-        // _preferences is @MainActor-isolated but we read it from the logger's serial
-        // queue. The one-time write happens before any log call, so this is safe.
-        if let prefs = _preferences {
-            return DispatchQueue.main.sync { prefs.logLevel }
-        }
+        if let cached = _cachedLevel.withLock({ $0 }) { return cached }
         return .info
     }
 
