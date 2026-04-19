@@ -165,3 +165,70 @@ public struct DurationMinutes: RawRepresentable, Codable, Equatable, Comparable,
 extension DurationMinutes: ExpressibleByIntegerLiteral {
     public init(integerLiteral value: Int) { rawValue = value }
 }
+
+// MARK: - RefreshInterval
+
+/// A polling interval in seconds, clamped to [30, 1800].
+/// Value object ensuring the app never polls faster than every 30s or slower than every 30min.
+public struct RefreshInterval: Codable, Equatable, Hashable, Sendable, Comparable {
+    public let seconds: Int
+
+    public static let minimumSeconds = 30
+    public static let maximumSeconds = 1800
+    public static let defaultSeconds = 180
+
+    public static let `default` = RefreshInterval(clamping: defaultSeconds)
+    public static let minimum = RefreshInterval(clamping: minimumSeconds)
+    public static let maximum = RefreshInterval(clamping: maximumSeconds)
+
+    public enum ValidationError: Error, Equatable {
+        case belowMinimum(requested: Int, minimum: Int)
+        case aboveMaximum(requested: Int, maximum: Int)
+    }
+
+    /// Validated initializer — returns `.failure` if the value is out of range.
+    public static func validated(_ seconds: Int) -> Result<RefreshInterval, ValidationError> {
+        if seconds < minimumSeconds {
+            return .failure(.belowMinimum(requested: seconds, minimum: minimumSeconds))
+        }
+        if seconds > maximumSeconds {
+            return .failure(.aboveMaximum(requested: seconds, maximum: maximumSeconds))
+        }
+        return .success(RefreshInterval(unchecked: seconds))
+    }
+
+    /// Clamping initializer — silently clamps out-of-range values.
+    public init(clamping seconds: Int) {
+        self.seconds = min(max(seconds, Self.minimumSeconds), Self.maximumSeconds)
+    }
+
+    private init(unchecked seconds: Int) {
+        self.seconds = seconds
+    }
+
+    public var duration: Duration {
+        .seconds(seconds)
+    }
+
+    public static func < (lhs: RefreshInterval, rhs: RefreshInterval) -> Bool {
+        lhs.seconds < rhs.seconds
+    }
+
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(Int.self)
+        self.init(clamping: raw)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(seconds)
+    }
+}
+
+extension RefreshInterval: ExpressibleByIntegerLiteral {
+    public init(integerLiteral value: Int) { self.init(clamping: value) }
+}
+
+extension RefreshInterval: CustomStringConvertible {
+    public var description: String { "\(seconds)s" }
+}
