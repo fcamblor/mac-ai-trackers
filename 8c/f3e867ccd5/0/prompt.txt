@@ -1,0 +1,7 @@
+j'ai eu une erreur lors du switch du compte fcamblor@gmail.com => frederic.camblor@4sh.fr :
+[2026-04-19T12:45:28Z] [WARN] Parse fields: five_hour=true sevenDay=true sessionUtil=true sessionReset=true weeklyUtil=true weeklyReset=true
+[2026-04-19T12:45:28Z] [ERROR] Response parse failed: API response does not match expected format — top-level keys: ["omelette_promotional", "iguana_necktie", "five_hour", "seven_day_opus", "seven_day_omelette", "seven_day_cowork", "seven_day", "seven_day_sonnet", "seven_day_oauth_apps", "extra_usage"]
+[2026-04-19T12:45:28Z] [WARN] Failed payload dump: {"extra_usage":{"currency":null,"is_enabled":false,"monthly_limit":null,"used_credits":null,"utilization":null},"five_hour":{"resets_at":null,"utilization":0},"iguana_necktie":null,"omelette_promotional":null,"seven_day":{"resets_at":"2026-04-23T19:00:00.893098+00:00","utilization":38},"seven_day_cowork":null,"seven_day_oauth_apps":null,"seven_day_omelette":{"resets_at":null,"utilization":0},"seven_day_opus":null,"seven_day_sonnet":{"resets_at":"2026-04-23T19:00:00.893110+00:00","utilization":24}}
+
+
+Il ne faut pas être "strict" sur la deserialization des json (les propriétés non mappées devraient pas engendrer une erreur ... juste un warning)
