@@ -1,0 +1,407 @@
+# implement-roadmap-feature — Review aggregation & application
+
+## Review sources
+- Code quality: Now let me read the relevant Swift guideline docs as required by CLAUDE.md.```
+# Review — Code quality
+
+1. [LogCleaner.swift:41] Purge-failure error is logged to `fileLogger` — the very logger whose purge just failed. If `fileLogger` is the claude logger and not the app logger, the operational error is buried in the wrong file. Use `self.logger` (the app logger) instead: `self.logger.log(.error, "Log purge failed for \(fileLogger.filePath): \(error)")`.
+
+2. [Logger.swift:97] `ISO8601DateFormatter()` is instantiated inside `purgeFile`, which is called twice per `purgeEntries` (main + backup). The plan specified "Reuse a single ISO8601DateFormatter instance within one purge call." Create the formatter once in `purgeEntries` and pass it as a parameter to `purgeFile`.
+
+3. [LogCleanerTests.swift:82,102,108,113,119] Multiple `Task.sleep(for: .milliseconds(…))` literals in tests — exactly the pattern W3 forbids. The plan called for `eventually()`-style polling. These are inherently flaky: a slow CI machine can cause false failures (too many ticks) or missed assertions (too few). Replace with a deterministic approach: use an injectable `sleep` that signals a continuation, or a counter-based barrier.
+```
+- Error handling: # Review — Error handling
+
+1. **Logger.swift:123** — `result.data(using: .utf8)!` force-unwraps. Although the input was originally read as UTF-8, this is a crash site if `kept.joined(separator:)` ever produces a string that `data(using:)` returns `nil` for (e.g. invalid scalar reassembly from mixed-encoding files on disk). Guard-unwrap and throw `LogPurgeError.writeFailed` instead:
+   ```swift
+   guard let data = result.data(using: .utf8) else {
+       throw LogPurgeError.writeFailed(path: path, underlying: /* encoding error */)
+   }
+   try data.write(to: url, options: .atomic)
+   ```
+
+2. **LogCleaner.swift:42** — A purge failure is logged *to the same FileLogger whose purge just failed*. If the underlying file is unreadable/corrupted, the `log(.error, ...)` write may also fail silently (swallowed inside `queue.async`). Consider logging to the dedicated `self.logger` (the app logger) instead of `fileLogger`:
+   ```swift
+   self.logger.log(.error, "Log purge failed for \(fileLogger.filePath): \(error)")
+   ```
+   Wait — this is inside a `DispatchQueue.global` closure where `self` isn't directly accessible (actor isolation). You'd need to capture `logger` in the closure scope alongside `fileLogger`.
+
+3. **LoggerTests.swift:205** — `try? logger.purgeEntries(olderThan: cutoff)` silently swallows errors in the concurrent-purge test. This is the `try?`-on-fallible-operation pattern the project guidelines flag. Even in a test, the intent is to verify no corruption — a thrown error is useful signal. Use `do/catch` and at minimum `Issue.record` the error, or let it propagate if the test should fail on purge error.
+
+4. **LogCleaner.swift:60** — `catch { break }` silently exits the scheduling loop on *any* sleep error, not just cancellation. If a custom `sleepFn` injected in production throws a non-cancellation error, the cleaner permanently stops with no log. Add an `if !(error is CancellationError)` branch that logs before breaking:
+   ```swift
+   } catch is CancellationError {
+       break
+   } catch {
+       logger.log(.error, "LogCleaner sleep interrupted: \(error)")
+       break
+   }
+   ```
+
+5. **LogCleaner.swift:69-71** — `stop()` cancels the task but doesn't `await` its completion. A `cleanOnce()` that is mid-purge when `stop()` is called will keep running. If the app terminates immediately after `quit()`, the atomic write may be interrupted. Consider making `stop()` async and awaiting the task's value before nilling it:
+   ```swift
+   public func stop() async {
+       task?.cancel()
+       await task?.value
+       task = nil
+   }
+   ```
+   This is already partially mitigated by atomic writes, but the window exists.
+
+6. **Logger.swift:87** — `fileExists` + read is a TOCTOU race: the file can vanish between the guard and `String(contentsOfFile:)`. The subsequent `do/catch` wrapping the read *does* catch this, so it's not a bug — but the guard is misleading because it suggests a missing file is a no-op, when a concurrent deletion after the guard would throw `.readFailed`. Minor, but removing the guard and handling `NSFileReadNoSuchFileError` in the catch would be more honest.
+- Test coverage: # Review — Test coverage
+
+1. **LogCleanerTests.swift:82,102,108,113,119** — `Task.sleep(for: .milliseconds(...))` literals violate SwiftLint W3. The plan itself calls for `eventually()`-style polling. These timing-based sleeps make the idempotence and stop/restart tests flaky on slow CI. Replace with an injectable, controllable sleep or a poll helper.
+
+2. **LogCleanerTests.swift** — Missing: **one logger's purge failure does not prevent cleanup of subsequent loggers**. `cleanOnce()` catches per-logger errors and continues (Logger.swift:40-42), but no test verifies this. Inject a logger whose file has been made unreadable (e.g., `chmod 000`), followed by a healthy logger, and assert the healthy one is still purged.
+
+3. **LoggerTests.swift** — Missing: **`LogPurgeError.readFailed` error path**. `purgeFile` throws `.readFailed` when `String(contentsOfFile:)` fails (Logger.swift:94). No test triggers this (e.g., file with no read permission). SWIFT-TESTABILITY requires testing error paths for I/O.
+
+4. **LoggerTests.swift** — Missing: **`LogPurgeError.writeFailed` error path**. The atomic write at Logger.swift:123 can throw `.writeFailed`, but no test covers this (e.g., writing to a read-only directory).
+
+5. **LoggerTests.swift / LogCleanerTests.swift** — Missing: **exact boundary `date == cutoff`**. The code keeps lines where `date >= cutoff` (Logger.swift:104). `clockInjection` tests near the boundary but not the exact edge. Add a line timestamped exactly at `cutoff` and assert it is kept.
+
+6. **LogCleanerTests.swift** — Missing: **`stop()` idempotence** (calling `stop()` twice without an intervening `start()`). The plan's acceptance criteria list start/stop idempotence; start-idempotence is tested, but double-stop is not.
+
+7. **LogCleanerTests.swift:86** — The idempotence assertion `count < 20` is a timing heuristic. On a slow machine this could be fewer ticks, and on a fast one it could be more. A deterministic approach: use a controllable sleep (continuation-based) that counts invocations without relying on wall-clock timing.
+
+8. **LoggerTests.swift:205** — `try? logger.purgeEntries(...)` inside the concurrent test silently swallows errors. If purge throws during the race, the test still passes. Use `do { try ... } catch { Issue.record(...) }` to surface failures.
+
+9. **LoggerTests.swift** — Missing: **file consisting only of continuation lines** (no leading timestamp on any line). Current tests always have at least one timestamped line. The initial `keepingContinuation = true` (Logger.swift:100) means orphan continuation lines at the top of the file are kept — this behavior should have an explicit test.
+
+10. **Logger.swift:123** — `result.data(using: .utf8)!` is a force-unwrap in production code. Provably safe (input was read as UTF-8 and only split/rejoined), but per SWIFT-TESTABILITY the assumption should be documented with a `// known-safe` comment, and a test should confirm round-trip integrity on non-ASCII content (e.g., emoji in log messages).
+
+**Summary**: Good breadth on the happy paths (all-old, all-recent, mixed, empty, missing, continuation, backup, concurrency, clock injection, idempotent start, stop+restart). Main gaps are **error-path coverage** (read/write failures, partial-failure across loggers), **boundary precision** (exact cutoff), and **test determinism** (wall-clock sleeps instead of controllable fakes, violating W3).
+- Comment quality: # Review — Comment quality
+
+**`LogCleaner.swift:34-36`** — Keep, but trim the `WHY:` prefix. The project rule is "comment WHY, not WHAT", not a literal `WHY:` label. The prefix is noise; the reason is already clear:
+```swift
+// purgeEntries uses queue.sync internally — hop to a background
+// queue so we never block the cooperative thread pool
+```
+
+**`Logger.swift:92`** (production) — Keep. The comment explains why reading a ~5 MB file into memory is intentional, not obvious from the code alone. Correct and non-redundant.
+
+**`Logger.swift:111`** (production) — Remove. `// Continuation / malformed line — follows fate of preceding timestamped line` repeats exactly what the doc-comment on `purgeEntries` (lines 62–67) already says. The inline comment adds nothing the variable name `keepingContinuation` doesn't already convey.
+
+**`LogCleanerTests.swift:5`** — Rewrite. `// Guarded by NSLock — all access goes through lock/unlock // justification: test-only counter` is a W4-style justification for `@unchecked Sendable`, but it's awkwardly crammed onto one line and mixes two ideas. Split and clarify:
+```swift
+// @unchecked Sendable: all mutations go through NSLock; test-only,
+// never escapes the test suite
+```
+
+**`LogCleanerTests.swift:80`** — Remove. `// second call — should be no-op` is pure WHAT. The test name `startIdempotent` and the call site context already say this.
+
+**`LogCleanerTests.swift:85`** — Rewrite. `// If two tasks were spawned, count would roughly double.` explains the *mechanism* of the assertion, which is WHY-adjacent but vague ("roughly"). Sharpen or drop:
+```swift
+// Upper bound: one tick per 10 ms over 100 ms = ~10; double if two tasks ran
+```
+
+**`LogCleanerTests.swift:117`** — Remove. `// Restart should work` is a WHAT comment with zero information the test name `stopThenRestart` doesn't already carry.
+
+**`LoggerTests.swift:149`** — Keep. `// Don't create the file — purge should be a no-op` documents a deliberate test setup choice that isn't otherwise obvious (you'd expect a logger to have a file).
+
+**`LoggerTests.swift:196`** — Rewrite. `// Seed the file with a recent line so purge has something to examine` is mostly WHAT. Rephrase to WHY:
+```swift
+// Seed a recent line so the purge scan doesn't short-circuit on an empty file
+```
+
+**Summary of actions:**
+
+| Location | Action |
+|---|---|
+| `LogCleaner.swift:35` | Rewrite — drop `WHY:` prefix, keep the reason |
+| `Logger.swift:111` | Remove — duplicates doc-comment and variable name |
+| `LogCleanerTests.swift:5` | Rewrite — split the two concerns, fix awkward formatting |
+| `LogCleanerTests.swift:80` | Remove — pure WHAT, covered by test name |
+| `LogCleanerTests.swift:85` | Rewrite — add a concrete bound to justify the threshold |
+| `LogCleanerTests.swift:117` | Remove — pure WHAT, covered by test name |
+| `LoggerTests.swift:196` | Rewrite — flip from setup description to motivation |
+- Doc impact: # Review — Doc impact
+
+`docs/ARCHITECTURE.md` was already updated in this branch — the Logging section now covers the 7-day retention purge, the daily schedule, and the atomic-rewrite crash safety guarantee. That is the only doc that needed touching.
+
+No other gaps found:
+
+- **DEVELOPMENT.md** — covers build/run/test commands and the log-level env var; retention is an architectural concern, not a workflow step. No update needed.
+- **CHANGELOG** — does not exist in the repo; nothing to update.
+- **README** — does not exist in the tracked files.
+- **roadmap/** — exempt per instructions (close-feature phase handles status updates).
+
+**Last user message**:
+
+---
+
+## Non-negotiable principle — commit discipline
+
+You commit BEFORE presenting the result.
+
+**LANGUAGE — absolute rule: commit messages entirely in English.**
+
+**FIXUP — absolute rule:** each recommendation application
+produces `--fixup` commits attached to the source commit, NOT
+independent `review(axis):` commits.
+```bash
+git log --oneline origin/main..HEAD -- <files>
+SOURCE_HASH=<hash of the source commit>
+git add <files>
+git commit --fixup=$SOURCE_HASH
+```
+If a block touches multiple source commits, one fixup per source.
+History must be squashable with `git rebase --autosquash`.
+
+## Tooling
+
+Prefer **Serena** if available.
+
+---
+
+## First iteration ( empty)
+
+1. Consolidate the 5 reviews into a single numbered action plan
+   (deduplicate across axes, priority CRITICAL > HIGH > MED > LOW).
+   Format:
+   ```
+   N. [priority] [axis] [file:line] <recommendation>
+   ```
+2. Present it. Ask: `all` / `none` / `1,3,5` / free text.
+3. Do **NOT** emit the signal.
+
+## Subsequent iterations
+
+### "none" / "skip" / "ship it" / "finaliser"
+→ Emit: <promise>REVIEWS_DONE</promise>
+
+### Selection (`all`, `1,3,5`, etc.)
+1. Apply each recommendation. Be surgical.
+2. Commit per logical block WITH `--fixup`.
+3. Run the shared gate:
+   ```bash
+   bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
+   ```
+   If failure, fix BEFORE presenting. Do NOT present "apply done"
+   until the gate is green.
+4. Report: applied / remaining / diff stat.
+5. Ask: "apply more / re-run reviews / ship it ?" — do NOT
+   emit the signal.
+
+### "re-run reviews"
+The re-run runs **on the current state** (fixups included).
+
+Launch **5 Tasks in parallel** in ONE SINGLE message (tool `Agent`
+with `subagent_type: general-purpose`), each prompt starting with
+`git diff origin/main...HEAD` then applying the corresponding
+axis (see phase 4). Strict response format
+`[file:line] recommendation`.
+
+Re-aggregate, re-prioritize, present, ask
+"apply more / re-run / ship it ?" again. Do NOT emit the signal.
+
+### CRITICAL — signal discipline
+Emit `<promise>REVIEWS_DONE</promise>` **only** on an explicit
+closure signal.
+
+---
+
+# implement-roadmap-feature — Review aggregation & application
+
+## Review sources
+- Code quality: Now let me read the relevant Swift guideline docs as required by CLAUDE.md.```
+# Review — Code quality
+
+1. [LogCleaner.swift:41] Purge-failure error is logged to `fileLogger` — the very logger whose purge just failed. If `fileLogger` is the claude logger and not the app logger, the operational error is buried in the wrong file. Use `self.logger` (the app logger) instead: `self.logger.log(.error, "Log purge failed for \(fileLogger.filePath): \(error)")`.
+
+2. [Logger.swift:97] `ISO8601DateFormatter()` is instantiated inside `purgeFile`, which is called twice per `purgeEntries` (main + backup). The plan specified "Reuse a single ISO8601DateFormatter instance within one purge call." Create the formatter once in `purgeEntries` and pass it as a parameter to `purgeFile`.
+
+3. [LogCleanerTests.swift:82,102,108,113,119] Multiple `Task.sleep(for: .milliseconds(…))` literals in tests — exactly the pattern W3 forbids. The plan called for `eventually()`-style polling. These are inherently flaky: a slow CI machine can cause false failures (too many ticks) or missed assertions (too few). Replace with a deterministic approach: use an injectable `sleep` that signals a continuation, or a counter-based barrier.
+```
+- Error handling: # Review — Error handling
+
+1. **Logger.swift:123** — `result.data(using: .utf8)!` force-unwraps. Although the input was originally read as UTF-8, this is a crash site if `kept.joined(separator:)` ever produces a string that `data(using:)` returns `nil` for (e.g. invalid scalar reassembly from mixed-encoding files on disk). Guard-unwrap and throw `LogPurgeError.writeFailed` instead:
+   ```swift
+   guard let data = result.data(using: .utf8) else {
+       throw LogPurgeError.writeFailed(path: path, underlying: /* encoding error */)
+   }
+   try data.write(to: url, options: .atomic)
+   ```
+
+2. **LogCleaner.swift:42** — A purge failure is logged *to the same FileLogger whose purge just failed*. If the underlying file is unreadable/corrupted, the `log(.error, ...)` write may also fail silently (swallowed inside `queue.async`). Consider logging to the dedicated `self.logger` (the app logger) instead of `fileLogger`:
+   ```swift
+   self.logger.log(.error, "Log purge failed for \(fileLogger.filePath): \(error)")
+   ```
+   Wait — this is inside a `DispatchQueue.global` closure where `self` isn't directly accessible (actor isolation). You'd need to capture `logger` in the closure scope alongside `fileLogger`.
+
+3. **LoggerTests.swift:205** — `try? logger.purgeEntries(olderThan: cutoff)` silently swallows errors in the concurrent-purge test. This is the `try?`-on-fallible-operation pattern the project guidelines flag. Even in a test, the intent is to verify no corruption — a thrown error is useful signal. Use `do/catch` and at minimum `Issue.record` the error, or let it propagate if the test should fail on purge error.
+
+4. **LogCleaner.swift:60** — `catch { break }` silently exits the scheduling loop on *any* sleep error, not just cancellation. If a custom `sleepFn` injected in production throws a non-cancellation error, the cleaner permanently stops with no log. Add an `if !(error is CancellationError)` branch that logs before breaking:
+   ```swift
+   } catch is CancellationError {
+       break
+   } catch {
+       logger.log(.error, "LogCleaner sleep interrupted: \(error)")
+       break
+   }
+   ```
+
+5. **LogCleaner.swift:69-71** — `stop()` cancels the task but doesn't `await` its completion. A `cleanOnce()` that is mid-purge when `stop()` is called will keep running. If the app terminates immediately after `quit()`, the atomic write may be interrupted. Consider making `stop()` async and awaiting the task's value before nilling it:
+   ```swift
+   public func stop() async {
+       task?.cancel()
+       await task?.value
+       task = nil
+   }
+   ```
+   This is already partially mitigated by atomic writes, but the window exists.
+
+6. **Logger.swift:87** — `fileExists` + read is a TOCTOU race: the file can vanish between the guard and `String(contentsOfFile:)`. The subsequent `do/catch` wrapping the read *does* catch this, so it's not a bug — but the guard is misleading because it suggests a missing file is a no-op, when a concurrent deletion after the guard would throw `.readFailed`. Minor, but removing the guard and handling `NSFileReadNoSuchFileError` in the catch would be more honest.
+- Test coverage: # Review — Test coverage
+
+1. **LogCleanerTests.swift:82,102,108,113,119** — `Task.sleep(for: .milliseconds(...))` literals violate SwiftLint W3. The plan itself calls for `eventually()`-style polling. These timing-based sleeps make the idempotence and stop/restart tests flaky on slow CI. Replace with an injectable, controllable sleep or a poll helper.
+
+2. **LogCleanerTests.swift** — Missing: **one logger's purge failure does not prevent cleanup of subsequent loggers**. `cleanOnce()` catches per-logger errors and continues (Logger.swift:40-42), but no test verifies this. Inject a logger whose file has been made unreadable (e.g., `chmod 000`), followed by a healthy logger, and assert the healthy one is still purged.
+
+3. **LoggerTests.swift** — Missing: **`LogPurgeError.readFailed` error path**. `purgeFile` throws `.readFailed` when `String(contentsOfFile:)` fails (Logger.swift:94). No test triggers this (e.g., file with no read permission). SWIFT-TESTABILITY requires testing error paths for I/O.
+
+4. **LoggerTests.swift** — Missing: **`LogPurgeError.writeFailed` error path**. The atomic write at Logger.swift:123 can throw `.writeFailed`, but no test covers this (e.g., writing to a read-only directory).
+
+5. **LoggerTests.swift / LogCleanerTests.swift** — Missing: **exact boundary `date == cutoff`**. The code keeps lines where `date >= cutoff` (Logger.swift:104). `clockInjection` tests near the boundary but not the exact edge. Add a line timestamped exactly at `cutoff` and assert it is kept.
+
+6. **LogCleanerTests.swift** — Missing: **`stop()` idempotence** (calling `stop()` twice without an intervening `start()`). The plan's acceptance criteria list start/stop idempotence; start-idempotence is tested, but double-stop is not.
+
+7. **LogCleanerTests.swift:86** — The idempotence assertion `count < 20` is a timing heuristic. On a slow machine this could be fewer ticks, and on a fast one it could be more. A deterministic approach: use a controllable sleep (continuation-based) that counts invocations without relying on wall-clock timing.
+
+8. **LoggerTests.swift:205** — `try? logger.purgeEntries(...)` inside the concurrent test silently swallows errors. If purge throws during the race, the test still passes. Use `do { try ... } catch { Issue.record(...) }` to surface failures.
+
+9. **LoggerTests.swift** — Missing: **file consisting only of continuation lines** (no leading timestamp on any line). Current tests always have at least one timestamped line. The initial `keepingContinuation = true` (Logger.swift:100) means orphan continuation lines at the top of the file are kept — this behavior should have an explicit test.
+
+10. **Logger.swift:123** — `result.data(using: .utf8)!` is a force-unwrap in production code. Provably safe (input was read as UTF-8 and only split/rejoined), but per SWIFT-TESTABILITY the assumption should be documented with a `// known-safe` comment, and a test should confirm round-trip integrity on non-ASCII content (e.g., emoji in log messages).
+
+**Summary**: Good breadth on the happy paths (all-old, all-recent, mixed, empty, missing, continuation, backup, concurrency, clock injection, idempotent start, stop+restart). Main gaps are **error-path coverage** (read/write failures, partial-failure across loggers), **boundary precision** (exact cutoff), and **test determinism** (wall-clock sleeps instead of controllable fakes, violating W3).
+- Comment quality: # Review — Comment quality
+
+**`LogCleaner.swift:34-36`** — Keep, but trim the `WHY:` prefix. The project rule is "comment WHY, not WHAT", not a literal `WHY:` label. The prefix is noise; the reason is already clear:
+```swift
+// purgeEntries uses queue.sync internally — hop to a background
+// queue so we never block the cooperative thread pool
+```
+
+**`Logger.swift:92`** (production) — Keep. The comment explains why reading a ~5 MB file into memory is intentional, not obvious from the code alone. Correct and non-redundant.
+
+**`Logger.swift:111`** (production) — Remove. `// Continuation / malformed line — follows fate of preceding timestamped line` repeats exactly what the doc-comment on `purgeEntries` (lines 62–67) already says. The inline comment adds nothing the variable name `keepingContinuation` doesn't already convey.
+
+**`LogCleanerTests.swift:5`** — Rewrite. `// Guarded by NSLock — all access goes through lock/unlock // justification: test-only counter` is a W4-style justification for `@unchecked Sendable`, but it's awkwardly crammed onto one line and mixes two ideas. Split and clarify:
+```swift
+// @unchecked Sendable: all mutations go through NSLock; test-only,
+// never escapes the test suite
+```
+
+**`LogCleanerTests.swift:80`** — Remove. `// second call — should be no-op` is pure WHAT. The test name `startIdempotent` and the call site context already say this.
+
+**`LogCleanerTests.swift:85`** — Rewrite. `// If two tasks were spawned, count would roughly double.` explains the *mechanism* of the assertion, which is WHY-adjacent but vague ("roughly"). Sharpen or drop:
+```swift
+// Upper bound: one tick per 10 ms over 100 ms = ~10; double if two tasks ran
+```
+
+**`LogCleanerTests.swift:117`** — Remove. `// Restart should work` is a WHAT comment with zero information the test name `stopThenRestart` doesn't already carry.
+
+**`LoggerTests.swift:149`** — Keep. `// Don't create the file — purge should be a no-op` documents a deliberate test setup choice that isn't otherwise obvious (you'd expect a logger to have a file).
+
+**`LoggerTests.swift:196`** — Rewrite. `// Seed the file with a recent line so purge has something to examine` is mostly WHAT. Rephrase to WHY:
+```swift
+// Seed a recent line so the purge scan doesn't short-circuit on an empty file
+```
+
+**Summary of actions:**
+
+| Location | Action |
+|---|---|
+| `LogCleaner.swift:35` | Rewrite — drop `WHY:` prefix, keep the reason |
+| `Logger.swift:111` | Remove — duplicates doc-comment and variable name |
+| `LogCleanerTests.swift:5` | Rewrite — split the two concerns, fix awkward formatting |
+| `LogCleanerTests.swift:80` | Remove — pure WHAT, covered by test name |
+| `LogCleanerTests.swift:85` | Rewrite — add a concrete bound to justify the threshold |
+| `LogCleanerTests.swift:117` | Remove — pure WHAT, covered by test name |
+| `LoggerTests.swift:196` | Rewrite — flip from setup description to motivation |
+- Doc impact: # Review — Doc impact
+
+`docs/ARCHITECTURE.md` was already updated in this branch — the Logging section now covers the 7-day retention purge, the daily schedule, and the atomic-rewrite crash safety guarantee. That is the only doc that needed touching.
+
+No other gaps found:
+
+- **DEVELOPMENT.md** — covers build/run/test commands and the log-level env var; retention is an architectural concern, not a workflow step. No update needed.
+- **CHANGELOG** — does not exist in the repo; nothing to update.
+- **README** — does not exist in the tracked files.
+- **roadmap/** — exempt per instructions (close-feature phase handles status updates).
+
+**Last user message**: 1,2,3,4,5,6,7,8
+
+---
+
+## Non-negotiable principle — commit discipline
+
+You commit BEFORE presenting the result.
+
+**LANGUAGE — absolute rule: commit messages entirely in English.**
+
+**FIXUP — absolute rule:** each recommendation application
+produces `--fixup` commits attached to the source commit, NOT
+independent `review(axis):` commits.
+```bash
+git log --oneline origin/main..HEAD -- <files>
+SOURCE_HASH=<hash of the source commit>
+git add <files>
+git commit --fixup=$SOURCE_HASH
+```
+If a block touches multiple source commits, one fixup per source.
+History must be squashable with `git rebase --autosquash`.
+
+## Tooling
+
+Prefer **Serena** if available.
+
+---
+
+## First iteration (1,2,3,4,5,6,7,8 empty)
+
+1. Consolidate the 5 reviews into a single numbered action plan
+   (deduplicate across axes, priority CRITICAL > HIGH > MED > LOW).
+   Format:
+   ```
+   N. [priority] [axis] [file:line] <recommendation>
+   ```
+2. Present it. Ask: `all` / `none` / `1,3,5` / free text.
+3. Do **NOT** emit the signal.
+
+## Subsequent iterations
+
+### "none" / "skip" / "ship it" / "finaliser"
+→ Emit: <promise>REVIEWS_DONE</promise>
+
+### Selection (`all`, `1,3,5`, etc.)
+1. Apply each recommendation. Be surgical.
+2. Commit per logical block WITH `--fixup`.
+3. Run the shared gate:
+   ```bash
+   bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
+   ```
+   If failure, fix BEFORE presenting. Do NOT present "apply done"
+   until the gate is green.
+4. Report: applied / remaining / diff stat.
+5. Ask: "apply more / re-run reviews / ship it ?" — do NOT
+   emit the signal.
+
+### "re-run reviews"
+The re-run runs **on the current state** (fixups included).
+
+Launch **5 Tasks in parallel** in ONE SINGLE message (tool `Agent`
+with `subagent_type: general-purpose`), each prompt starting with
+`git diff origin/main...HEAD` then applying the corresponding
+axis (see phase 4). Strict response format
+`[file:line] recommendation`.
+
+Re-aggregate, re-prioritize, present, ask
+"apply more / re-run / ship it ?" again. Do NOT emit the signal.
+
+### CRITICAL — signal discipline
+Emit `<promise>REVIEWS_DONE</promise>` **only** on an explicit
+closure signal.
