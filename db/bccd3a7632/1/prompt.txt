@@ -1,0 +1,27 @@
+<task-notification>
+<task-id>bo3dyxuy4</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/7129975a-76ac-4960-a0b8-0d0c1dd10f2c/tasks/bo3dyxuy4.output</output-file>
+<status>completed</status>
+<summary>Background command "Approuver critical+high log-cleanup" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>behvc5lxq</task-id>
+<tool-use-id>toolu_01Ur2GJG2mxoYneY45yAt74q</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/7129975a-76ac-4960-a0b8-0d0c1dd10f2c/tasks/behvc5lxq.output</output-file>
+<status>completed</status>
+<summary>Background command "Ship log-cleanup PR" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bfs93gthi</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-fcamblor-Documents-projects-third-party-oss-mac-ai-trackers/7129975a-76ac-4960-a0b8-0d0c1dd10f2c/tasks/bfs93gthi.output</output-file>
+<status>completed</status>
+<summary>Background command "Approuver vendor-status-monitor" completed (exit code 0)</summary>
+</task-notification>
