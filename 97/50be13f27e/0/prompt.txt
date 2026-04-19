@@ -1,0 +1,13 @@
+à quelle fréquence l'affichage de la popover se fait ?
+
+Car le temps restant d'ici au reset (ainsi que l'indicateur de la consommation théorique) devraient évoluer au cours du temps, même lorsqu'on est offline et qu'on n'est pas en mesure de refresh les données des metriques
+
+Peux-tu t'assurer que cela soit possible ?
+
+---
+
+/commit
+
+---
+
+ce sont 2 commits bien séparés, commit les separement
