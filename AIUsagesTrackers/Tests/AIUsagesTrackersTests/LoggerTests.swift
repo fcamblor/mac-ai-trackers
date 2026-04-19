@@ -202,7 +202,13 @@ struct FileLoggerTests {
             for i in 0..<20 {
                 group.addTask { logger.log(.info, "msg \(i)") }
             }
-            group.addTask { try? logger.purgeEntries(olderThan: cutoff) }
+            group.addTask {
+                do {
+                    try logger.purgeEntries(olderThan: cutoff)
+                } catch {
+                    Issue.record("Concurrent purge threw: \(error)")
+                }
+            }
         }
         logger.waitForPendingWrites()
 
@@ -234,5 +240,44 @@ struct FileLoggerTests {
         // Main file should be smaller than backup after rotation
         let mainSize = (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? UInt64) ?? 0
         #expect(mainSize < 5 * 1024 * 1024)
+    }
+
+    @Test("purge throws readFailed for unreadable file")
+    func purgeReadFailed() throws {
+        let path = makeTempPath()
+        let logger = FileLogger(filePath: path, minLevel: .debug)
+        try "some content".data(using: .utf8)!.write(to: URL(fileURLWithPath: path))
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: path)
+        defer {
+            do {
+                try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: path)
+            } catch {
+                Issue.record("Failed to restore permissions: \(error)")
+            }
+        }
+
+        #expect {
+            try logger.purgeEntries(olderThan: Date())
+        } throws: { error in
+            guard let purgeError = error as? LogPurgeError,
+                  case .readFailed = purgeError else { return false }
+            return true
+        }
+    }
+
+    @Test("purge keeps line timestamped exactly at cutoff")
+    func purgeExactBoundary() throws {
+        let path = makeTempPath()
+        let logger = FileLogger(filePath: path, minLevel: .debug)
+        let fmt = ISO8601DateFormatter()
+        let stamp = fmt.string(from: Date())
+        // Derive cutoff from the formatted string so both sides share
+        // the same second-truncated precision
+        let cutoff = fmt.date(from: stamp)!  // known-valid: just formatted
+        let original = "[\(stamp)] [INFO] boundary\n"
+        try original.data(using: .utf8)!.write(to: URL(fileURLWithPath: path))
+        try logger.purgeEntries(olderThan: cutoff)
+        let content = try String(contentsOfFile: path, encoding: .utf8)
+        #expect(content == original)
     }
 }
