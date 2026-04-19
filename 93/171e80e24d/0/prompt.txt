@@ -1,0 +1,509 @@
+# implement-roadmap-feature — Review aggregation & application
+
+## Review sources
+- Code quality: Now let me check a few specific files for the final state.```
+# Review — Code quality
+
+1. [VendorStatusBanner.swift:54] `.buttonStyle(.plain)` is a no-op here — the parent is a `VStack`/`HStack` with `.onTapGesture`, not a `Button`. Remove the dead modifier or convert the tap target to a `Button` (which would also gain proper accessibility for free).
+
+2. [UsageModels.swift:225] `Outage.url` is a raw `String?` but the project's value-object rule says to wrap domain primitives with distinct identity. It is parsed into a `URL` at the use-site (VendorStatusBanner:50) anyway — consider a lightweight value object (or just `URL?` with a custom Codable) to push validation to decode-time rather than tap-time.
+
+3. [UsageModels.swift:36-38] `vendors.flatMap` iterates a `Dictionary`, so `usages` returns entries in non-deterministic order. Callers currently cope (sort before display, keyed lookup in merge), but a future caller that assumes stable ordering will get bitten. A one-line `.sorted(by:)` on the outer iteration would make the contract explicit and cheap.
+
+4. [UsageDetailsView.swift:29] `vendorsNeedingBanner(in:)` is recomputed on every SwiftUI body evaluation even when `store.outagesByVendor` hasn't changed. For a handful of entries this is fine, but if entry count grows, hoisting the result into a stored/derived property on the store (or a simple `let` outside the `ScrollView`) avoids repeated work inside the view builder.
+
+5. [UsagesFileManager.swift:89-126] `merge` flattens to `[VendorUsageEntry]` then writes back through the `usages` setter, causing two full traversals of the vendor map. Operating directly on `vendors` sections (keyed merge per vendor) would be both more efficient and make the "outages are untouched" guarantee structural rather than relying on the setter's preservation logic.
+```
+- Error handling: # Review — Error handling
+
+1. **UsageModels.swift:84-86** — `UsagesFile.init(from:)` silently falls back to an empty file when JSON contains neither `schemaVersion` nor `usages`. A corrupted or unexpected payload (e.g. `{"foo":1}`) is indistinguishable from a genuinely empty file. Consider throwing a `DecodingError` or at minimum logging a warning so data loss is diagnosable.
+
+2. **UsageModels.swift:222-225** — `Outage.url` is `String?` but never validated at decode time. An upstream payload with `"url": "not a url"` passes through silently — the failure only surfaces later in the UI when `URL(string:)` returns `nil` on tap. Validate at the boundary (decode as `URL?` or validate the string) so bad data is caught early rather than silently swallowed at interaction time.
+
+3. **VendorStatusBanner.swift:49-52** — `onTapGesture` silently no-ops when the URL is missing or unparseable. The user taps a banner and nothing happens, with no feedback. Consider disabling the tap gesture (or removing the clickable affordance) when there is no valid URL, so the UI doesn't look broken.
+
+4. **UsagesFileManager.swift:66** — `guard var section = file.vendors[vendor] else { return }` in `updateIsActive` silently discards the request when the vendor section doesn't exist. If a connector registers an account and then immediately calls `updateIsActive` before the file is flushed, the active-account switch is lost with no warning. A `logger.log(.warning, ...)` here would make the race diagnosable.
+
+5. **UsagesFileManager.swift:123-125** — The merge rebuilds the vendor map via the `usages` setter, which preserves outages from `existing`. But if `incoming` introduces a _new_ vendor that also has outages in `existing` (impossible today but fragile), the setter path won't carry those over because `vendors` is rebuilt from the setter's `newValue`. The implicit coupling between the setter's outage-preservation logic and the merge's `result.usages = usages` assignment is not obviously correct on first read — a comment or assertion (`assert(result.outagesByVendor == existing.outagesByVendor)`) would guard against future regressions.
+
+6. **UsagesFileManagerTests.swift:423,462** — `try!` on `Data.write(to:options:)` in test setup. Per project rules (`SWIFT-ERROR-HANDLING`), `write` is a correctness-critical operation. Use `try` with the test's throwing context instead, so a file-system failure produces a clear test error rather than a crash.
+- Test coverage: Let me read the diff in chunks, focusing on production code and test code separately.Let me check specific source lines for the gaps I've identified.Now let me check the `UsageMetric.kind` property and the `UsageStore` changes.Now I have all the data I need. Let me compile the review.
+
+# Review — Test coverage
+
+```
+1. ValueObjects.swift:149-174 — OutageSeverity has no dedicated tests.
+   Codable round-trip, `ExpressibleByStringLiteral` init, and `description`
+   are untested. While structurally identical to other value objects that also
+   lack tests, this one is new in this branch and its severity values drive
+   UI color mapping in VendorStatusBanner — a decode mismatch would silently
+   produce the wrong tint.
+
+2. ValueObjects.swift:179-199 — OutageId has no dedicated tests.
+   Same gap as OutageSeverity: Codable round-trip, string-literal init, and
+   description are untested. Lower risk (identity only, no branching logic),
+   but the project rule is "every public method must have at least one test."
+
+3. ValueObjects.swift:36-45 — ISODate.init(date:) and ISODate.date are untested.
+   These are new public APIs on an existing value object. `init(date:)` creates
+   formatters per call and relies on ISO8601DateFormatter defaults; `date`
+   parses back. A round-trip test (`Date → ISODate → .date`) and a failure
+   test (garbage string → nil) would catch formatter misconfiguration.
+
+4. UsageModels.swift:271-277 — UsageMetric.kind computed property is untested.
+   Three branches (timeWindow, payAsYouGo, unknown) mapping to MetricKind.
+   Nothing exercises this directly; if the mapping drifts from the Codable
+   discriminator, callers would silently mis-categorize metrics.
+
+5. UsageModels.swift:153-159 — VendorAccountEntry ↔ VendorUsageEntry conversion
+   is only tested indirectly through file-level round-trips. A direct test for
+   `VendorAccountEntry(from:)` and `toUsageEntry(vendor:)` would catch field
+   omission or mismatch if new properties are added later.
+
+6. UsageModels.swift:118-122 — VendorSection.init(from:) uses
+   `decodeIfPresent` for outages, falling back to []. No test decodes a
+   VendorSection JSON blob where the "outages" key is absent (the v2WithOutages
+   test always includes the key). Add a test that omits the key and asserts
+   `.outages == []`.
+
+7. UsageModels.swift:70-86 — UsagesFile.init(from:) third branch (neither
+   `schemaVersion` nor `usages` present, e.g. `{}`) is untested. Only v1 and
+   v2 branches are exercised. A decode of `{}` should yield an empty file.
+
+8. VendorStatusBanner.swift:58-65 — `tintColor(for:)` is a static method with
+   5 branches (critical/major → red, minor → orange, maintenance → blue,
+   default → gray). No test covers it. Extract the severity→color mapping into
+   a testable pure function (or test it directly as a static) to catch
+   regressions if severity constants change.
+
+9. VendorStatusBanner.swift:49-53 — Tap gesture URL opening: `outage.url` is
+   optional, so there are two branches (nil, valid URL) plus a third (invalid
+   URL string). No test covers the nil-safety or the URL parsing. At minimum,
+   a unit test on the URL-construction logic would prevent silent failures.
+
+10. UsageModels.swift:39-52 — UsagesFile.usages setter with a vendor that has
+    outages but no accounts in the new value: the existing test
+    `usagesSetterPreservesOutages` covers one scenario, but does not test the
+    case where a *new* vendor appears in the setter that wasn't in the original
+    vendors map (no outages to preserve, should just create the section).
+
+11. UsageStoreTests — No test verifies that `outagesByVendor` is published on
+    the `@Published` property wrapper, i.e., that SwiftUI views actually get
+    notified when outages change. The existing `outageChangeRoundTrip` test
+    checks the value but not the notification.
+
+12. UsagesFileManagerTests — `updateIsActive` tests do not cover the case where
+    the account is already in the correct active/inactive state (no-op write
+    avoidance). A test that calls `updateIsActive` twice with the same account
+    and asserts no file write on the second call would confirm the `changed`
+    flag optimization works.
+```
+
+**Summary**: Model-layer Codable and merge logic is well-covered (21 + 25 tests). Store behavior is thoroughly tested (53 tests) including outage propagation. The main gaps are: (a) new value objects `OutageSeverity`/`OutageId` and `ISODate` extensions have zero dedicated tests despite being public API, (b) `UsageMetric.kind` and the account-entry conversion pair lack direct tests, (c) VendorStatusBanner has no tests at all — its severity-to-color mapping is pure logic that should be easy to unit-test, and (d) a few decode edge-case branches (empty JSON root, missing `outages` key in VendorSection) go unexercised.
+- Comment quality: # Review — Comment quality
+
+1. **UsageModels.swift:5–11** rewrite — schema doc block describes structure (WHAT) but buries the migration strategy. Lead with the WHY:
+   > `/// Dual-schema support: v2 vendor-keyed structure with per-vendor outages; v1 flat shape is accepted on read and upgraded transparently on next write.`
+
+2. **UsageModels.swift:35–37** remove — "Backward-compatible initialiser: builds vendor sections from a flat entry list" restates the signature. If the WHY (preserving compat during migration window) is worth keeping, say that instead.
+
+3. **UsageModels.swift:71–73** rewrite — "Preserve existing outages when rebuilding from a flat list" is WHAT. Better:
+   > `// Connector output never carries outages (field doesn't exist in v1); retaining the existing section's outages prevents losing externally-written incidents.`
+
+4. **UsageModels.swift:120–121** rewrite — `// v2: vendor-keyed shape` / `// v1: legacy flat array` are labels. The non-obvious thing is the branching heuristic:
+   > `// schemaVersion presence is the v2 sentinel; its absence implies v1 requiring a transparent lift to vendor sections.`
+
+5. **UsageModels.swift:157–158** remove — "Encode vendor map with string keys" states the obvious from the code. No WHY to preserve.
+
+6. **UsageModels.swift:173–176** rewrite — current doc reads like a field inventory. Explain the ownership split:
+   > `/// Separates account config (written by connectors) from incident state (written by the status monitor) to enforce merge semantics that never clobber outages.`
+
+7. **UsageModels.swift:212–215** remove or shorten — "The vendor is implicit from the parent key, so it is not stored here" is a schema note worth keeping, but the rest restates the type name.
+
+8. **UsagesFileManager.swift:442–443** rewrite — mixes WHAT and WHY. Cleaner:
+   > `// Merge on the flat view to reuse existing entry-level semantics, then reconstruct vendor sections while re-attaching externally-written outages.`
+
+9. **UsageDetailsView.swift:26–29** rewrite — "entries are sorted by vendor so entries of the same vendor are contiguous" is the WHAT; the WHY is cheaper than a Set lookup and avoids a secondary map:
+   > `// Running cursor avoids a secondary data structure: entries are pre-sorted by vendor, so first-occurrence detection is a single comparison per entry.`
+
+10. **UsageDetailsView.swift:58–59** rewrite — "Returns a map of vendor → first index in sorted, for vendors that have active outages" is a signature translation. Replace with:
+    > `// Maps each vendor with active outages to its first sorted index so the banner renders exactly once per vendor group.`
+
+11. **VendorStatusBanner.swift** (struct doc) rewrite — "Tapped incidents open the incident URL in the default browser when present" is WHAT. Trim to:
+    > `/// Coloured incident banner; severity determines tint; tap opens incident URL when available.`
+
+**No issues** found in test comments — fixture setup annotations like `"resetAt is 2h13m in the future from Self.referenceDate"` correctly explain assumptions, not mechanics.
+- Doc impact: Now I have a clear picture. Let me check the ARCHITECTURE.md persistence section and display pipeline section for what needs updating.
+
+# Review — Doc impact
+
+**1. `docs/ARCHITECTURE.md` — Persistence section**
+
+The doc still describes the schema as:
+> "a top-level `usages` array where each entry is keyed by `(vendor, account)`"
+
+This is the old v1 flat shape. The branch restructured persistence to a **v2 vendor-keyed shape**: `{ schemaVersion: 2, vendors: { "<vendor>": { accounts: [...], outages: [...] } } }`, with transparent v1 → v2 upgrade on next write. The doc needs to describe the new schema, the `schemaVersion` field, and the `VendorSection` container (accounts + outages).
+
+**2. `docs/ARCHITECTURE.md` — Display pipeline section**
+
+The doc doesn't mention vendor outages anywhere in the display pipeline. The branch adds:
+- `UsagesFile.outagesByVendor` computed property exposed to the store
+- `UsageStore.outagesByVendor: [Vendor: [Outage]]` published to the UI
+- `VendorStatusBanner` rendered in the popover for active outages
+
+The display pipeline paragraph should note that active outages are surfaced alongside usage entries and rendered as a `VendorStatusBanner` per affected vendor when the popover is open.
+
+**3. `docs/ARCHITECTURE.md` — (no new section needed, but an existing gap)**
+
+New value objects `OutageSeverity` and `OutageId` were added. The architecture doc doesn't enumerate every value object, so no change needed there — but if `docs/SWIFT-VALUE-OBJECTS.md` has an illustrative table of existing value objects, it should include these two. Let me check:`SWIFT-VALUE-OBJECTS.md` has a checklist section but no enumerated table of existing value objects — no update needed there.
+
+---
+
+# Review — Doc impact
+
+**1. `docs/ARCHITECTURE.md` — Persistence section**
+
+Update the schema description. Current text says:
+
+> "The schema is a top-level `usages` array where each entry is keyed by `(vendor, account)`."
+
+Should become something like:
+
+> The file uses a versioned JSON schema. **v2** (current): `{ schemaVersion: 2, vendors: { "<vendor>": { accounts: [...], outages: [...] } } }` — a vendor-keyed map where each `VendorSection` holds the accounts for that vendor and any active outages written by an upstream status-fetching process. **v1** (legacy flat): `{ usages: [...] }` — decoded transparently and silently upgraded to v2 on the next write. Internal storage is always v2; callers use the `usages` computed property for a flattened `[VendorUsageEntry]` view.
+
+**2. `docs/ARCHITECTURE.md` — Display pipeline section**
+
+Add a paragraph (or extend the existing one) describing outage surfacing:
+
+> When the decoded file contains outages for one or more vendors, `UsageStore` exposes them via `outagesByVendor: [Vendor: [Outage]]`. The popover renders a `VendorStatusBanner` for each vendor that has active outages, showing severity, title, and affected components above the usage cards.
+
+No other docs (`CHANGELOG`, `README`, `roadmap/`, `SWIFT-VALUE-OBJECTS.md`) require updates based on this branch's changes.
+
+**Last user message**:
+
+---
+
+## Non-negotiable principle — commit discipline
+
+You commit BEFORE presenting the result.
+
+**LANGUAGE — absolute rule: commit messages entirely in English.**
+
+**FIXUP — absolute rule:** each recommendation application
+produces `--fixup` commits attached to the source commit, NOT
+independent `review(axis):` commits.
+```bash
+git log --oneline origin/main..HEAD -- <files>
+SOURCE_HASH=<hash of the source commit>
+git add <files>
+git commit --fixup=$SOURCE_HASH
+```
+If a block touches multiple source commits, one fixup per source.
+History must be squashable with `git rebase --autosquash`.
+
+## Tooling
+
+Prefer **Serena** if available.
+
+---
+
+## First iteration ( empty)
+
+1. Consolidate the 5 reviews into a single numbered action plan
+   (deduplicate across axes, priority CRITICAL > HIGH > MED > LOW).
+   Format:
+   ```
+   N. [priority] [axis] [file:line] <recommendation>
+   ```
+2. Present it. Ask: `all` / `none` / `1,3,5` / free text.
+3. Do **NOT** emit the signal.
+
+## Subsequent iterations
+
+### "none" / "skip" / "ship it" / "finaliser"
+→ Emit: <promise>REVIEWS_DONE</promise>
+
+### Selection (`all`, `1,3,5`, etc.)
+1. Apply each recommendation. Be surgical.
+2. Commit per logical block WITH `--fixup`.
+3. Run the shared gate:
+   ```bash
+   bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
+   ```
+   If failure, fix BEFORE presenting. Do NOT present "apply done"
+   until the gate is green.
+4. Report: applied / remaining / diff stat.
+5. Ask: "apply more / re-run reviews / ship it ?" — do NOT
+   emit the signal.
+
+### "re-run reviews"
+The re-run runs **on the current state** (fixups included).
+
+Launch **5 Tasks in parallel** in ONE SINGLE message (tool `Agent`
+with `subagent_type: general-purpose`), each prompt starting with
+`git diff origin/main...HEAD` then applying the corresponding
+axis (see phase 4). Strict response format
+`[file:line] recommendation`.
+
+Re-aggregate, re-prioritize, present, ask
+"apply more / re-run / ship it ?" again. Do NOT emit the signal.
+
+### CRITICAL — signal discipline
+Emit `<promise>REVIEWS_DONE</promise>` **only** on an explicit
+closure signal.
+
+---
+
+# implement-roadmap-feature — Review aggregation & application
+
+## Review sources
+- Code quality: Now let me check a few specific files for the final state.```
+# Review — Code quality
+
+1. [VendorStatusBanner.swift:54] `.buttonStyle(.plain)` is a no-op here — the parent is a `VStack`/`HStack` with `.onTapGesture`, not a `Button`. Remove the dead modifier or convert the tap target to a `Button` (which would also gain proper accessibility for free).
+
+2. [UsageModels.swift:225] `Outage.url` is a raw `String?` but the project's value-object rule says to wrap domain primitives with distinct identity. It is parsed into a `URL` at the use-site (VendorStatusBanner:50) anyway — consider a lightweight value object (or just `URL?` with a custom Codable) to push validation to decode-time rather than tap-time.
+
+3. [UsageModels.swift:36-38] `vendors.flatMap` iterates a `Dictionary`, so `usages` returns entries in non-deterministic order. Callers currently cope (sort before display, keyed lookup in merge), but a future caller that assumes stable ordering will get bitten. A one-line `.sorted(by:)` on the outer iteration would make the contract explicit and cheap.
+
+4. [UsageDetailsView.swift:29] `vendorsNeedingBanner(in:)` is recomputed on every SwiftUI body evaluation even when `store.outagesByVendor` hasn't changed. For a handful of entries this is fine, but if entry count grows, hoisting the result into a stored/derived property on the store (or a simple `let` outside the `ScrollView`) avoids repeated work inside the view builder.
+
+5. [UsagesFileManager.swift:89-126] `merge` flattens to `[VendorUsageEntry]` then writes back through the `usages` setter, causing two full traversals of the vendor map. Operating directly on `vendors` sections (keyed merge per vendor) would be both more efficient and make the "outages are untouched" guarantee structural rather than relying on the setter's preservation logic.
+```
+- Error handling: # Review — Error handling
+
+1. **UsageModels.swift:84-86** — `UsagesFile.init(from:)` silently falls back to an empty file when JSON contains neither `schemaVersion` nor `usages`. A corrupted or unexpected payload (e.g. `{"foo":1}`) is indistinguishable from a genuinely empty file. Consider throwing a `DecodingError` or at minimum logging a warning so data loss is diagnosable.
+
+2. **UsageModels.swift:222-225** — `Outage.url` is `String?` but never validated at decode time. An upstream payload with `"url": "not a url"` passes through silently — the failure only surfaces later in the UI when `URL(string:)` returns `nil` on tap. Validate at the boundary (decode as `URL?` or validate the string) so bad data is caught early rather than silently swallowed at interaction time.
+
+3. **VendorStatusBanner.swift:49-52** — `onTapGesture` silently no-ops when the URL is missing or unparseable. The user taps a banner and nothing happens, with no feedback. Consider disabling the tap gesture (or removing the clickable affordance) when there is no valid URL, so the UI doesn't look broken.
+
+4. **UsagesFileManager.swift:66** — `guard var section = file.vendors[vendor] else { return }` in `updateIsActive` silently discards the request when the vendor section doesn't exist. If a connector registers an account and then immediately calls `updateIsActive` before the file is flushed, the active-account switch is lost with no warning. A `logger.log(.warning, ...)` here would make the race diagnosable.
+
+5. **UsagesFileManager.swift:123-125** — The merge rebuilds the vendor map via the `usages` setter, which preserves outages from `existing`. But if `incoming` introduces a _new_ vendor that also has outages in `existing` (impossible today but fragile), the setter path won't carry those over because `vendors` is rebuilt from the setter's `newValue`. The implicit coupling between the setter's outage-preservation logic and the merge's `result.usages = usages` assignment is not obviously correct on first read — a comment or assertion (`assert(result.outagesByVendor == existing.outagesByVendor)`) would guard against future regressions.
+
+6. **UsagesFileManagerTests.swift:423,462** — `try!` on `Data.write(to:options:)` in test setup. Per project rules (`SWIFT-ERROR-HANDLING`), `write` is a correctness-critical operation. Use `try` with the test's throwing context instead, so a file-system failure produces a clear test error rather than a crash.
+- Test coverage: Let me read the diff in chunks, focusing on production code and test code separately.Let me check specific source lines for the gaps I've identified.Now let me check the `UsageMetric.kind` property and the `UsageStore` changes.Now I have all the data I need. Let me compile the review.
+
+# Review — Test coverage
+
+```
+1. ValueObjects.swift:149-174 — OutageSeverity has no dedicated tests.
+   Codable round-trip, `ExpressibleByStringLiteral` init, and `description`
+   are untested. While structurally identical to other value objects that also
+   lack tests, this one is new in this branch and its severity values drive
+   UI color mapping in VendorStatusBanner — a decode mismatch would silently
+   produce the wrong tint.
+
+2. ValueObjects.swift:179-199 — OutageId has no dedicated tests.
+   Same gap as OutageSeverity: Codable round-trip, string-literal init, and
+   description are untested. Lower risk (identity only, no branching logic),
+   but the project rule is "every public method must have at least one test."
+
+3. ValueObjects.swift:36-45 — ISODate.init(date:) and ISODate.date are untested.
+   These are new public APIs on an existing value object. `init(date:)` creates
+   formatters per call and relies on ISO8601DateFormatter defaults; `date`
+   parses back. A round-trip test (`Date → ISODate → .date`) and a failure
+   test (garbage string → nil) would catch formatter misconfiguration.
+
+4. UsageModels.swift:271-277 — UsageMetric.kind computed property is untested.
+   Three branches (timeWindow, payAsYouGo, unknown) mapping to MetricKind.
+   Nothing exercises this directly; if the mapping drifts from the Codable
+   discriminator, callers would silently mis-categorize metrics.
+
+5. UsageModels.swift:153-159 — VendorAccountEntry ↔ VendorUsageEntry conversion
+   is only tested indirectly through file-level round-trips. A direct test for
+   `VendorAccountEntry(from:)` and `toUsageEntry(vendor:)` would catch field
+   omission or mismatch if new properties are added later.
+
+6. UsageModels.swift:118-122 — VendorSection.init(from:) uses
+   `decodeIfPresent` for outages, falling back to []. No test decodes a
+   VendorSection JSON blob where the "outages" key is absent (the v2WithOutages
+   test always includes the key). Add a test that omits the key and asserts
+   `.outages == []`.
+
+7. UsageModels.swift:70-86 — UsagesFile.init(from:) third branch (neither
+   `schemaVersion` nor `usages` present, e.g. `{}`) is untested. Only v1 and
+   v2 branches are exercised. A decode of `{}` should yield an empty file.
+
+8. VendorStatusBanner.swift:58-65 — `tintColor(for:)` is a static method with
+   5 branches (critical/major → red, minor → orange, maintenance → blue,
+   default → gray). No test covers it. Extract the severity→color mapping into
+   a testable pure function (or test it directly as a static) to catch
+   regressions if severity constants change.
+
+9. VendorStatusBanner.swift:49-53 — Tap gesture URL opening: `outage.url` is
+   optional, so there are two branches (nil, valid URL) plus a third (invalid
+   URL string). No test covers the nil-safety or the URL parsing. At minimum,
+   a unit test on the URL-construction logic would prevent silent failures.
+
+10. UsageModels.swift:39-52 — UsagesFile.usages setter with a vendor that has
+    outages but no accounts in the new value: the existing test
+    `usagesSetterPreservesOutages` covers one scenario, but does not test the
+    case where a *new* vendor appears in the setter that wasn't in the original
+    vendors map (no outages to preserve, should just create the section).
+
+11. UsageStoreTests — No test verifies that `outagesByVendor` is published on
+    the `@Published` property wrapper, i.e., that SwiftUI views actually get
+    notified when outages change. The existing `outageChangeRoundTrip` test
+    checks the value but not the notification.
+
+12. UsagesFileManagerTests — `updateIsActive` tests do not cover the case where
+    the account is already in the correct active/inactive state (no-op write
+    avoidance). A test that calls `updateIsActive` twice with the same account
+    and asserts no file write on the second call would confirm the `changed`
+    flag optimization works.
+```
+
+**Summary**: Model-layer Codable and merge logic is well-covered (21 + 25 tests). Store behavior is thoroughly tested (53 tests) including outage propagation. The main gaps are: (a) new value objects `OutageSeverity`/`OutageId` and `ISODate` extensions have zero dedicated tests despite being public API, (b) `UsageMetric.kind` and the account-entry conversion pair lack direct tests, (c) VendorStatusBanner has no tests at all — its severity-to-color mapping is pure logic that should be easy to unit-test, and (d) a few decode edge-case branches (empty JSON root, missing `outages` key in VendorSection) go unexercised.
+- Comment quality: # Review — Comment quality
+
+1. **UsageModels.swift:5–11** rewrite — schema doc block describes structure (WHAT) but buries the migration strategy. Lead with the WHY:
+   > `/// Dual-schema support: v2 vendor-keyed structure with per-vendor outages; v1 flat shape is accepted on read and upgraded transparently on next write.`
+
+2. **UsageModels.swift:35–37** remove — "Backward-compatible initialiser: builds vendor sections from a flat entry list" restates the signature. If the WHY (preserving compat during migration window) is worth keeping, say that instead.
+
+3. **UsageModels.swift:71–73** rewrite — "Preserve existing outages when rebuilding from a flat list" is WHAT. Better:
+   > `// Connector output never carries outages (field doesn't exist in v1); retaining the existing section's outages prevents losing externally-written incidents.`
+
+4. **UsageModels.swift:120–121** rewrite — `// v2: vendor-keyed shape` / `// v1: legacy flat array` are labels. The non-obvious thing is the branching heuristic:
+   > `// schemaVersion presence is the v2 sentinel; its absence implies v1 requiring a transparent lift to vendor sections.`
+
+5. **UsageModels.swift:157–158** remove — "Encode vendor map with string keys" states the obvious from the code. No WHY to preserve.
+
+6. **UsageModels.swift:173–176** rewrite — current doc reads like a field inventory. Explain the ownership split:
+   > `/// Separates account config (written by connectors) from incident state (written by the status monitor) to enforce merge semantics that never clobber outages.`
+
+7. **UsageModels.swift:212–215** remove or shorten — "The vendor is implicit from the parent key, so it is not stored here" is a schema note worth keeping, but the rest restates the type name.
+
+8. **UsagesFileManager.swift:442–443** rewrite — mixes WHAT and WHY. Cleaner:
+   > `// Merge on the flat view to reuse existing entry-level semantics, then reconstruct vendor sections while re-attaching externally-written outages.`
+
+9. **UsageDetailsView.swift:26–29** rewrite — "entries are sorted by vendor so entries of the same vendor are contiguous" is the WHAT; the WHY is cheaper than a Set lookup and avoids a secondary map:
+   > `// Running cursor avoids a secondary data structure: entries are pre-sorted by vendor, so first-occurrence detection is a single comparison per entry.`
+
+10. **UsageDetailsView.swift:58–59** rewrite — "Returns a map of vendor → first index in sorted, for vendors that have active outages" is a signature translation. Replace with:
+    > `// Maps each vendor with active outages to its first sorted index so the banner renders exactly once per vendor group.`
+
+11. **VendorStatusBanner.swift** (struct doc) rewrite — "Tapped incidents open the incident URL in the default browser when present" is WHAT. Trim to:
+    > `/// Coloured incident banner; severity determines tint; tap opens incident URL when available.`
+
+**No issues** found in test comments — fixture setup annotations like `"resetAt is 2h13m in the future from Self.referenceDate"` correctly explain assumptions, not mechanics.
+- Doc impact: Now I have a clear picture. Let me check the ARCHITECTURE.md persistence section and display pipeline section for what needs updating.
+
+# Review — Doc impact
+
+**1. `docs/ARCHITECTURE.md` — Persistence section**
+
+The doc still describes the schema as:
+> "a top-level `usages` array where each entry is keyed by `(vendor, account)`"
+
+This is the old v1 flat shape. The branch restructured persistence to a **v2 vendor-keyed shape**: `{ schemaVersion: 2, vendors: { "<vendor>": { accounts: [...], outages: [...] } } }`, with transparent v1 → v2 upgrade on next write. The doc needs to describe the new schema, the `schemaVersion` field, and the `VendorSection` container (accounts + outages).
+
+**2. `docs/ARCHITECTURE.md` — Display pipeline section**
+
+The doc doesn't mention vendor outages anywhere in the display pipeline. The branch adds:
+- `UsagesFile.outagesByVendor` computed property exposed to the store
+- `UsageStore.outagesByVendor: [Vendor: [Outage]]` published to the UI
+- `VendorStatusBanner` rendered in the popover for active outages
+
+The display pipeline paragraph should note that active outages are surfaced alongside usage entries and rendered as a `VendorStatusBanner` per affected vendor when the popover is open.
+
+**3. `docs/ARCHITECTURE.md` — (no new section needed, but an existing gap)**
+
+New value objects `OutageSeverity` and `OutageId` were added. The architecture doc doesn't enumerate every value object, so no change needed there — but if `docs/SWIFT-VALUE-OBJECTS.md` has an illustrative table of existing value objects, it should include these two. Let me check:`SWIFT-VALUE-OBJECTS.md` has a checklist section but no enumerated table of existing value objects — no update needed there.
+
+---
+
+# Review — Doc impact
+
+**1. `docs/ARCHITECTURE.md` — Persistence section**
+
+Update the schema description. Current text says:
+
+> "The schema is a top-level `usages` array where each entry is keyed by `(vendor, account)`."
+
+Should become something like:
+
+> The file uses a versioned JSON schema. **v2** (current): `{ schemaVersion: 2, vendors: { "<vendor>": { accounts: [...], outages: [...] } } }` — a vendor-keyed map where each `VendorSection` holds the accounts for that vendor and any active outages written by an upstream status-fetching process. **v1** (legacy flat): `{ usages: [...] }` — decoded transparently and silently upgraded to v2 on the next write. Internal storage is always v2; callers use the `usages` computed property for a flattened `[VendorUsageEntry]` view.
+
+**2. `docs/ARCHITECTURE.md` — Display pipeline section**
+
+Add a paragraph (or extend the existing one) describing outage surfacing:
+
+> When the decoded file contains outages for one or more vendors, `UsageStore` exposes them via `outagesByVendor: [Vendor: [Outage]]`. The popover renders a `VendorStatusBanner` for each vendor that has active outages, showing severity, title, and affected components above the usage cards.
+
+No other docs (`CHANGELOG`, `README`, `roadmap/`, `SWIFT-VALUE-OBJECTS.md`) require updates based on this branch's changes.
+
+**Last user message**: 1,2,3
+
+---
+
+## Non-negotiable principle — commit discipline
+
+You commit BEFORE presenting the result.
+
+**LANGUAGE — absolute rule: commit messages entirely in English.**
+
+**FIXUP — absolute rule:** each recommendation application
+produces `--fixup` commits attached to the source commit, NOT
+independent `review(axis):` commits.
+```bash
+git log --oneline origin/main..HEAD -- <files>
+SOURCE_HASH=<hash of the source commit>
+git add <files>
+git commit --fixup=$SOURCE_HASH
+```
+If a block touches multiple source commits, one fixup per source.
+History must be squashable with `git rebase --autosquash`.
+
+## Tooling
+
+Prefer **Serena** if available.
+
+---
+
+## First iteration (1,2,3 empty)
+
+1. Consolidate the 5 reviews into a single numbered action plan
+   (deduplicate across axes, priority CRITICAL > HIGH > MED > LOW).
+   Format:
+   ```
+   N. [priority] [axis] [file:line] <recommendation>
+   ```
+2. Present it. Ask: `all` / `none` / `1,3,5` / free text.
+3. Do **NOT** emit the signal.
+
+## Subsequent iterations
+
+### "none" / "skip" / "ship it" / "finaliser"
+→ Emit: <promise>REVIEWS_DONE</promise>
+
+### Selection (`all`, `1,3,5`, etc.)
+1. Apply each recommendation. Be surgical.
+2. Commit per logical block WITH `--fixup`.
+3. Run the shared gate:
+   ```bash
+   bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
+   ```
+   If failure, fix BEFORE presenting. Do NOT present "apply done"
+   until the gate is green.
+4. Report: applied / remaining / diff stat.
+5. Ask: "apply more / re-run reviews / ship it ?" — do NOT
+   emit the signal.
+
+### "re-run reviews"
+The re-run runs **on the current state** (fixups included).
+
+Launch **5 Tasks in parallel** in ONE SINGLE message (tool `Agent`
+with `subagent_type: general-purpose`), each prompt starting with
+`git diff origin/main...HEAD` then applying the corresponding
+axis (see phase 4). Strict response format
+`[file:line] recommendation`.
+
+Re-aggregate, re-prioritize, present, ask
+"apply more / re-run / ship it ?" again. Do NOT emit the signal.
+
+### CRITICAL — signal discipline
+Emit `<promise>REVIEWS_DONE</promise>` **only** on an explicit
+closure signal.
