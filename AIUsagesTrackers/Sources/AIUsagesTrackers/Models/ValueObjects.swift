@@ -142,6 +142,62 @@ extension UsagePercent: ExpressibleByIntegerLiteral {
     public init(integerLiteral value: Int) { rawValue = value }
 }
 
+// MARK: - OutageSeverity
+
+/// Severity level of a vendor outage. Open-ended (string-backed) so unknown severities
+/// from upstream degrade gracefully rather than failing to decode.
+public struct OutageSeverity: RawRepresentable, Codable, Equatable, Hashable, Sendable {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    public static let critical = OutageSeverity(rawValue: "critical")
+    public static let major = OutageSeverity(rawValue: "major")
+    public static let minor = OutageSeverity(rawValue: "minor")
+    public static let maintenance = OutageSeverity(rawValue: "maintenance")
+
+    public init(from decoder: Decoder) throws {
+        rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+extension OutageSeverity: ExpressibleByStringLiteral {
+    public init(stringLiteral value: String) { rawValue = value }
+}
+
+extension OutageSeverity: CustomStringConvertible {
+    public var description: String { rawValue }
+}
+
+// MARK: - OutageId
+
+/// Stable identifier for a vendor outage, sourced from the upstream status page.
+public struct OutageId: RawRepresentable, Codable, Equatable, Hashable, Sendable {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    public init(from decoder: Decoder) throws {
+        rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+extension OutageId: ExpressibleByStringLiteral {
+    public init(stringLiteral value: String) { rawValue = value }
+}
+
+extension OutageId: CustomStringConvertible {
+    public var description: String { rawValue }
+}
+
 // MARK: - DurationMinutes
 
 public struct DurationMinutes: RawRepresentable, Codable, Equatable, Comparable, Hashable, Sendable {

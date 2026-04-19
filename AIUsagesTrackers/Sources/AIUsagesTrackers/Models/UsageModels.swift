@@ -51,6 +51,52 @@ public struct UsageError: Codable, Equatable, Sendable {
     }
 }
 
+// MARK: - Outage
+
+/// An active incident on a vendor's platform, written by an upstream status-fetching process.
+public struct Outage: Codable, Equatable, Sendable, Identifiable {
+    public let id: OutageId
+    public let title: String
+    public let severity: OutageSeverity
+    public let affectedComponents: [String]
+    public let status: String?
+    public let startedAt: ISODate?
+    public let url: String?
+
+    public init(
+        id: OutageId,
+        title: String,
+        severity: OutageSeverity,
+        affectedComponents: [String] = [],
+        status: String? = nil,
+        startedAt: ISODate? = nil,
+        url: String? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.severity = severity
+        self.affectedComponents = affectedComponents
+        self.status = status
+        self.startedAt = startedAt
+        self.url = url
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, severity, affectedComponents, status, startedAt, url
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(OutageId.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        severity = try container.decode(OutageSeverity.self, forKey: .severity)
+        affectedComponents = try container.decodeIfPresent([String].self, forKey: .affectedComponents) ?? []
+        status = try container.decodeIfPresent(String.self, forKey: .status)
+        startedAt = try container.decodeIfPresent(ISODate.self, forKey: .startedAt)
+        url = try container.decodeIfPresent(String.self, forKey: .url)
+    }
+}
+
 // MARK: - Metric (polymorphic on "type" discriminator)
 
 public enum UsageMetric: Codable, Equatable, Sendable {
