@@ -118,9 +118,17 @@ public final class FileLogger: Sendable {
         let result = kept.joined(separator: "\n")
         guard result != original else { return }
 
+        let url = URL(fileURLWithPath: path)
+        guard let data = result.data(using: .utf8) else {
+            throw LogPurgeError.writeFailed(
+                path: path,
+                underlying: NSError(domain: "FileLogger", code: -1, userInfo: [
+                    NSLocalizedDescriptionKey: "UTF-8 encoding round-trip failed"
+                ])
+            )
+        }
         do {
-            let url = URL(fileURLWithPath: path)
-            try result.data(using: .utf8)!.write(to: url, options: .atomic)
+            try data.write(to: url, options: .atomic)
         } catch {
             throw LogPurgeError.writeFailed(path: path, underlying: error)
         }
