@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "6ef64a958f75",
+  "strategy": "manual-commit",
+  "branch": "archon/task-feat-vendor-status-monitor",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/UsageModels.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/ValueObjects.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageModelsTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/6e/f64a958f75/0/metadata.json",
+      "transcript": "/6e/f64a958f75/0/full.jsonl",
+      "content_hash": "/6e/f64a958f75/0/content_hash.txt",
+      "prompt": "/6e/f64a958f75/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 3578,
+    "cache_creation_tokens": 65748,
+    "cache_read_tokens": 793179,
+    "output_tokens": 5688,
+    "api_call_count": 15
+  }
+}
