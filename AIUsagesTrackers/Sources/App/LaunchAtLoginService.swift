@@ -1,14 +1,6 @@
+import AIUsagesTrackersLib
 import Foundation
 import ServiceManagement
-
-// MARK: - Protocol
-
-/// Abstracts SMAppService so tests can stub launch-at-login behaviour.
-@MainActor
-protocol LaunchAtLoginManaging: Sendable {
-    var isEnabled: Bool { get }
-    func setEnabled(_ enabled: Bool) throws
-}
 
 // MARK: - Production implementation
 
