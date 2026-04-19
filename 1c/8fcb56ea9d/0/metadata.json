@@ -1,0 +1,44 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "1c8fcb56ea9d",
+  "session_id": "ca52dc02-c487-42ab-bee1-05bdb361b11b",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-19T12:17:00.940025Z",
+  "branch": "archon/task-feat-settings-window",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "roadmap/index.md",
+    "roadmap/settings-window.plan.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "59a53b011250",
+  "token_usage": {
+    "input_tokens": 29,
+    "cache_creation_tokens": 43960,
+    "cache_read_tokens": 997448,
+    "output_tokens": 11077,
+    "api_call_count": 25
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-19T12:17:00.826787Z",
+    "agent_lines": 137,
+    "agent_removed": 1,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 137,
+    "total_lines_changed": 138,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
