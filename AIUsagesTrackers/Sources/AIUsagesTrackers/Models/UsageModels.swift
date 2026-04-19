@@ -54,7 +54,7 @@ public struct UsageError: Codable, Equatable, Sendable {
 // MARK: - Metric (polymorphic on "type" discriminator)
 
 public enum UsageMetric: Codable, Equatable, Sendable {
-    case timeWindow(name: String, resetAt: ISODate, windowDuration: DurationMinutes, usagePercent: UsagePercent)
+    case timeWindow(name: String, resetAt: ISODate?, windowDuration: DurationMinutes, usagePercent: UsagePercent)
     case payAsYouGo(name: String, currentAmount: Double, currency: String)
     /// A metric type not yet known to this client; retained for round-trip fidelity.
     case unknown(String)
@@ -84,7 +84,7 @@ public enum UsageMetric: Codable, Equatable, Sendable {
         case .timeWindow:
             self = .timeWindow(
                 name: try container.decode(String.self, forKey: .name),
-                resetAt: try container.decode(ISODate.self, forKey: .resetAt),
+                resetAt: try container.decodeIfPresent(ISODate.self, forKey: .resetAt),
                 windowDuration: try container.decode(DurationMinutes.self, forKey: .windowDuration),
                 usagePercent: try container.decode(UsagePercent.self, forKey: .usagePercent)
             )
@@ -105,7 +105,7 @@ public enum UsageMetric: Codable, Equatable, Sendable {
         case let .timeWindow(name, resetAt, windowDuration, usagePercent):
             try container.encode(MetricKind.timeWindow, forKey: .type)
             try container.encode(name, forKey: .name)
-            try container.encode(resetAt, forKey: .resetAt)
+            try container.encodeIfPresent(resetAt, forKey: .resetAt)
             try container.encode(windowDuration, forKey: .windowDuration)
             try container.encode(usagePercent, forKey: .usagePercent)
         case let .payAsYouGo(name, currentAmount, currency):

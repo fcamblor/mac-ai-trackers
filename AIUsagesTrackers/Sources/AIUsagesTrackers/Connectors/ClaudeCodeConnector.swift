@@ -124,22 +124,22 @@ public actor ClaudeCodeConnector: UsageConnector {
         do {
             let usage = try parseAPIResponse(data)
             logger.log(.info, "Fetched successfully: session=\(usage.sessionPercent.map { "\($0)%" } ?? "nil") weekly=\(usage.weeklyPercent.map { "\($0)%" } ?? "nil") sonnet=\(usage.sonnetWeekly.map { "\($0.percent)%" } ?? "nil") opus=\(usage.opusWeekly.map { "\($0.percent)%" } ?? "nil")")
-            // A window is emitted only when both utilization and resets_at are known.
-            // Missing/null reset dates indicate "no active window yet" (fresh account,
-            // between cycles) — skipped silently rather than surfaced as a parse error.
+            // A window is emitted whenever utilization is known, even if resets_at is null
+            // (fresh account, between cycles). A null reset date surfaces in the UI as "???"
+            // rather than silently omitting the metric.
             var metrics: [UsageMetric] = []
-            if let percent = usage.sessionPercent, let resetAt = usage.sessionResetAt {
+            if let percent = usage.sessionPercent {
                 metrics.append(.timeWindow(
                     name: "5h sessions (all models)",
-                    resetAt: resetAt,
+                    resetAt: usage.sessionResetAt,
                     windowDuration: Self.sessionWindowMinutes,
                     usagePercent: UsagePercent(rawValue: percent)
                 ))
             }
-            if let percent = usage.weeklyPercent, let resetAt = usage.weeklyResetAt {
+            if let percent = usage.weeklyPercent {
                 metrics.append(.timeWindow(
                     name: "Weekly (all models)",
-                    resetAt: resetAt,
+                    resetAt: usage.weeklyResetAt,
                     windowDuration: Self.weeklyWindowMinutes,
                     usagePercent: UsagePercent(rawValue: percent)
                 ))
@@ -280,7 +280,7 @@ public actor ClaudeCodeConnector: UsageConnector {
 
     private struct ModelWeeklyMetric {
         let percent: Int
-        let resetAt: ISODate
+        let resetAt: ISODate?
     }
 
     private struct ParsedUsage {
@@ -318,25 +318,28 @@ public actor ClaudeCodeConnector: UsageConnector {
 
         return ParsedUsage(
             sessionPercent: session.map { Int($0.percent) },
-            sessionResetAt: session.map { normalizeISO8601($0.resetAt) },
+            sessionResetAt: session.flatMap { $0.resetAt.map { normalizeISO8601($0) } },
             weeklyPercent: weekly.map { Int($0.percent) },
-            weeklyResetAt: weekly.map { normalizeISO8601($0.resetAt) },
-            sonnetWeekly: sonnet.map { ModelWeeklyMetric(percent: $0.percent, resetAt: normalizeISO8601($0.resetAt)) },
-            opusWeekly: opus.map { ModelWeeklyMetric(percent: $0.percent, resetAt: normalizeISO8601($0.resetAt)) }
+            weeklyResetAt: weekly.flatMap { $0.resetAt.map { normalizeISO8601($0) } },
+            sonnetWeekly: sonnet.map { ModelWeeklyMetric(percent: $0.percent, resetAt: $0.resetAt.map { normalizeISO8601($0) }) },
+            opusWeekly: opus.map { ModelWeeklyMetric(percent: $0.percent, resetAt: $0.resetAt.map { normalizeISO8601($0) }) }
         )
     }
 
-    /// Every usage window block is optional — a missing key, a null `resets_at`
-    /// (fresh account, between cycles) or an unexpected shape is silently skipped
-    /// instead of propagating an error through the whole fetch.
-    private func extractOptionalModelMetric(from json: [String: Any], key: String) -> (percent: Int, resetAt: String)? {
+    /// Every usage window block is optional — a missing key or an unexpected shape is silently
+    /// skipped. A null `resets_at` (fresh account, between cycles) is kept with `resetAt: nil`
+    /// so the metric still surfaces in the UI as "???".
+    private func extractOptionalModelMetric(from json: [String: Any], key: String) -> (percent: Int, resetAt: String?)? {
         guard let block = json[key] as? [String: Any] else {
             return nil
         }
-        guard let util = block["utilization"] as? Double,
-              let resetAt = block["resets_at"] as? String else {
-            logger.log(.debug, "Block '\(key)' present but utilization/resets_at missing or null — skipped")
+        guard let util = block["utilization"] as? Double else {
+            logger.log(.debug, "Block '\(key)' present but utilization missing — skipped")
             return nil
+        }
+        let resetAt = block["resets_at"] as? String
+        if resetAt == nil {
+            logger.log(.debug, "Block '\(key)' has null resets_at — metric emitted without reset date")
         }
         return (percent: Int(util.rounded()), resetAt: resetAt)
     }

@@ -192,10 +192,10 @@ public final class UsageStore {
         // A metric with an empty name cannot be abbreviated — skip to avoid a leading space in output
         guard !abbreviation.isEmpty else { return nil }
 
-        let remaining = formatRemainingTime(resetAt: resetAt, now: now)
+        let remaining = resetAt.map { formatRemainingTime(resetAt: $0, now: now) } ?? "???"
         let text = "\(abbreviation) \(usagePercent.rawValue)% \(remaining)"
 
-        let theoretical = theoreticalFraction(resetAt: resetAt, windowDuration: windowDuration, now: now)
+        let theoretical = resetAt.map { theoreticalFraction(resetAt: $0, windowDuration: windowDuration, now: now) } ?? 0.0
         let tier = consumptionRatio(actualPercent: usagePercent, theoreticalFraction: theoretical)
             .map { consumptionTier(ratio: $0) }
 

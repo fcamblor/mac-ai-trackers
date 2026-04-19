@@ -212,11 +212,12 @@ struct ClaudeCodeConnectorFetchTests {
         #expect(entries[0].lastError?.type == "parse_error")
     }
 
-    @Test("five_hour with null resets_at is silently skipped — only weekly metric emitted")
-    func fiveHourNullResetsAtSkipped() async throws {
+    @Test("five_hour with null resets_at emits metric with nil resetAt — not silently dropped")
+    func fiveHourNullResetsAtEmitsMetricWithoutDate() async throws {
         let dir = makeTempDir()
         // Payload observed after a fresh account switch: no active 5h session yet,
-        // `five_hour.resets_at` is null. Must not escalate to parse_error.
+        // `five_hour.resets_at` is null. Must not escalate to parse_error and must
+        // still emit the metric so the UI can show "???".
         mockHTTP200(json: """
         {"five_hour":{"utilization":0,"resets_at":null},
          "seven_day":{"utilization":38,"resets_at":"2026-04-23T19:00:00+00:00"},
@@ -228,11 +229,18 @@ struct ClaudeCodeConnectorFetchTests {
         #expect(entries.count == 1)
         #expect(entries[0].lastError == nil)
         #expect(entries[0].isActive == true)
-        #expect(entries[0].metrics.count == 1)
-        if case .timeWindow(_, _, _, let pct) = entries[0].metrics[0] {
+        #expect(entries[0].metrics.count == 2)
+        if case .timeWindow(let name, let resetAt, _, let pct) = entries[0].metrics[0] {
+            #expect(name == "5h sessions (all models)")
+            #expect(resetAt == nil)
+            #expect(pct.rawValue == 0)
+        } else {
+            Issue.record("Expected first metric to be a timeWindow for 5h sessions")
+        }
+        if case .timeWindow(_, _, _, let pct) = entries[0].metrics[1] {
             #expect(pct.rawValue == 38)
         } else {
-            Issue.record("Expected a single weekly timeWindow metric")
+            Issue.record("Expected second metric to be the weekly timeWindow")
         }
     }
 
@@ -249,14 +257,14 @@ struct ClaudeCodeConnectorFetchTests {
         #expect(entries.count == 1)
         if case .timeWindow(_, let sessionResetAt, _, _) = entries[0].metrics[0] {
             // Fractional seconds must be stripped; standard ISO8601DateFormatter must parse the result
-            #expect(sessionResetAt.date != nil)
-            #expect(!sessionResetAt.rawValue.contains("."))
+            #expect(sessionResetAt?.date != nil)
+            #expect(sessionResetAt.map { !$0.rawValue.contains(".") } ?? false)
         } else {
             Issue.record("Expected timeWindow metric for session")
         }
         if case .timeWindow(_, let weeklyResetAt, _, _) = entries[0].metrics[1] {
-            #expect(weeklyResetAt.date != nil)
-            #expect(!weeklyResetAt.rawValue.contains("."))
+            #expect(weeklyResetAt?.date != nil)
+            #expect(weeklyResetAt.map { !$0.rawValue.contains(".") } ?? false)
         } else {
             Issue.record("Expected timeWindow metric for weekly")
         }
@@ -319,7 +327,7 @@ struct ClaudeCodeConnectorFetchTests {
         named name: String,
         in metrics: [UsageMetric],
         sourceLocation: SourceLocation = #_sourceLocation
-    ) -> (name: String, resetAt: ISODate, duration: DurationMinutes, pct: UsagePercent)? {
+    ) -> (name: String, resetAt: ISODate?, duration: DurationMinutes, pct: UsagePercent)? {
         guard let metric = metrics.first(where: {
             if case .timeWindow(let n, _, _, _) = $0 { return n == name }
             return false
@@ -441,7 +449,7 @@ struct ClaudeCodeConnectorFetchTests {
         }
     }
 
-    @Test("seven_day_sonnet with null resets_at is silently skipped")
+    @Test("seven_day_sonnet with null resets_at emits metric with nil resetAt — not silently dropped")
     func sonnetNullResetsAt() async throws {
         let dir = makeTempDir()
         mockHTTP200(json: """
@@ -454,7 +462,11 @@ struct ClaudeCodeConnectorFetchTests {
         let entries = try await connector.fetchUsages()
 
         #expect(entries[0].lastError == nil)
-        #expect(entries[0].metrics.count == 3)
+        #expect(entries[0].metrics.count == 4)
+        if let sonnet = requireTimeWindowMetric(named: "Weekly Sonnet", in: entries[0].metrics) {
+            #expect(sonnet.resetAt == nil)
+            #expect(sonnet.pct.rawValue == 15)
+        }
         _ = requireTimeWindowMetric(named: "Weekly Opus", in: entries[0].metrics)
     }
 
@@ -562,8 +574,8 @@ struct ClaudeCodeConnectorFetchTests {
         let entries = try await connector.fetchUsages()
 
         if let sonnet = requireTimeWindowMetric(named: "Weekly Sonnet", in: entries[0].metrics) {
-            #expect(sonnet.resetAt.date != nil)
-            #expect(!sonnet.resetAt.rawValue.contains("."))
+            #expect(sonnet.resetAt?.date != nil)
+            #expect(sonnet.resetAt.map { !$0.rawValue.contains(".") } ?? false)
         }
     }
 
