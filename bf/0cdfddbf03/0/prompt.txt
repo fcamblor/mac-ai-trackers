@@ -1,0 +1,1 @@
+execute les tests et tente de les fixer s'ils ne passent pas
