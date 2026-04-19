@@ -30,15 +30,16 @@ public actor LogCleaner {
 
     public func cleanOnce() async {
         let cutoff = now().addingTimeInterval(-retentionSeconds)
+        let appLogger = self.logger
         for fileLogger in loggers {
-            // WHY: purgeEntries uses queue.sync internally — hop to a background
+            // purgeEntries uses queue.sync internally — hop to a background
             // queue so we never block the cooperative thread pool
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                 DispatchQueue.global(qos: .utility).async {
                     do {
                         try fileLogger.purgeEntries(olderThan: cutoff)
                     } catch {
-                        fileLogger.log(.error, "Log purge failed for \(fileLogger.filePath): \(error)")
+                        appLogger.log(.error, "Log purge failed for \(fileLogger.filePath): \(error)")
                     }
                     continuation.resume()
                 }
@@ -52,11 +53,14 @@ public actor LogCleaner {
             return
         }
         await cleanOnce()
-        task = Task { [sleepFn, tickInterval] in
+        task = Task { [sleepFn, tickInterval, logger] in
             while !Task.isCancelled {
                 do {
                     try await sleepFn(tickInterval)
+                } catch is CancellationError {
+                    break
                 } catch {
+                    logger.log(.error, "LogCleaner sleep interrupted: \(error)")
                     break
                 }
                 guard !Task.isCancelled else { break }
