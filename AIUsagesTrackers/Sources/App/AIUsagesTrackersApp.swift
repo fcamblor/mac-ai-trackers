@@ -7,7 +7,10 @@ struct AIUsagesTrackersApp: App {
 
     var body: some Scene {
         Settings {
-            SettingsView(preferences: AppDelegate.sharedPreferences)
+            SettingsView(
+                preferences: AppDelegate.sharedPreferences,
+                launchAtLoginService: LaunchAtLoginService.shared
+            )
         }
     }
 }
