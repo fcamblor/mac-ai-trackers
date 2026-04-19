@@ -99,8 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let popover = NSPopover()
         popover.behavior = .transient
-        popover.contentSize = NSSize(width: 320, height: 400)
-        popover.contentViewController = NSHostingController(
+        let hosting = NSHostingController(
             rootView: UsageDetailsView(
                 store: store,
                 refreshState: refreshState,
@@ -115,6 +114,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             )
         )
+        // Let SwiftUI's intrinsic size drive the popover so it grows with content
+        // up to the screen-ratio cap enforced inside UsageDetailsView.
+        hosting.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = hosting
         self.popover = popover
 
         if let button = item.button {
