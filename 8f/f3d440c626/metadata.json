@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "8ff3d440c626",
+  "strategy": "manual-commit",
+  "branch": "archon/task-feat-log-cleanup",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Logging/Logger.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/8f/f3d440c626/0/metadata.json",
+      "transcript": "/8f/f3d440c626/0/full.jsonl",
+      "content_hash": "/8f/f3d440c626/0/content_hash.txt",
+      "prompt": "/8f/f3d440c626/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 14,
+    "cache_creation_tokens": 31172,
+    "cache_read_tokens": 445508,
+    "output_tokens": 3479,
+    "api_call_count": 13
+  }
+}

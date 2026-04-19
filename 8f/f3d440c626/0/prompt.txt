@@ -1,0 +1,67 @@
+# implement-roadmap-feature — IMPLEMENT
+
+FRESH session — you have NO memory of previous iterations.
+Read state from disk.
+
+**Initial request**: log-cleanup
+**Feedback from the previous failed iteration (if any)**: 
+
+## Commit discipline
+
+You commit AS YOU GO through implementation, **one commit per logical
+block**, BEFORE the deterministic gate or the user validates anything.
+
+**LANGUAGE — absolute rule: commit messages entirely in English.**
+
+## Tooling
+
+Prefer **Serena** (`mcp__serena__*`) if available.
+
+## Setup
+
+```bash
+PLAN_FILE=$(ls roadmap/*.plan.md 2>/dev/null | head -1)
+[ -n "$PLAN_FILE" ] || { echo 'ERROR: no roadmap/*.plan.md found'; exit 1; }
+SLUG=$(basename "$PLAN_FILE" .plan.md)
+EPIC_FILE="roadmap/$SLUG.md"
+echo "=== $EPIC_FILE ==="
+cat "$EPIC_FILE"
+echo "=== $PLAN_FILE ==="
+cat "$PLAN_FILE"
+git log --oneline -20
+git status
+```
+
+Read `CLAUDE.md`. If the epic touches Swift code, **also read the
+five docs listed under "Swift code quality (mandatory)" in
+`CLAUDE.md`** — mandatory before any Swift modification.
+
+## Your mission this iteration
+
+1. Identify what is already implemented (via `git log`) vs what
+   remains in the plan. Iterating is OK — no need to do everything
+   in one pass.
+2. Implement the next logical block.
+3. Write **solid tests**: happy path + edge cases + error cases.
+   Don't wait for a downstream review to catch you.
+4. Commit AS YOU GO, one commit per logical block:
+   ```bash
+   git add <files>
+   git commit -m "<type>: <subject in English>" \
+     -m "<WHY — retained trade-offs, discarded alternatives, technical decisions>"
+   ```
+   Types: `feat:`, `test:`, `refactor:`, `fix:`, `chore:`.
+   NEVER describe the WHAT in the body — always the WHY.
+5. Before declaring yourself ready, run build + tests yourself via
+   bash to reduce round-trips on the gate.
+
+## Exit criterion
+
+When you are confident that:
+- All relevant plan items are implemented
+- Tests cover happy path + edge cases + errors
+- Build + tests pass locally
+
+Emit: <promise>IMPL_READY</promise>
+
+The engine will then run `until_bash` as the DETERMINISTIC GATE.
