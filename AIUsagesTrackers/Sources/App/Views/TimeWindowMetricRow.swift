@@ -15,7 +15,8 @@ struct TimeWindowMetricRow: View {
 
     var body: some View {
         let now = Date()
-        let theoretical = theoreticalFraction(resetAt: resetAt, windowDuration: windowDuration, now: now)
+        let isExpired = resetAt.date.map { now > $0 } ?? false
+        let theoretical = isExpired ? 0.0 : theoreticalFraction(resetAt: resetAt, windowDuration: windowDuration, now: now)
         let tier = consumptionRatio(actualPercent: usagePercent, theoreticalFraction: theoretical)
             .map(consumptionTier(ratio:))
 
@@ -25,22 +26,22 @@ struct TimeWindowMetricRow: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("\(usagePercent.rawValue)%")
+                Text(isExpired ? "???" : "\(usagePercent.rawValue)%")
                     .font(.system(size: 11, weight: .semibold).monospacedDigit())
             }
 
             GaugeBar(
-                actual: actualFraction,
+                actual: isExpired ? 0.0 : actualFraction,
                 theoretical: theoretical,
                 tier: tier
             )
 
             HStack {
-                Text(formatRemainingTime(resetAt: resetAt, now: now))
+                Text(isExpired ? "???" : formatRemainingTime(resetAt: resetAt, now: now))
                     .font(.system(size: 10).monospacedDigit())
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("resets \(formatResetDate(resetAt, now: now))")
+                Text(isExpired ? "resets ???" : "resets \(formatResetDate(resetAt, now: now))")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
             }
