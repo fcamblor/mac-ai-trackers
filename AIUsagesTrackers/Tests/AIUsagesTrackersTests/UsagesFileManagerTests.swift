@@ -397,6 +397,92 @@ struct UsagesFileManagerTests {
         #expect(result.usages.isEmpty)
     }
 
+    // MARK: - Outage preservation
+
+    @Test("merge preserves outages from existing file when connectors provide none")
+    func mergePreservesOutages() async {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+
+        // Write initial v2 file with outages via raw JSON
+        let v2JSON = """
+        {
+          "schemaVersion": 2,
+          "vendors": {
+            "claude": {
+              "accounts": [
+                {"account": "a@b.com", "isActive": true, "metrics": []}
+              ],
+              "outages": [
+                {"id": "inc-1", "title": "API issues", "severity": "major"}
+              ]
+            }
+          }
+        }
+        """.data(using: .utf8)!
+        try! v2JSON.write(to: URL(fileURLWithPath: mgr.filePath), options: .atomic)
+
+        // Connector provides fresh account data without outages
+        let entry = VendorUsageEntry(
+            vendor: "claude", account: "a@b.com", isActive: true,
+            lastAcquiredOn: "2026-04-19T12:00:00Z",
+            metrics: [.timeWindow(name: "session", resetAt: "2026-04-19T15:00:00Z",
+                                  windowDuration: 300, usagePercent: 50)]
+        )
+        await mgr.update(with: [entry])
+
+        let result = await mgr.read()
+        #expect(result.usages.count == 1)
+        #expect(result.usages[0].metrics.count == 1)
+        // Outages survive the merge
+        let outages = result.outagesByVendor[.claude]
+        #expect(outages?.count == 1)
+        #expect(outages?[0].id == OutageId(rawValue: "inc-1"))
+    }
+
+    @Test("merge does not create outages from connector entries")
+    func mergeDoesNotCreateOutages() async {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+
+        await mgr.update(with: [
+            VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true),
+        ])
+        let result = await mgr.read()
+        #expect(result.outagesByVendor.isEmpty)
+    }
+
+    @Test("read accepts legacy v1 shape and returns correct entries")
+    func readAcceptsLegacyShape() async {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+        let v1JSON = """
+        {"usages":[{"vendor":"claude","account":"a@b.com","isActive":true,"metrics":[]}]}
+        """.data(using: .utf8)!
+        try! v1JSON.write(to: URL(fileURLWithPath: mgr.filePath), options: .atomic)
+
+        let result = await mgr.read()
+        #expect(result.usages.count == 1)
+        #expect(result.usages[0].vendor == .claude)
+        #expect(result.outagesByVendor.isEmpty)
+    }
+
+    @Test("writeUnsafe always emits v2 shape with schemaVersion")
+    func writeAlwaysEmitsV2() async {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+
+        await mgr.update(with: [
+            VendorUsageEntry(vendor: "claude", account: "a@b.com"),
+        ])
+
+        let raw = try! Data(contentsOf: URL(fileURLWithPath: mgr.filePath))
+        let json = try! JSONSerialization.jsonObject(with: raw) as! [String: Any]
+        #expect(json["schemaVersion"] as? Int == 2)
+        #expect(json["vendors"] != nil)
+        #expect(json["usages"] == nil)
+    }
+
     // MARK: - Lock error paths
 
     @Test("read returns empty file when lock times out")
