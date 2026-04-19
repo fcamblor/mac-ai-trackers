@@ -1,0 +1,361 @@
+# implement-roadmap-feature — Review aggregation & application
+
+## Review sources
+- Code quality: Now let me look at a few specific areas more closely.```
+# Review — Code quality
+
+1. [Logger.swift:145] `DispatchQueue.main.sync` inside `resolveLevel()` will deadlock when `log()` is called from the main thread. The call path is: main-thread `log()` → `effectiveMinLevel` → `dynamicLevel()` → `resolveLevel()` → `DispatchQueue.main.sync { prefs.logLevel }` → deadlock. Consider using `Thread.isMainThread` to call synchronously when already on main, or restructure so that `resolveLevel` never does a sync hop to the current queue (e.g. cache the level value via an observation callback instead of reading it per-call).
+
+2. [Logger.swift:36–59] The two `FileLogger` initializers duplicate the directory-creation block verbatim (6 lines each). Extract into a `private static func ensureDirectory(for filePath: String)` to remove the duplication — this is a real maintenance risk since a fix to one init could miss the other.
+
+3. [UsagePoller.swift:56] `fixedInterval ?? .seconds(180)` — the `?? .seconds(180)` fallback is unreachable: the test init always assigns `fixedInterval = interval` (which itself defaults to `.seconds(180)`), and the production init requires `preferences`. The dead branch hides an implicit magic number; either remove the fallback with a `fixedInterval!` (provably safe) or make the default explicit via a named constant.
+
+4. [GeneralSettingsView.swift:22–24] The `Slider` binding's setter `{ preferences.refreshInterval = RefreshInterval(clamping: Int($0)) }` truncates the `Double` via `Int(_:)`. Slider continuous updates produce values like `89.999…` which truncate to `89` instead of rounding to `90`. Use `Int($0.rounded())` instead.
+
+5. [LoggingSettingsView.swift:7–9] `envOverrideActive` reads `ProcessInfo.processInfo.environment` on every view body evaluation. This value is immutable for the process lifetime — compute it once (e.g., `static let` or `@State` initialized in `init`) rather than per-render.
+```
+- Error handling: Now let me check a couple of specific areas more closely.# Review — Error handling
+
+1. **`Logger.swift:53-58`** — The new `init(filePath:dynamicLevel:)` catches the `createDirectory` error but only prints to stderr and continues. If the directory does not exist, every subsequent `append` call will silently fail to write logs. Per `SWIFT-ERROR-HANDLING.md §1`, `createDirectory` must not be swallowed. Either propagate (make the init `throws`) or, at minimum, set a flag so later writes log to stderr as a fallback. Note: the existing `init(filePath:minLevel:)` on line 37–45 has the same pattern — the new init copied it.
+
+2. **`Logger.swift:145`** — `DispatchQueue.main.sync { prefs.logLevel }` inside `resolveLevel()` will deadlock if this is ever called from the main thread (e.g., a `Loggers.app.log(...)` on the main queue). The logger's serial queue dispatches to main synchronously — if that serial queue callback is itself called from main, it's a classic `sync`-on-same-queue deadlock. Consider `DispatchQueue.main.async` with a cached last-known level, or guard `Thread.isMainThread` to read directly.
+
+3. **`Logger.swift:128-131`** — `nonisolated(unsafe)` on `_preferences` relies on the comment's "written exactly once before any log call" invariant. There is no enforcement of this ordering — if any static logger (`Loggers.app`) is used at file scope or in another `static let` initializer before `AppDelegate.applicationDidFinishLaunching` runs, the read races with the write. Consider using an atomic or `os_unfair_lock`-protected wrapper instead of relying on launch ordering.
+
+4. **`LaunchAtLoginService.swift:23-28`** — `setEnabled(_:)` throws the raw `SMAppService` error. The protocol declares `throws` which is good, and `GeneralSettingsView` catches it (line 47–48). However, the error surfaced is `error.localizedDescription` which for `SMAppService` failures is often vague (e.g., "The operation couldn't be completed"). Consider wrapping in a domain error with the `enabled` flag and underlying error for better diagnostics.
+
+5. **`AppDelegate.swift:49-50`** — The reconciliation `Self.sharedPreferences.launchAtLogin = launchService.isEnabled` reads `SMAppService.mainApp.status`. If macOS returns `.notFound` (app not in Login Items database), `isEnabled` returns `false`. This is fine. But if `.requiresApproval` is the status, `isEnabled` also returns `false`, which may silently flip the preference to `false` even though the user did enable it in-app. Consider handling `.requiresApproval` distinctly — at least log it.
+
+6. **`UsagePoller.swift:69`** — `try? await Task.sleep(for: sleepDuration)` — the `try?` here is acceptable (cancellation), but the `sleepDuration` comes from `currentInterval()` which hops to `@MainActor`. If the main actor is blocked (e.g., a long modal alert), this `await` will stall the poller. Low severity but worth noting.
+
+7. **`GeneralSettingsView.swift:42-49`** — The toggle's `set` closure calls `launchAtLoginService.setEnabled(newValue)` and only updates the preference on success. Good error-path discipline. However, if `setEnabled` throws, the Toggle's binding `get` still returns the old (stale) value, so SwiftUI will visually snap the toggle back — but there's a brief flash. Consider using `@State private var launchAtLogin` seeded from preferences to give the UI a stable source of truth.
+
+8. **`AppPreferences.swift:28-29`** — `defaults.integer(forKey:)` returns `0` for a missing key, which is treated as "return default". This is correct. But if a caller writes `refreshInterval = RefreshInterval(clamping: 30)` (the minimum), it stores `30`, and reading back gives `30` (not `0`), so the "return default" path is never hit for the minimum value. No bug, but worth a comment — the sentinel `0` conflates "never set" with an impossible clamped value.
+
+---
+
+**Summary**: The most actionable items are **#1** (swallowed `createDirectory` error — violates the project's own SwiftLint rule E1 if `try?` were used, and the `catch`-and-continue pattern has the same effect) and **#2** (potential main-thread deadlock in `resolveLevel`). Items #3–#5 are moderate-severity race/edge-case concerns. The rest are low severity.
+- Test coverage: Let me read the key source files to understand what's untested.Now let me check what `RefreshInterval` looks like, including its `validated` and boundary constants.Now let me check the `Loggers` level-resolution logic and the `AppDelegate` wiring.Now I have a complete picture. Here is my review:
+
+# Review — Test coverage
+
+## Well covered
+- `RefreshInterval` value object: boundaries, clamping, Codable, Comparable, ExpressibleByIntegerLiteral — solid.
+- `UserDefaultsAppPreferences` / `InMemoryAppPreferences`: round-trips, defaults, out-of-range clamping — good.
+- `FileLogger` dynamic level: override, effectiveMinLevel — good.
+- `UsagePoller` + preferences: dynamic interval from prefs, cache freshness with prefs interval — good.
+
+## Missing or improvable
+
+1. **`LaunchAtLoginService.swift:8-11`** — `LaunchAtLoginManaging` protocol is injectable but there is **no test double or test exercising it**. `GeneralSettingsView` calls `setEnabled` and reads `isEnabled`; a unit test with a mock `LaunchAtLoginManaging` should verify: (a) toggling on calls `setEnabled(true)` and updates `preferences.launchAtLogin`, (b) when `setEnabled` throws, `launchAtLoginError` is populated and `preferences.launchAtLogin` is unchanged.
+
+2. **`GeneralSettingsView.swift:40-57`** — The launch-at-login toggle error path (`catch` branch, line 47-49) has no coverage. A ViewInspector or programmatic test with a throwing mock would catch regressions in error display.
+
+3. **`GeneralSettingsView.swift:22-26`** — Slider binding that writes `RefreshInterval(clamping:)` back to preferences is untested. Verify that moving the slider actually updates `preferences.refreshInterval`.
+
+4. **`AppPreferences.swift:28-30`** — `refreshInterval` getter: when UserDefaults stores `0`, it falls back to `.default`. The test at line 103 (`emptyDefaults`) covers this implicitly, but there is **no explicit test for the `raw == 0` branch** with a non-fresh suite that has the key present with value `0`.
+
+5. **`AppPreferences.swift:43-46`** — `logLevel` getter: when UserDefaults has an unrecognized string (e.g. `"garbage"`), `LogLevel.from(string:)` returns `.info`. No test verifies this fallback for `UserDefaultsAppPreferences`.
+
+6. **`Logger.swift:115-148`** — `Loggers.resolveLevel()` has three branches (env var, preferences, `.info` default). The `dynamicLevel` test on `FileLogger` only proves FileLogger respects a closure — it does **not test `Loggers.resolveLevel` itself**. Missing: (a) env var override wins over preferences, (b) preferences level used when env var absent, (c) `.info` default when both absent.
+
+7. **`Logger.swift:131`** — `nonisolated(unsafe)` static `_preferences`: the `setPreferences` → `resolveLevel` path is untested. A test should verify that after `Loggers.setPreferences(prefs)`, the shared loggers resolve to the injected level.
+
+8. **`AppDelegate.swift:47-51`** — Launch-at-login reconciliation (`sharedPreferences.launchAtLogin = launchService.isEnabled`) is untested. If the user disables launch-at-login in System Settings, this reconciliation is the only path that syncs state. Needs a test with a mock service returning `false` while preferences return `true`.
+
+9. **`UsagePoller.swift:52-57`** — `currentInterval()` with `nil` preferences and `nil` fixedInterval falls back to `.seconds(180)`. No test covers the double-nil fallback (the legacy init always sets `fixedInterval`, but the branch still exists).
+
+10. **`ValueObjects.swift:36-39`** — `ISODate(date:)` initializer was added in this PR. No test verifies it round-trips (format a Date, parse it back, confirm equality).
+
+## Qualitative notes
+
+- **Tests assert behavior, not implementation** — the AppPreferences tests verify round-trip semantics through the public interface rather than checking internal storage mechanics. Good.
+- **No brittle mocks** — `InMemoryAppPreferences` and `MockConnector` are lightweight fakes, not strict-invocation mocks. This is the right approach.
+- **`try!` in tests** (LoggerTests:116,123) — force-try on `String(contentsOfFile:)` is acceptable in test code but will produce unhelpful crash messages on failure. Consider `throws` test functions with plain `try` instead.
+- **`@unchecked Sendable` in test** (LoggerTests `MutableLogLevel`) has the required justification comment — compliant with W4.
+- Comment quality: # Review — Comment quality
+
+1. **`LoggerTests.swift:6`** — **MISLEADING, rewrite** — `// lock-free: only test code, single writer` claims lock-free but the class uses `NSLock`. Suggest: `// @unchecked Sendable justified: NSLock guards _value; only this test file mutates it`
+
+2. **`Logger.swift:48-49`** — **WHAT, rewrite** — `/// Creates a logger whose effective level is resolved dynamically per call.` restates the constructor signature. The WHY is missing: why dynamic resolution instead of passing a fixed level? Suggest: `/// Used for process-wide singleton loggers whose level must track live preferences changes without reconstructing the logger.`
+
+3. **`UsagePoller.swift:50-51`** — **WHAT, rewrite** — `/// Resolves the current polling interval — reads from preferences (main actor hop) or falls back to the fixed interval.` describes mechanics already clear from the body. Missing WHY: why re-read on every call? Suggest: `/// Re-read on every tick so that preference changes take effect immediately without restarting the poller.`
+
+4. **`AppPreferences.swift:56`** — **MISLEADING, rewrite** — `/// Shared between production defaults-absent paths and test code.` — in the current code `InMemoryAppPreferences` is only used in tests; no production path instantiates it. "Production defaults-absent paths" is vague and inaccurate. Suggest: `/// Lives in the lib target (not the test target) so it can be imported by both test suites and any future production stub that needs a no-persistence backing.`
+
+5. **`AppPreferencesTests.swift:117-118`** — **WHAT, remove** — `// Verify the raw value stored in defaults` restates exactly what the next two lines do. The test name already conveys intent; no comment needed.
+
+6. **`Logger.swift:133`** — **WHAT, rewrite** — `/// Called once from AppDelegate to wire preferences into the logging subsystem.` The "once" constraint is the critical safety assumption (the `nonisolated(unsafe)` above relies on it) but the comment reads as a call-site label. Suggest: `/// Must be called exactly once before the first log call — the nonisolated(unsafe) storage relies on the write being visible to all subsequent readers.`
+- Doc impact: # Review — Doc impact
+
+1. **`docs/DEVELOPMENT.md` — update log-level note**
+
+   Line 10 currently reads:
+   > Log level: set `AI_TRACKER_LOG_LEVEL` environment variable (`debug`, `info`, `warning`, `error`; defaults to `info`)
+
+   The branch changes `Logger` so that when the env var is absent the level falls back to the preference stored in the settings window (itself defaulting to `info`), not to a hardcoded `info`. The sentence should reflect that the env var overrides the UI preference rather than being the sole control:
+
+   ```
+   Log level: set the `AI_TRACKER_LOG_LEVEL` environment variable
+   (`debug`, `info`, `warning`, `error`) to override the value chosen
+   in the settings window (General › Logging tab; default: `info`).
+   ```
+
+   `docs/ARCHITECTURE.md` already has a correct, complete description of this fallback chain — `DEVELOPMENT.md` just needs its one-liner updated so it doesn't contradict it.
+
+No other tracked docs (`docs/SWIFT-*.md`, `docs/GIT-CONVENTIONS.md`, `docs/ROADMAP.md`) are affected by the changes in this branch.
+
+**Last user message**:
+
+---
+
+## Non-negotiable principle — commit discipline
+
+You commit BEFORE presenting the result.
+
+**LANGUAGE — absolute rule: commit messages entirely in English.**
+
+**FIXUP — absolute rule:** each recommendation application
+produces `--fixup` commits attached to the source commit, NOT
+independent `review(axis):` commits.
+```bash
+git log --oneline origin/main..HEAD -- <files>
+SOURCE_HASH=<hash of the source commit>
+git add <files>
+git commit --fixup=$SOURCE_HASH
+```
+If a block touches multiple source commits, one fixup per source.
+History must be squashable with `git rebase --autosquash`.
+
+## Tooling
+
+Prefer **Serena** if available.
+
+---
+
+## First iteration ( empty)
+
+1. Consolidate the 5 reviews into a single numbered action plan
+   (deduplicate across axes, priority CRITICAL > HIGH > MED > LOW).
+   Format:
+   ```
+   N. [priority] [axis] [file:line] <recommendation>
+   ```
+2. Present it. Ask: `all` / `none` / `1,3,5` / free text.
+3. Do **NOT** emit the signal.
+
+## Subsequent iterations
+
+### "none" / "skip" / "ship it" / "finaliser"
+→ Emit: <promise>REVIEWS_DONE</promise>
+
+### Selection (`all`, `1,3,5`, etc.)
+1. Apply each recommendation. Be surgical.
+2. Commit per logical block WITH `--fixup`.
+3. Run the shared gate:
+   ```bash
+   bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
+   ```
+   If failure, fix BEFORE presenting. Do NOT present "apply done"
+   until the gate is green.
+4. Report: applied / remaining / diff stat.
+5. Ask: "apply more / re-run reviews / ship it ?" — do NOT
+   emit the signal.
+
+### "re-run reviews"
+The re-run runs **on the current state** (fixups included).
+
+Launch **5 Tasks in parallel** in ONE SINGLE message (tool `Agent`
+with `subagent_type: general-purpose`), each prompt starting with
+`git diff origin/main...HEAD` then applying the corresponding
+axis (see phase 4). Strict response format
+`[file:line] recommendation`.
+
+Re-aggregate, re-prioritize, present, ask
+"apply more / re-run / ship it ?" again. Do NOT emit the signal.
+
+### CRITICAL — signal discipline
+Emit `<promise>REVIEWS_DONE</promise>` **only** on an explicit
+closure signal.
+
+---
+
+# implement-roadmap-feature — Review aggregation & application
+
+## Review sources
+- Code quality: Now let me look at a few specific areas more closely.```
+# Review — Code quality
+
+1. [Logger.swift:145] `DispatchQueue.main.sync` inside `resolveLevel()` will deadlock when `log()` is called from the main thread. The call path is: main-thread `log()` → `effectiveMinLevel` → `dynamicLevel()` → `resolveLevel()` → `DispatchQueue.main.sync { prefs.logLevel }` → deadlock. Consider using `Thread.isMainThread` to call synchronously when already on main, or restructure so that `resolveLevel` never does a sync hop to the current queue (e.g. cache the level value via an observation callback instead of reading it per-call).
+
+2. [Logger.swift:36–59] The two `FileLogger` initializers duplicate the directory-creation block verbatim (6 lines each). Extract into a `private static func ensureDirectory(for filePath: String)` to remove the duplication — this is a real maintenance risk since a fix to one init could miss the other.
+
+3. [UsagePoller.swift:56] `fixedInterval ?? .seconds(180)` — the `?? .seconds(180)` fallback is unreachable: the test init always assigns `fixedInterval = interval` (which itself defaults to `.seconds(180)`), and the production init requires `preferences`. The dead branch hides an implicit magic number; either remove the fallback with a `fixedInterval!` (provably safe) or make the default explicit via a named constant.
+
+4. [GeneralSettingsView.swift:22–24] The `Slider` binding's setter `{ preferences.refreshInterval = RefreshInterval(clamping: Int($0)) }` truncates the `Double` via `Int(_:)`. Slider continuous updates produce values like `89.999…` which truncate to `89` instead of rounding to `90`. Use `Int($0.rounded())` instead.
+
+5. [LoggingSettingsView.swift:7–9] `envOverrideActive` reads `ProcessInfo.processInfo.environment` on every view body evaluation. This value is immutable for the process lifetime — compute it once (e.g., `static let` or `@State` initialized in `init`) rather than per-render.
+```
+- Error handling: Now let me check a couple of specific areas more closely.# Review — Error handling
+
+1. **`Logger.swift:53-58`** — The new `init(filePath:dynamicLevel:)` catches the `createDirectory` error but only prints to stderr and continues. If the directory does not exist, every subsequent `append` call will silently fail to write logs. Per `SWIFT-ERROR-HANDLING.md §1`, `createDirectory` must not be swallowed. Either propagate (make the init `throws`) or, at minimum, set a flag so later writes log to stderr as a fallback. Note: the existing `init(filePath:minLevel:)` on line 37–45 has the same pattern — the new init copied it.
+
+2. **`Logger.swift:145`** — `DispatchQueue.main.sync { prefs.logLevel }` inside `resolveLevel()` will deadlock if this is ever called from the main thread (e.g., a `Loggers.app.log(...)` on the main queue). The logger's serial queue dispatches to main synchronously — if that serial queue callback is itself called from main, it's a classic `sync`-on-same-queue deadlock. Consider `DispatchQueue.main.async` with a cached last-known level, or guard `Thread.isMainThread` to read directly.
+
+3. **`Logger.swift:128-131`** — `nonisolated(unsafe)` on `_preferences` relies on the comment's "written exactly once before any log call" invariant. There is no enforcement of this ordering — if any static logger (`Loggers.app`) is used at file scope or in another `static let` initializer before `AppDelegate.applicationDidFinishLaunching` runs, the read races with the write. Consider using an atomic or `os_unfair_lock`-protected wrapper instead of relying on launch ordering.
+
+4. **`LaunchAtLoginService.swift:23-28`** — `setEnabled(_:)` throws the raw `SMAppService` error. The protocol declares `throws` which is good, and `GeneralSettingsView` catches it (line 47–48). However, the error surfaced is `error.localizedDescription` which for `SMAppService` failures is often vague (e.g., "The operation couldn't be completed"). Consider wrapping in a domain error with the `enabled` flag and underlying error for better diagnostics.
+
+5. **`AppDelegate.swift:49-50`** — The reconciliation `Self.sharedPreferences.launchAtLogin = launchService.isEnabled` reads `SMAppService.mainApp.status`. If macOS returns `.notFound` (app not in Login Items database), `isEnabled` returns `false`. This is fine. But if `.requiresApproval` is the status, `isEnabled` also returns `false`, which may silently flip the preference to `false` even though the user did enable it in-app. Consider handling `.requiresApproval` distinctly — at least log it.
+
+6. **`UsagePoller.swift:69`** — `try? await Task.sleep(for: sleepDuration)` — the `try?` here is acceptable (cancellation), but the `sleepDuration` comes from `currentInterval()` which hops to `@MainActor`. If the main actor is blocked (e.g., a long modal alert), this `await` will stall the poller. Low severity but worth noting.
+
+7. **`GeneralSettingsView.swift:42-49`** — The toggle's `set` closure calls `launchAtLoginService.setEnabled(newValue)` and only updates the preference on success. Good error-path discipline. However, if `setEnabled` throws, the Toggle's binding `get` still returns the old (stale) value, so SwiftUI will visually snap the toggle back — but there's a brief flash. Consider using `@State private var launchAtLogin` seeded from preferences to give the UI a stable source of truth.
+
+8. **`AppPreferences.swift:28-29`** — `defaults.integer(forKey:)` returns `0` for a missing key, which is treated as "return default". This is correct. But if a caller writes `refreshInterval = RefreshInterval(clamping: 30)` (the minimum), it stores `30`, and reading back gives `30` (not `0`), so the "return default" path is never hit for the minimum value. No bug, but worth a comment — the sentinel `0` conflates "never set" with an impossible clamped value.
+
+---
+
+**Summary**: The most actionable items are **#1** (swallowed `createDirectory` error — violates the project's own SwiftLint rule E1 if `try?` were used, and the `catch`-and-continue pattern has the same effect) and **#2** (potential main-thread deadlock in `resolveLevel`). Items #3–#5 are moderate-severity race/edge-case concerns. The rest are low severity.
+- Test coverage: Let me read the key source files to understand what's untested.Now let me check what `RefreshInterval` looks like, including its `validated` and boundary constants.Now let me check the `Loggers` level-resolution logic and the `AppDelegate` wiring.Now I have a complete picture. Here is my review:
+
+# Review — Test coverage
+
+## Well covered
+- `RefreshInterval` value object: boundaries, clamping, Codable, Comparable, ExpressibleByIntegerLiteral — solid.
+- `UserDefaultsAppPreferences` / `InMemoryAppPreferences`: round-trips, defaults, out-of-range clamping — good.
+- `FileLogger` dynamic level: override, effectiveMinLevel — good.
+- `UsagePoller` + preferences: dynamic interval from prefs, cache freshness with prefs interval — good.
+
+## Missing or improvable
+
+1. **`LaunchAtLoginService.swift:8-11`** — `LaunchAtLoginManaging` protocol is injectable but there is **no test double or test exercising it**. `GeneralSettingsView` calls `setEnabled` and reads `isEnabled`; a unit test with a mock `LaunchAtLoginManaging` should verify: (a) toggling on calls `setEnabled(true)` and updates `preferences.launchAtLogin`, (b) when `setEnabled` throws, `launchAtLoginError` is populated and `preferences.launchAtLogin` is unchanged.
+
+2. **`GeneralSettingsView.swift:40-57`** — The launch-at-login toggle error path (`catch` branch, line 47-49) has no coverage. A ViewInspector or programmatic test with a throwing mock would catch regressions in error display.
+
+3. **`GeneralSettingsView.swift:22-26`** — Slider binding that writes `RefreshInterval(clamping:)` back to preferences is untested. Verify that moving the slider actually updates `preferences.refreshInterval`.
+
+4. **`AppPreferences.swift:28-30`** — `refreshInterval` getter: when UserDefaults stores `0`, it falls back to `.default`. The test at line 103 (`emptyDefaults`) covers this implicitly, but there is **no explicit test for the `raw == 0` branch** with a non-fresh suite that has the key present with value `0`.
+
+5. **`AppPreferences.swift:43-46`** — `logLevel` getter: when UserDefaults has an unrecognized string (e.g. `"garbage"`), `LogLevel.from(string:)` returns `.info`. No test verifies this fallback for `UserDefaultsAppPreferences`.
+
+6. **`Logger.swift:115-148`** — `Loggers.resolveLevel()` has three branches (env var, preferences, `.info` default). The `dynamicLevel` test on `FileLogger` only proves FileLogger respects a closure — it does **not test `Loggers.resolveLevel` itself**. Missing: (a) env var override wins over preferences, (b) preferences level used when env var absent, (c) `.info` default when both absent.
+
+7. **`Logger.swift:131`** — `nonisolated(unsafe)` static `_preferences`: the `setPreferences` → `resolveLevel` path is untested. A test should verify that after `Loggers.setPreferences(prefs)`, the shared loggers resolve to the injected level.
+
+8. **`AppDelegate.swift:47-51`** — Launch-at-login reconciliation (`sharedPreferences.launchAtLogin = launchService.isEnabled`) is untested. If the user disables launch-at-login in System Settings, this reconciliation is the only path that syncs state. Needs a test with a mock service returning `false` while preferences return `true`.
+
+9. **`UsagePoller.swift:52-57`** — `currentInterval()` with `nil` preferences and `nil` fixedInterval falls back to `.seconds(180)`. No test covers the double-nil fallback (the legacy init always sets `fixedInterval`, but the branch still exists).
+
+10. **`ValueObjects.swift:36-39`** — `ISODate(date:)` initializer was added in this PR. No test verifies it round-trips (format a Date, parse it back, confirm equality).
+
+## Qualitative notes
+
+- **Tests assert behavior, not implementation** — the AppPreferences tests verify round-trip semantics through the public interface rather than checking internal storage mechanics. Good.
+- **No brittle mocks** — `InMemoryAppPreferences` and `MockConnector` are lightweight fakes, not strict-invocation mocks. This is the right approach.
+- **`try!` in tests** (LoggerTests:116,123) — force-try on `String(contentsOfFile:)` is acceptable in test code but will produce unhelpful crash messages on failure. Consider `throws` test functions with plain `try` instead.
+- **`@unchecked Sendable` in test** (LoggerTests `MutableLogLevel`) has the required justification comment — compliant with W4.
+- Comment quality: # Review — Comment quality
+
+1. **`LoggerTests.swift:6`** — **MISLEADING, rewrite** — `// lock-free: only test code, single writer` claims lock-free but the class uses `NSLock`. Suggest: `// @unchecked Sendable justified: NSLock guards _value; only this test file mutates it`
+
+2. **`Logger.swift:48-49`** — **WHAT, rewrite** — `/// Creates a logger whose effective level is resolved dynamically per call.` restates the constructor signature. The WHY is missing: why dynamic resolution instead of passing a fixed level? Suggest: `/// Used for process-wide singleton loggers whose level must track live preferences changes without reconstructing the logger.`
+
+3. **`UsagePoller.swift:50-51`** — **WHAT, rewrite** — `/// Resolves the current polling interval — reads from preferences (main actor hop) or falls back to the fixed interval.` describes mechanics already clear from the body. Missing WHY: why re-read on every call? Suggest: `/// Re-read on every tick so that preference changes take effect immediately without restarting the poller.`
+
+4. **`AppPreferences.swift:56`** — **MISLEADING, rewrite** — `/// Shared between production defaults-absent paths and test code.` — in the current code `InMemoryAppPreferences` is only used in tests; no production path instantiates it. "Production defaults-absent paths" is vague and inaccurate. Suggest: `/// Lives in the lib target (not the test target) so it can be imported by both test suites and any future production stub that needs a no-persistence backing.`
+
+5. **`AppPreferencesTests.swift:117-118`** — **WHAT, remove** — `// Verify the raw value stored in defaults` restates exactly what the next two lines do. The test name already conveys intent; no comment needed.
+
+6. **`Logger.swift:133`** — **WHAT, rewrite** — `/// Called once from AppDelegate to wire preferences into the logging subsystem.` The "once" constraint is the critical safety assumption (the `nonisolated(unsafe)` above relies on it) but the comment reads as a call-site label. Suggest: `/// Must be called exactly once before the first log call — the nonisolated(unsafe) storage relies on the write being visible to all subsequent readers.`
+- Doc impact: # Review — Doc impact
+
+1. **`docs/DEVELOPMENT.md` — update log-level note**
+
+   Line 10 currently reads:
+   > Log level: set `AI_TRACKER_LOG_LEVEL` environment variable (`debug`, `info`, `warning`, `error`; defaults to `info`)
+
+   The branch changes `Logger` so that when the env var is absent the level falls back to the preference stored in the settings window (itself defaulting to `info`), not to a hardcoded `info`. The sentence should reflect that the env var overrides the UI preference rather than being the sole control:
+
+   ```
+   Log level: set the `AI_TRACKER_LOG_LEVEL` environment variable
+   (`debug`, `info`, `warning`, `error`) to override the value chosen
+   in the settings window (General › Logging tab; default: `info`).
+   ```
+
+   `docs/ARCHITECTURE.md` already has a correct, complete description of this fallback chain — `DEVELOPMENT.md` just needs its one-liner updated so it doesn't contradict it.
+
+No other tracked docs (`docs/SWIFT-*.md`, `docs/GIT-CONVENTIONS.md`, `docs/ROADMAP.md`) are affected by the changes in this branch.
+
+**Last user message**: 1,2,3,4,5,6,7,8
+
+---
+
+## Non-negotiable principle — commit discipline
+
+You commit BEFORE presenting the result.
+
+**LANGUAGE — absolute rule: commit messages entirely in English.**
+
+**FIXUP — absolute rule:** each recommendation application
+produces `--fixup` commits attached to the source commit, NOT
+independent `review(axis):` commits.
+```bash
+git log --oneline origin/main..HEAD -- <files>
+SOURCE_HASH=<hash of the source commit>
+git add <files>
+git commit --fixup=$SOURCE_HASH
+```
+If a block touches multiple source commits, one fixup per source.
+History must be squashable with `git rebase --autosquash`.
+
+## Tooling
+
+Prefer **Serena** if available.
+
+---
+
+## First iteration (1,2,3,4,5,6,7,8 empty)
+
+1. Consolidate the 5 reviews into a single numbered action plan
+   (deduplicate across axes, priority CRITICAL > HIGH > MED > LOW).
+   Format:
+   ```
+   N. [priority] [axis] [file:line] <recommendation>
+   ```
+2. Present it. Ask: `all` / `none` / `1,3,5` / free text.
+3. Do **NOT** emit the signal.
+
+## Subsequent iterations
+
+### "none" / "skip" / "ship it" / "finaliser"
+→ Emit: <promise>REVIEWS_DONE</promise>
+
+### Selection (`all`, `1,3,5`, etc.)
+1. Apply each recommendation. Be surgical.
+2. Commit per logical block WITH `--fixup`.
+3. Run the shared gate:
+   ```bash
+   bash "$HOME/.archon/.archon/workflows/fcr-dev-validate.sh"
+   ```
+   If failure, fix BEFORE presenting. Do NOT present "apply done"
+   until the gate is green.
+4. Report: applied / remaining / diff stat.
+5. Ask: "apply more / re-run reviews / ship it ?" — do NOT
+   emit the signal.
+
+### "re-run reviews"
+The re-run runs **on the current state** (fixups included).
+
+Launch **5 Tasks in parallel** in ONE SINGLE message (tool `Agent`
+with `subagent_type: general-purpose`), each prompt starting with
+`git diff origin/main...HEAD` then applying the corresponding
+axis (see phase 4). Strict response format
+`[file:line] recommendation`.
+
+Re-aggregate, re-prioritize, present, ask
+"apply more / re-run / ship it ?" again. Do NOT emit the signal.
+
+### CRITICAL — signal discipline
+Emit `<promise>REVIEWS_DONE</promise>` **only** on an explicit
+closure signal.
