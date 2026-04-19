@@ -400,7 +400,7 @@ struct UsagesFileManagerTests {
     // MARK: - Outage preservation
 
     @Test("merge preserves outages from existing file when connectors provide none")
-    func mergePreservesOutages() async {
+    func mergePreservesOutages() async throws {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
 
@@ -420,7 +420,7 @@ struct UsagesFileManagerTests {
           }
         }
         """.data(using: .utf8)!
-        try! v2JSON.write(to: URL(fileURLWithPath: mgr.filePath), options: .atomic)
+        try v2JSON.write(to: URL(fileURLWithPath: mgr.filePath), options: .atomic)
 
         // Connector provides fresh account data without outages
         let entry = VendorUsageEntry(
@@ -453,13 +453,13 @@ struct UsagesFileManagerTests {
     }
 
     @Test("read accepts legacy v1 shape and returns correct entries")
-    func readAcceptsLegacyShape() async {
+    func readAcceptsLegacyShape() async throws {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
         let v1JSON = """
         {"usages":[{"vendor":"claude","account":"a@b.com","isActive":true,"metrics":[]}]}
         """.data(using: .utf8)!
-        try! v1JSON.write(to: URL(fileURLWithPath: mgr.filePath), options: .atomic)
+        try v1JSON.write(to: URL(fileURLWithPath: mgr.filePath), options: .atomic)
 
         let result = await mgr.read()
         #expect(result.usages.count == 1)
