@@ -47,11 +47,10 @@ struct VendorStatusBanner: View {
         )
         .contentShape(Rectangle())
         .onTapGesture {
-            if let urlString = outage.url, let url = URL(string: urlString) {
+            if let url = outage.url {
                 NSWorkspace.shared.open(url)
             }
         }
-        .buttonStyle(.plain)
         .focusable(false)
     }
 
