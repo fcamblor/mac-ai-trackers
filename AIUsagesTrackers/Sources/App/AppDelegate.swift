@@ -100,6 +100,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 onRefresh: { [weak self] in
                     await self?.poller?.pollOnce(now: Date(), force: true)
                 },
+                onOpenSettings: { [weak self] in
+                    self?.openSettings()
+                },
                 onQuit: { [weak self] in
                     self?.quit()
                 }
@@ -156,6 +159,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.trackStoreChanges(store: store)
             }
         }
+    }
+
+    // MARK: - Settings
+
+    private func openSettings() {
+        popover?.performClose(nil)
+        // .accessory apps are not frontmost — bring the app forward so the
+        // settings window appears above other windows.
+        NSApp.activate(ignoringOtherApps: true)
+        // macOS 14+ replacement for the deprecated showPreferencesWindow: selector.
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
     }
 
     // MARK: - Quit
