@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "783fc8ddea6e",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "tech-debt/20260419_low_S_vendor-status-code-hygiene/debt.md",
+    "tech-debt/20260419_low_XS_settings-window-code-comments-docs/debt.md",
+    "tech-debt/20260419_low_XS_vendor-status-comments-docs/debt.md",
+    "tech-debt/20260419_medium_S_settings-window-error-ux-polish/debt.md",
+    "tech-debt/20260419_medium_S_settings-window-missing-tests/debt.md",
+    "tech-debt/20260419_medium_S_vendor-status-missing-tests/debt.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/78/3fc8ddea6e/0/metadata.json",
+      "transcript": "/78/3fc8ddea6e/0/full.jsonl",
+      "content_hash": "/78/3fc8ddea6e/0/content_hash.txt",
+      "prompt": "/78/3fc8ddea6e/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 10,
+    "cache_creation_tokens": 155368,
+    "cache_read_tokens": 543471,
+    "output_tokens": 14138,
+    "api_call_count": 5
+  }
+}
