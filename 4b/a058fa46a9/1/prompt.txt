@@ -1,0 +1,5 @@
+comment se fait-il que les hooks qui lancent swift build via le gitdiff-watcher ne soient jamais appelés ?
+
+---
+
+que fait le -p dans npx ?
