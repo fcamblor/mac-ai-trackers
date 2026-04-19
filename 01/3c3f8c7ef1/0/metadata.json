@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "013c3f8c7ef1",
+  "session_id": "80acaa13-1d31-41f9-a0e8-cfa7ceca524f",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-19T13:09:36.770035Z",
+  "branch": "archon/task-feat-log-cleanup",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "docs/ARCHITECTURE.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "34616cc4eefd",
+  "checkpoint_transcript_start": 105,
+  "transcript_lines_at_start": 105,
+  "token_usage": {
+    "input_tokens": 3,
+    "cache_creation_tokens": 2008,
+    "cache_read_tokens": 169066,
+    "output_tokens": 604,
+    "api_call_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-19T13:09:36.588455Z",
+    "agent_lines": 1,
+    "agent_removed": 1,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1,
+    "total_lines_changed": 2,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}
