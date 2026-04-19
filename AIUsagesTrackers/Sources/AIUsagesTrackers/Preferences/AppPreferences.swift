@@ -6,7 +6,7 @@ import Observation
 /// Single source of truth for user-adjustable runtime behaviour.
 /// Injectable so tests can swap in `InMemoryAppPreferences`.
 @MainActor
-public protocol AppPreferences: AnyObject, Observable {
+public protocol AppPreferences: AnyObject, Observable, Sendable {
     var refreshInterval: RefreshInterval { get set }
     var launchAtLogin: Bool { get set }
     var logLevel: LogLevel { get set }

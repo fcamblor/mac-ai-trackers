@@ -14,6 +14,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var popover: NSPopover?
     private var appearanceObserver: NSKeyValueObservation?
 
+    /// Shared preferences store — exposed as static so the SwiftUI Settings scene
+    /// (constructed before applicationDidFinishLaunching) can access it.
+    static let sharedPreferences: UserDefaultsAppPreferences = UserDefaultsAppPreferences()
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
 
@@ -43,7 +47,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let poller = UsagePoller(
             connectors: [ClaudeCodeConnector()],
             fileManager: fileManager,
-            refreshState: refreshState
+            refreshState: refreshState,
+            preferences: Self.sharedPreferences
         )
         let accountMonitor = ClaudeActiveAccountMonitor(
             fileManager: fileManager,
