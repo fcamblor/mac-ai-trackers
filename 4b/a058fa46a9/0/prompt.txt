@@ -1,0 +1,5 @@
+delete le plan roadmap/log-cleanup.plan.md
+
+---
+
+/commit
