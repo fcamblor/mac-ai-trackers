@@ -210,16 +210,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 forName: NSWindow.willCloseNotification,
                 object: nil,
                 queue: .main
-            ) { [weak self] _ in
+            ) { [weak self] notification in
                 guard let self else { return }
-                Task { @MainActor in
-                    let hasVisibleWindows = NSApp.windows.contains { $0.isVisible }
-                    if !hasVisibleWindows {
-                        NSApp.setActivationPolicy(.accessory)
-                        if let token = self.settingsWindowObserver {
-                            NotificationCenter.default.removeObserver(token)
-                            self.settingsWindowObserver = nil
-                        }
+                // Only react to the Settings window closing — popovers and other
+                // transient windows also emit willClose.
+                guard let closingWindow = notification.object as? NSWindow else { return }
+                let windowIdentifier = closingWindow.identifier?.rawValue ?? ""
+                guard windowIdentifier.contains("Settings") || windowIdentifier.contains("Preferences") else { return }
+                // willClose fires while the window is still visible and before
+                // AppKit tears it down; defer to the next runloop tick so the
+                // activation-policy change isn't overridden by pending AppKit work.
+                DispatchQueue.main.async {
+                    NSApp.setActivationPolicy(.accessory)
+                    // Accessory transition doesn't always remove the app from the
+                    // Cmd+Tab / app-switcher list until another app is activated.
+                    if let frontmost = NSWorkspace.shared.runningApplications.first(where: {
+                        $0.isActive && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier
+                    }) {
+                        frontmost.activate()
+                    } else {
+                        NSApp.hide(nil)
+                    }
+                    if let token = self.settingsWindowObserver {
+                        NotificationCenter.default.removeObserver(token)
+                        self.settingsWindowObserver = nil
                     }
                 }
             }
