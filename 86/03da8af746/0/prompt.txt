@@ -1,0 +1,9 @@
+quelles dimensions fait la fenetre de préférences ?
+
+---
+
+pourrais-tu augmenter la minHeight/idealHeight à 750 / 800 ?
+
+---
+
+/commit
