@@ -1,0 +1,5 @@
+- le champ de la metric letter ne semble pas editable
+  - dans le petit hint à coté du segment, il faudrait afficher le nom du vendor + account en plus du nom de la métrique
+  - sur l'onglet "Assistants":
+    - je ne comprends pas pourquoi tu affiches 2 fois le champ "polling interval" (pour moi, le 1er est à supprimer)
+    - la legend 1m / 2m / 3m / 5m / 10m est pas aligné avec les ticks du slider
