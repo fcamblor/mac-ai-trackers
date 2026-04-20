@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import AIUsagesTrackersLib
+import AppIconKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -25,6 +26,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
+
+        // No .app bundle ships with this SwiftPM executable, so AppKit has no
+        // static icon slot — set the Dock / Cmd+Tab icon programmatically.
+        if let icon = AppIconRenderer.makeImage(pixelSize: 1024) {
+            NSApplication.shared.applicationIconImage = icon
+        }
 
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let guard_ = AppPidGuard(cacheDir: "\(home)/.cache/ai-usages-tracker")

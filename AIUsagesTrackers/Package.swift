@@ -13,10 +13,21 @@ let package = Package(
             path: "Sources/AIUsagesTrackers",
             plugins: [.plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")]
         ),
+        .target(
+            name: "AppIconKit",
+            path: "Sources/AppIconKit",
+            plugins: [.plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")]
+        ),
         .executableTarget(
             name: "AIUsagesTrackers",
-            dependencies: ["AIUsagesTrackersLib"],
+            dependencies: ["AIUsagesTrackersLib", "AppIconKit"],
             path: "Sources/App",
+            plugins: [.plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")]
+        ),
+        .executableTarget(
+            name: "IconExporter",
+            dependencies: ["AppIconKit"],
+            path: "Sources/IconExporter",
             plugins: [.plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")]
         ),
         .testTarget(
