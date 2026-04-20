@@ -18,6 +18,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// (constructed before applicationDidFinishLaunching) can access it.
     static let sharedPreferences: UserDefaultsAppPreferences = UserDefaultsAppPreferences()
 
+    /// Shared usage store — populated in applicationDidFinishLaunching. The Settings
+    /// scene is instantiated before the store exists, so it must read through this
+    /// mutable holder. Nil until the first launch callback has run.
+    static var sharedStore: UsageStore?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
 
@@ -43,6 +48,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pidGuard = guard_
 
         Loggers.setPreferences(Self.sharedPreferences)
+
+        MenuBarSegmentsSeeder.seedIfNeeded(preferences: Self.sharedPreferences)
 
         // Reconcile launch-at-login preference with system state — the user may
         // have disabled the entry in System Settings > Login Items directly.
@@ -71,8 +78,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let usagesPath = fileManager.filePath
         let fileWatcher = UsagesFileWatcher(path: usagesPath)
-        let store = UsageStore(fileWatcher: fileWatcher)
+        let store = UsageStore(fileWatcher: fileWatcher, preferences: Self.sharedPreferences)
         self.usageStore = store
+        Self.sharedStore = store
 
         setupStatusItem(store: store, refreshState: refreshState)
         trackStoreChanges(store: store)

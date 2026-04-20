@@ -103,6 +103,68 @@ struct UserDefaultsAppPreferencesTests {
         #expect(prefs.refreshInterval == .default)
         #expect(prefs.launchAtLogin == false)
         #expect(prefs.logLevel == .info)
+        #expect(prefs.menuBarSegments.isEmpty)
+        #expect(prefs.menuBarSegmentsInitialized == false)
+    }
+
+    @Test("menuBarSegments round-trips through UserDefaults")
+    @MainActor
+    func menuBarSegmentsRoundTrip() {
+        let (defaults, name) = makeSuite()
+        defer { cleanUp(suiteName: name) }
+
+        let prefs = UserDefaultsAppPreferences(defaults: defaults)
+        let segments = [
+            MenuBarSegmentConfig(
+                vendor: .claude,
+                account: .currentlyActive,
+                metricName: "Weekly (all models)",
+                display: .timeWindow(TimeWindowDisplay(letter: "W"))
+            ),
+        ]
+        prefs.menuBarSegments = segments
+        #expect(prefs.menuBarSegments == segments)
+    }
+
+    @Test("menuBarSegments persists across instances")
+    @MainActor
+    func menuBarSegmentsPersist() {
+        let (defaults, name) = makeSuite()
+        defer { cleanUp(suiteName: name) }
+
+        let writer = UserDefaultsAppPreferences(defaults: defaults)
+        let segment = MenuBarSegmentConfig(
+            vendor: .claude,
+            account: .specific("a@b.com"),
+            metricName: "Cost",
+            display: .payAsYouGo
+        )
+        writer.menuBarSegments = [segment]
+
+        let reader = UserDefaultsAppPreferences(defaults: defaults)
+        #expect(reader.menuBarSegments == [segment])
+    }
+
+    @Test("menuBarSegmentsInitialized round-trips")
+    @MainActor
+    func menuBarSegmentsInitializedRoundTrip() {
+        let (defaults, name) = makeSuite()
+        defer { cleanUp(suiteName: name) }
+
+        let prefs = UserDefaultsAppPreferences(defaults: defaults)
+        prefs.menuBarSegmentsInitialized = true
+        #expect(prefs.menuBarSegmentsInitialized == true)
+    }
+
+    @Test("corrupt menuBarSegments JSON returns empty array")
+    @MainActor
+    func corruptMenuBarSegments() {
+        let (defaults, name) = makeSuite()
+        defer { cleanUp(suiteName: name) }
+
+        defaults.set(Data("not json".utf8), forKey: AppPreferenceKeys.menuBarSegments.rawValue)
+        let prefs = UserDefaultsAppPreferences(defaults: defaults)
+        #expect(prefs.menuBarSegments.isEmpty)
     }
 
     @Test("refreshInterval round-trips through UserDefaults")

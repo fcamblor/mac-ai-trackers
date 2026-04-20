@@ -7,35 +7,12 @@ struct GeneralSettingsView: View {
 
     @State private var launchAtLoginError: String?
 
+    private var envOverrideActive: Bool {
+        ProcessInfo.processInfo.environment["AI_TRACKER_LOG_LEVEL"] != nil
+    }
+
     var body: some View {
         Form {
-            Section("Polling") {
-                let currentSeconds = preferences.refreshInterval.seconds
-                HStack {
-                    Text("Refresh interval")
-                    Spacer()
-                    Text("\(currentSeconds)s")
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                }
-                Slider(
-                    value: Binding(
-                        get: { Double(currentSeconds) },
-                        set: { preferences.refreshInterval = RefreshInterval(clamping: Int($0.rounded())) }
-                    ),
-                    in: Double(RefreshInterval.minimumSeconds)...Double(RefreshInterval.maximumSeconds),
-                    step: 30
-                ) {
-                    Text("Refresh interval")
-                } minimumValueLabel: {
-                    Text("\(RefreshInterval.minimumSeconds)s")
-                        .font(.caption)
-                } maximumValueLabel: {
-                    Text("\(RefreshInterval.maximumSeconds / 60)m")
-                        .font(.caption)
-                }
-            }
-
             Section("Startup") {
                 Toggle("Launch at login", isOn: Binding(
                     get: { preferences.launchAtLogin },
@@ -54,6 +31,25 @@ struct GeneralSettingsView: View {
                     Text(launchAtLoginError)
                         .font(.caption)
                         .foregroundStyle(.red)
+                }
+            }
+
+            Section("Logging") {
+                Picker("Log level", selection: Binding(
+                    get: { preferences.logLevel },
+                    set: { preferences.logLevel = $0 }
+                )) {
+                    Text("Debug").tag(LogLevel.debug)
+                    Text("Info").tag(LogLevel.info)
+                    Text("Warning").tag(LogLevel.warning)
+                    Text("Error").tag(LogLevel.error)
+                }
+                .disabled(envOverrideActive)
+
+                if envOverrideActive {
+                    Text("Log level is overridden by the AI_TRACKER_LOG_LEVEL environment variable.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
