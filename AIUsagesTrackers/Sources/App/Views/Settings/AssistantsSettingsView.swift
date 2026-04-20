@@ -67,6 +67,8 @@ struct AssistantsSettingsView: View {
                         EmptyView()
                     }
                     .labelsHidden()
+                    .focusable(false)
+                    .focusEffectDisabled()
                     GeometryReader { geo in
                         let travel = max(0, geo.size.width - 2 * Self.sliderThumbRadius)
                         ZStack(alignment: .topLeading) {
