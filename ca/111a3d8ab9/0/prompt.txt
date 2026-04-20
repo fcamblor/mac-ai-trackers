@@ -1,0 +1,108 @@
+Le contenu du panel settings ne me va pas, j'aimerais qu'on le revoit ensemble:
+
+# General
+
+- Startup at login => a mettre en tout premier
+- Déplacer le log level à la fin de ce tab (supprimer le tab "Logging")
+- Polling refresh interval => à déplacer dans un nouvel onglet "Assistants"
+
+# Menubar hint (nouveau)
+
+Cette partie est destinée à configurer les "segments" qu'on souhaite afficher dans la menubar
+Un segment target une métrique donnée, c'est par exemple "[pastille metrique][lettre metrique][pourcentage metrique][temps restant d'ici au prochain reset]"
+
+Quand on affiche "[pastille verte]S 2% 1h47m | [pastille jaune]W 48% 3d 11h47m" on affiche 2 segments
+
+On a une liste de segments affichés qui correspond à ce que l'utilisateur a actuellement de paramétré. Un bouton permet à l'utilisateur de créer un nouveau segment en draft.
+Chaque segment est en fait une section expandable dont le titre donne le rendu actuel dudit segment, ex: "[pastille verte]S 2% 1h47m"
+Quand on expand, on accède à la configuration de chaque segment:
+- Vendor: dropdown avec tous les vendors unique du usages.json (uniquement "claude" pour le moment, mais ça évoluera dans le futur)
+- Account: dropdown avec tous les accounts pour le vendor sélectionné du usages.json
+- Metric: dropdown avec toutes les métriques pour l'account+vendor sélectionné du usages.json
+- "Afficher la pastille": toggle on/off
+- "Afficher une lettre correspondant à la métrique": toggle on/off
+- "Afficher le pourcentage d'utilisation": toggle on/off
+- "Afficher le temps restant d'ici au prochain reset" toggle on/off
+
+
+
+# Assistants (nouveau)
+
+Faire une Section nommée "Claude"
+
+Y mettre un seul champ pour le API Polling interval
+Faire un seul champ (plutot que 2 actuellement), de type slider, avec 5 valeurs possibles: 1 minute, 2 minutes, 3 minutes, 5 minutes, 10 minutes.
+Par défaut, au tout premier lancement de l'app, c'est 3 minutes qui est configuré
+S'assurer que ce paramétrage est bien utilisé par le Claude Connector pour ses refresh API
+
+---
+
+Le contenu du panel settings ne me va pas, j'aimerais qu'on le revoit ensemble:
+
+# General
+
+- Startup at login => a mettre en tout premier
+- Déplacer le log level à la fin de ce tab (supprimer le tab "Logging")
+- Polling refresh interval => à déplacer dans un nouvel onglet "Assistants"
+
+# Menubar hint (nouveau)
+
+Cette partie est destinée à configurer les "segments" qu'on souhaite afficher dans la menubar
+Un segment target une métrique donnée, c'est par exemple "[pastille metrique][lettre metrique][pourcentage metrique][temps restant d'ici au prochain reset]"
+
+Quand on affiche "[pastille verte]S 2% 1h47m | [pastille jaune]W 48% 3d 11h47m" on affiche 2 segments
+
+On a une liste de segments affichés qui correspond à ce que l'utilisateur a actuellement de paramétré. Un bouton permet à l'utilisateur de créer un nouveau segment en draft.
+Chaque segment est en fait une section expandable dont le titre donne le rendu actuel dudit segment, ex: "[pastille verte]S 2% 1h47m"
+Quand on expand, on accède à la configuration de chaque segment:
+- Vendor: dropdown avec tous les vendors unique du usages.json (uniquement "claude" pour le moment, mais ça évoluera dans le futur)
+- Account: dropdown avec tous les accounts pour le vendor sélectionné du usages.json
+- Metric: dropdown avec toutes les métriques pour l'account+vendor sélectionné du usages.json
+- "Afficher la pastille": toggle on/off
+- "Afficher une lettre correspondant à la métrique": toggle on/off
+- "Afficher le pourcentage d'utilisation": toggle on/off
+- "Afficher le temps restant d'ici au prochain reset" toggle on/off
+
+Boutons permettant de "monter/descendre" le segment avant/apres les autres sections (si tu arrives à faire ça avec un drag'n'drop c'est encore mieux)
+Bouton rouge permettant de supprimer le segment après une confirmation par l'utilisateur
+
+
+Réfléchir à l'UI de ce nouveau tab avec le skill Impeccable pour avoir quelque chose de user friendly.
+Prendre en compte ce paramétrage au niveau du calcul de ce qu'on affiche dans la menubar.
+
+
+# Assistants (nouveau)
+
+Faire une Section nommée "Claude"
+
+Y mettre un seul champ pour le API Polling interval
+Faire un seul champ (plutot que 2 actuellement), de type slider, avec 5 valeurs possibles: 1 minute, 2 minutes, 3 minutes, 5 minutes, 10 minutes.
+Par défaut, au tout premier lancement de l'app, c'est 3 minutes qui est configuré
+S'assurer que ce paramétrage est bien utilisé par le Claude Connector pour ses refresh API
+
+---
+
+1/ je viens de l'installer ça devrait etre bon maintenant
+2/ non reordonnable: on fige l'ordre
+3/ garde le value object et expose 5 paliers dans l'UI
+4/ normalement, un account ne doit jamais disparaitre. Mais si ça venait à arriver, il faudrait afficher un warning et proposer à l'utilisateur de supprimer le segment de lui-même
+
+---
+
+- ok pour garder la preview top, ça permet aussi de donner une idée de la largeur dans la menubar
+- on peut faire saisir la lettre par l'utilisateur (en déterminant la default valuevia menuBarAbbreviations)
+- persistance: oui, utilise UserDefaults
+
+Point que j'ai oublié: ne pas proposer les couples vendor+account avec aucune métrique définie
+
+---
+
+1/ en effet, en fonction de la métrique sélectionnée, il faut proposer des choix différents à l'utilisateur
+Dans le cas d'un pay-as-you-go, le simple fait de référencer la métrique fait qu'on va afficher le consommé (montant+currency): on n'a pas besoin de configurer quoi que ce soit en dehors de la coordonnée vendor+account+metric
+2/ oui, crée ces 2 segments par défaut pour rester iso avec ce qu'on a actuellement
+
+ATTENTION: j'ai omis un point important: dans account, on devrait pouvoir saisir explicitement un account OU un choix "currently active account" (c'est le choix par défaut utilisé pour la migration d'ailleurs)
+
+---
+
+oui parfait

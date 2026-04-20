@@ -1,0 +1,43 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "ca111a3d8ab9",
+  "strategy": "manual-commit",
+  "branch": "archon/task-feat-settings-window",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Helpers/MenuBarSegmentResolver.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/MenuBarSegmentConfig.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Preferences/AppPreferenceKeys.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Preferences/AppPreferences.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Preferences/MenuBarSegmentsSeeder.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Store/UsageStore.swift",
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift",
+    "AIUsagesTrackers/Sources/App/MenuBarLabelRenderer.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/AssistantsSettingsView.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/GeneralSettingsView.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/LoggingSettingsView.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/MenubarHintSettingsView.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/SegmentCardView.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/SegmentEditor.swift",
+    "AIUsagesTrackers/Sources/App/Views/SettingsView.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/AppPreferencesTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/MenuBarSegmentConfigTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/MenuBarSegmentResolverTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/MenuBarSegmentsSeederTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ca/111a3d8ab9/0/metadata.json",
+      "transcript": "/ca/111a3d8ab9/0/full.jsonl",
+      "content_hash": "/ca/111a3d8ab9/0/content_hash.txt",
+      "prompt": "/ca/111a3d8ab9/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 156,
+    "cache_creation_tokens": 354979,
+    "cache_read_tokens": 9844477,
+    "output_tokens": 66992,
+    "api_call_count": 107
+  }
+}
