@@ -1,0 +1,24 @@
+quand je clique sur le cog, rien ne se passe, la page de preferences ne s'ouvre pas
+
+---
+
+c'est bizarre, quand je clique sur le cog, j'ai l'impression que ça met le focus sur l'app AIUsagesTracker car la menubar mac os change et, depuis cette menubar, je peux cliquer sur settings pour ouvrir la page de settings
+
+Mais elle ne s'ouvre pas directement au clic sur le bouton
+
+---
+
+c'est bizarre, quand je clique sur le cog, j'ai l'impression que ça met le focus sur l'app AIUsagesTracker car la menubar mac os change et, depuis cette menubar, je peux cliquer sur settings pour ouvrir la page
+  de settings
+
+  Mais elle ne s'ouvre pas directement au clic sur le bouton
+
+---
+
+ça ne fonctionne toujours pas quand je clique sur le cog depuis la popover
+
+---
+
+dès lors que j'ai ouvert la fenetre de settings via le File Menu, alors quand j'appuie sur le cog, la fenetre s'ouvre bien
+
+Mais avant que je n'ouvre la fenetre une premiere fois, ca ne fonctionne pas depuis le cog

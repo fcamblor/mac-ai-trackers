@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "ce4812be847b",
+  "strategy": "manual-commit",
+  "branch": "archon/task-feat-settings-window",
+  "checkpoints_count": 6,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ce/4812be847b/0/metadata.json",
+      "transcript": "/ce/4812be847b/0/full.jsonl",
+      "content_hash": "/ce/4812be847b/0/content_hash.txt",
+      "prompt": "/ce/4812be847b/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 64,
+    "cache_creation_tokens": 104440,
+    "cache_read_tokens": 1074131,
+    "output_tokens": 18182,
+    "api_call_count": 30
+  }
+}
