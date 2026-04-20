@@ -13,9 +13,12 @@ struct SettingsView: View {
             )
             .tabItem { Label("General", systemImage: "gearshape") }
 
-            LoggingSettingsView(preferences: preferences)
-                .tabItem { Label("Logging", systemImage: "doc.text") }
+            MenubarHintSettingsView(preferences: preferences)
+                .tabItem { Label("Menubar hint", systemImage: "menubar.rectangle") }
+
+            AssistantsSettingsView(preferences: preferences)
+                .tabItem { Label("Assistants", systemImage: "sparkles") }
         }
-        .frame(width: 400)
+        .frame(width: 520)
     }
 }
