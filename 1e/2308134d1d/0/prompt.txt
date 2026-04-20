@@ -1,0 +1,19 @@
+Lors de la création du Menubar hint dans les préférences, j'ai plusieurs soucis sur le champ "Metric letter" de chaque segment:
+- je constate qu'il est très difficile de mettre le focus dans le champ .. j'ai besoin de cliquer dans ce dernier a plusieurs reprise (voire parfois double-cliquer) pour qu'il ait finalement le focus
+- lorsque je saisis plus de 3 lettres, elles sont tronquées (il faudrait enlever ce tronquage, ça ne sert à rien)
+- au niveau du nommage du champ (et de son libellé), il faudrait parler de "Metric short label" plutôt que de "Metric letter"
+
+---
+
+pas la peine d'augmenter la largeur du champ à 64, 48 était OK
+
+Par contre, j'ai toujours le problème de temps de latence entre le moment où je clique dans le champ et le moment où le champ a le focus (il se passe bien 1 seconde)
+Ça ne me paraît pas normal ... peut-être lié au fait qu'on soit dans une zone expandable ?
+
+---
+
+oui
+
+---
+
+/commit

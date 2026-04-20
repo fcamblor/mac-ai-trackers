@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "1e2308134d1d",
+  "strategy": "manual-commit",
+  "branch": "archon/task-feat-settings-window",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/App/Views/Settings/MenubarHintSettingsView.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/SegmentEditor.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/1e/2308134d1d/0/metadata.json",
+      "transcript": "/1e/2308134d1d/0/full.jsonl",
+      "content_hash": "/1e/2308134d1d/0/content_hash.txt",
+      "prompt": "/1e/2308134d1d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 96,
+    "cache_creation_tokens": 80273,
+    "cache_read_tokens": 1498165,
+    "output_tokens": 9345,
+    "api_call_count": 26
+  }
+}
