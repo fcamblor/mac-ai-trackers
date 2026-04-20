@@ -1,0 +1,12 @@
+sur l'écran de préférence, onglet "Assistants", sur le slider de l'API polling interval, quand je déplace le bouton du slider, j'ai un focus qui se rafraichit un peu bizarrement et qui persiste au mauvais endroit sur le slider
+cf screenshot: [Image #1] (je l'ai obtenu en passant la valeur de 10m à 5m)
+
+Pour faire simple, y a-t-il un moyen d'enlever l'affichage focus de ce champ ? ça serait suffisant (évidemment, si trouves la root cause du problème n'hésites pas a la fixer)
+
+---
+
+ça n'a rien changé au problème
+
+---
+
+/commit
