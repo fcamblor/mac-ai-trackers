@@ -1,0 +1,7 @@
+est-il possible de rajouter un peu d'UX sur le hover des boutons (settings, refresh et quit) dans la popover, pour signifier à l'utilisateur qu'il s'agit de boutons cliquables
+
+Utilise le skill Impeccable pour raisonner
+
+---
+
+sur le bouton Quit, qui était déjà sous forme de bouton, on n'a aucun feedback au hover, c'est normal ?

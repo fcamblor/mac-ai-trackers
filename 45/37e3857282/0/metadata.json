@@ -1,0 +1,70 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "4537e3857282",
+  "session_id": "14ec920d-177e-45a7-b3d7-ed353a63d2d1",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-20T07:04:02.936866Z",
+  "branch": "archon/task-feat-settings-window",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/App/Views/HoverAffordance.swift",
+    "AIUsagesTrackers/Sources/App/Views/UsageDetailsView.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-7[1m]",
+  "turn_id": "fe097f63cb4f",
+  "token_usage": {
+    "input_tokens": 48,
+    "cache_creation_tokens": 127932,
+    "cache_read_tokens": 705287,
+    "output_tokens": 8682,
+    "api_call_count": 19
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-20T07:04:02.812736Z",
+    "agent_lines": 72,
+    "agent_removed": 1,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 72,
+    "total_lines_changed": 73,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 10,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 10,
+      "user_lines_removed": 0,
+      "agent_lines_added": 70,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 10,
+      "user_lines_removed": 0,
+      "agent_lines_added": 72,
+      "agent_lines_removed": 1,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10
+      }
+    }
+  ]
+}
