@@ -2,11 +2,14 @@ import SwiftUI
 import AIUsagesTrackersLib
 
 struct SettingsView: View {
-    let preferences: any AppPreferences
     let launchAtLoginService: any LaunchAtLoginManaging
 
     var body: some View {
-        TabView {
+        // Access sharedPreferences directly so SwiftUI can observe the concrete
+        // @Observable UserDefaultsAppPreferences type instead of the existential protocol.
+        let preferences = AppDelegate.sharedPreferences
+
+        return TabView {
             GeneralSettingsView(
                 preferences: preferences,
                 launchAtLoginService: launchAtLoginService

@@ -92,7 +92,7 @@ private struct MenubarHintContent: View {
 
     @ViewBuilder
     private var segmentsPanel: some View {
-        if preferences.menuBarSegments.isEmpty {
+        if AppDelegate.sharedPreferences.menuBarSegments.isEmpty {
             emptyState
         } else {
             segmentsList
@@ -137,23 +137,23 @@ private struct MenubarHintContent: View {
             .padding(.bottom, 4)
 
             List {
-                ForEach(Array(preferences.menuBarSegments.enumerated()), id: \.element.id) { index, _ in
+                ForEach(Array(AppDelegate.sharedPreferences.menuBarSegments.enumerated()), id: \.element.id) { index, _ in
                     SegmentCardView(
                         preferences: preferences,
                         store: store,
                         isDark: isDark,
                         index: index,
                         canMoveUp: index > 0,
-                        canMoveDown: index < preferences.menuBarSegments.count - 1,
+                        canMoveDown: index < AppDelegate.sharedPreferences.menuBarSegments.count - 1,
                         onMoveUp: { move(from: index, to: index - 1) },
                         onMoveDown: { move(from: index, to: index + 2) },
-                        onRequestDelete: { pendingDelete = preferences.menuBarSegments[index].id }
+                        onRequestDelete: { pendingDelete = AppDelegate.sharedPreferences.menuBarSegments[index].id }
                     )
                 }
                 .onMove { source, destination in
-                    var segments = preferences.menuBarSegments
+                    var segments = AppDelegate.sharedPreferences.menuBarSegments
                     segments.move(fromOffsets: source, toOffset: destination)
-                    preferences.menuBarSegments = segments
+                    AppDelegate.sharedPreferences.menuBarSegments = segments
                 }
             }
             .listStyle(.inset)
@@ -163,6 +163,7 @@ private struct MenubarHintContent: View {
     // MARK: Mutations
 
     private func addSegment() {
+        let prefs = AppDelegate.sharedPreferences
         guard let vendor = availableVendors.first else { return }
         let defaultMetricName = firstAvailableMetricName(for: vendor, account: .currentlyActive)
             ?? ""
@@ -177,19 +178,21 @@ private struct MenubarHintContent: View {
             metricName: defaultMetricName,
             display: display
         )
-        preferences.menuBarSegments.append(new)
+        prefs.menuBarSegments.append(new)
     }
 
     private func delete(segmentID: UUID) {
-        preferences.menuBarSegments.removeAll { $0.id == segmentID }
+        let prefs = AppDelegate.sharedPreferences
+        prefs.menuBarSegments.removeAll { $0.id == segmentID }
     }
 
     private func move(from source: Int, to destination: Int) {
-        var segments = preferences.menuBarSegments
+        let prefs = AppDelegate.sharedPreferences
+        var segments = prefs.menuBarSegments
         guard source >= 0, source < segments.count else { return }
         let dest = max(0, min(destination, segments.count))
         segments.move(fromOffsets: IndexSet(integer: source), toOffset: dest)
-        preferences.menuBarSegments = segments
+        prefs.menuBarSegments = segments
     }
 
     // MARK: Helpers
@@ -248,7 +251,7 @@ private struct MenubarHintContent: View {
 
     private var deleteConfirmationTitle: String {
         guard let id = pendingDelete,
-              let segment = preferences.menuBarSegments.first(where: { $0.id == id }) else {
+              let segment = AppDelegate.sharedPreferences.menuBarSegments.first(where: { $0.id == id }) else {
             return "Delete segment?"
         }
         return "Delete \(segment.metricName) segment?"
