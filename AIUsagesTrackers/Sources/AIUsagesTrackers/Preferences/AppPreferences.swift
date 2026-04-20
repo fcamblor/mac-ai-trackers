@@ -29,28 +29,41 @@ public final class UserDefaultsAppPreferences: AppPreferences {
 
     public var refreshInterval: RefreshInterval {
         get {
+            access(keyPath: \.refreshInterval)
             let raw = defaults.integer(forKey: AppPreferenceKeys.refreshIntervalSeconds.rawValue)
             if raw == 0 { return .default }
             return RefreshInterval(clamping: raw)
         }
         set {
-            defaults.set(newValue.seconds, forKey: AppPreferenceKeys.refreshIntervalSeconds.rawValue)
+            withMutation(keyPath: \.refreshInterval) {
+                defaults.set(newValue.seconds, forKey: AppPreferenceKeys.refreshIntervalSeconds.rawValue)
+            }
         }
     }
 
     public var launchAtLogin: Bool {
-        get { defaults.bool(forKey: AppPreferenceKeys.launchAtLogin.rawValue) }
-        set { defaults.set(newValue, forKey: AppPreferenceKeys.launchAtLogin.rawValue) }
+        get {
+            access(keyPath: \.launchAtLogin)
+            return defaults.bool(forKey: AppPreferenceKeys.launchAtLogin.rawValue)
+        }
+        set {
+            withMutation(keyPath: \.launchAtLogin) {
+                defaults.set(newValue, forKey: AppPreferenceKeys.launchAtLogin.rawValue)
+            }
+        }
     }
 
     public var logLevel: LogLevel {
         get {
+            access(keyPath: \.logLevel)
             let raw = defaults.string(forKey: AppPreferenceKeys.logLevel.rawValue) ?? ""
             if raw.isEmpty { return .info }
             return LogLevel.from(string: raw)
         }
         set {
-            defaults.set(newValue.label.lowercased(), forKey: AppPreferenceKeys.logLevel.rawValue)
+            withMutation(keyPath: \.logLevel) {
+                defaults.set(newValue.label.lowercased(), forKey: AppPreferenceKeys.logLevel.rawValue)
+            }
         }
     }
 
