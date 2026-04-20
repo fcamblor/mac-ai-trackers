@@ -12,14 +12,16 @@ struct GeneralSettingsView: View {
     }
 
     var body: some View {
+        // Access concrete preferences to enable SwiftUI observation tracking.
+        let concretePrefs = AppDelegate.sharedPreferences
         Form {
             Section("Startup") {
                 Toggle("Launch at login", isOn: Binding(
-                    get: { preferences.launchAtLogin },
+                    get: { concretePrefs.launchAtLogin },
                     set: { newValue in
                         do {
                             try launchAtLoginService.setEnabled(newValue)
-                            preferences.launchAtLogin = newValue
+                            concretePrefs.launchAtLogin = newValue
                             launchAtLoginError = nil
                         } catch {
                             launchAtLoginError = error.localizedDescription
@@ -36,8 +38,8 @@ struct GeneralSettingsView: View {
 
             Section("Logging") {
                 Picker("Log level", selection: Binding(
-                    get: { preferences.logLevel },
-                    set: { preferences.logLevel = $0 }
+                    get: { concretePrefs.logLevel },
+                    set: { concretePrefs.logLevel = $0 }
                 )) {
                     Text("Debug").tag(LogLevel.debug)
                     Text("Info").tag(LogLevel.info)

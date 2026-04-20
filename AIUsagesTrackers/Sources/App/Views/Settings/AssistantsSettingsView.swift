@@ -6,10 +6,10 @@ struct AssistantsSettingsView: View {
 
     private static let pollingStepsMinutes: [Int] = [1, 2, 3, 5, 10]
 
-    private var selectedStepIndex: Binding<Double> {
+    private func selectedStepIndex(with concretePrefs: UserDefaultsAppPreferences) -> Binding<Double> {
         Binding(
             get: {
-                let minutes = preferences.refreshInterval.seconds / 60
+                let minutes = concretePrefs.refreshInterval.seconds / 60
                 let idx = Self.pollingStepsMinutes.firstIndex(of: minutes)
                     ?? Self.closestStepIndex(for: minutes)
                 return Double(idx)
@@ -17,7 +17,7 @@ struct AssistantsSettingsView: View {
             set: { newValue in
                 let idx = min(max(Int(newValue.rounded()), 0), Self.pollingStepsMinutes.count - 1)
                 let minutes = Self.pollingStepsMinutes[idx]
-                preferences.refreshInterval = RefreshInterval(clamping: minutes * 60)
+                concretePrefs.refreshInterval = RefreshInterval(clamping: minutes * 60)
             }
         )
     }
@@ -35,8 +35,8 @@ struct AssistantsSettingsView: View {
         return best
     }
 
-    private var currentMinutesLabel: String {
-        let minutes = preferences.refreshInterval.seconds / 60
+    private func currentMinutesLabel(from concretePrefs: UserDefaultsAppPreferences) -> String {
+        let minutes = concretePrefs.refreshInterval.seconds / 60
         return minutes == 1 ? "1 minute" : "\(minutes) minutes"
     }
 
@@ -46,18 +46,21 @@ struct AssistantsSettingsView: View {
     private static let sliderThumbRadius: CGFloat = 10
 
     var body: some View {
-        Form {
+        // Access concrete preferences to enable SwiftUI observation tracking.
+        let concretePrefs = AppDelegate.sharedPreferences
+
+        return Form {
             Section("Claude") {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .firstTextBaseline) {
                         Text("API polling interval")
                         Spacer()
-                        Text(currentMinutesLabel)
+                        Text(currentMinutesLabel(from: concretePrefs))
                             .monospacedDigit()
                             .foregroundStyle(.secondary)
                     }
                     Slider(
-                        value: selectedStepIndex,
+                        value: selectedStepIndex(with: concretePrefs),
                         in: 0...Double(Self.pollingStepsMinutes.count - 1),
                         step: 1
                     ) {
