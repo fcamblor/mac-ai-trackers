@@ -4,7 +4,6 @@ import AIUsagesTrackersLib
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var logCleaner: LogCleaner?
     private var poller: UsagePoller?
     private var accountMonitor: ClaudeActiveAccountMonitor?
     private var pidGuard: AppPidGuard?
@@ -13,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private var appearanceObserver: NSKeyValueObservation?
+    private var settingsWindowObserver: NSObjectProtocol?
 
     /// Shared preferences store — exposed as static so the SwiftUI Settings scene
     /// (constructed before applicationDidFinishLaunching) can access it.
@@ -65,8 +65,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await poller?.pollOnce(force: true)
             }
         )
-        let logCleaner = LogCleaner()
-        self.logCleaner = logCleaner
         self.poller = poller
         self.accountMonitor = accountMonitor
         self.refreshState = refreshState
@@ -80,7 +78,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         trackStoreChanges(store: store)
 
         Task {
-            await logCleaner.start()
             store.start()
             await poller.start()
             await accountMonitor.start()
@@ -175,21 +172,87 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func openSettings() {
         popover?.performClose(nil)
-        // .accessory apps are not frontmost — bring the app forward so the
-        // settings window appears above other windows.
+        // .accessory apps have no dock presence; showSettingsWindow: silently fails
+        // unless we temporarily switch to .regular so AppKit can make the window key.
+        NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
-        // macOS 14+ replacement for the deprecated showPreferencesWindow: selector.
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+
+        // SwiftUI creates the Settings window lazily on first showSettingsWindow: —
+        // if it already exists, reuse it directly to avoid responder-chain races
+        // that occur during the popover-dismissal + activation-policy transition.
+        if let settingsWindow = Self.findSettingsWindow() {
+            settingsWindow.makeKeyAndOrderFront(nil)
+        } else {
+            // First-time path: AppKit needs a runloop tick after the .accessory →
+            // .regular transition to install the standard App menu (which is where
+            // SwiftUI wires the Settings… action). sendAction with a nil target
+            // relies on that wiring, so we trigger the menu item directly once
+            // AppKit has had a chance to build it.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                Self.triggerSettingsMenuItem()
+                if let settingsWindow = Self.findSettingsWindow() {
+                    settingsWindow.makeKeyAndOrderFront(nil)
+                }
+            }
+        }
+
+        // Restore .accessory policy once the settings window is closed.
+        if settingsWindowObserver == nil {
+            settingsWindowObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.willCloseNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                guard let self else { return }
+                Task { @MainActor in
+                    let hasVisibleWindows = NSApp.windows.contains { $0.isVisible }
+                    if !hasVisibleWindows {
+                        NSApp.setActivationPolicy(.accessory)
+                        if let token = self.settingsWindowObserver {
+                            NotificationCenter.default.removeObserver(token)
+                            self.settingsWindowObserver = nil
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// SwiftUI tags its Settings window with an identifier containing "Settings"
+    /// (or "Preferences" on older SDKs). Match on the stable identifier rather
+    /// than localized titles.
+    private static func findSettingsWindow() -> NSWindow? {
+        NSApp.windows.first { window in
+            let identifier = window.identifier?.rawValue ?? ""
+            return identifier.contains("Settings") || identifier.contains("Preferences")
+        }
+    }
+
+    /// Walk the main menu looking for the App menu's Settings… (or Preferences…)
+    /// item and invoke it. Going through the menu guarantees the action is
+    /// routed to whichever responder SwiftUI wired up, instead of relying on
+    /// `sendAction(_:to:from:)` to resolve a nil target in the responder chain
+    /// — which is unreliable right after an activation-policy switch.
+    private static func triggerSettingsMenuItem() {
+        guard let mainMenu = NSApp.mainMenu else { return }
+        for topItem in mainMenu.items {
+            guard let submenu = topItem.submenu else { continue }
+            for (index, item) in submenu.items.enumerated() {
+                let title = item.title
+                if title.hasPrefix("Settings") || title.hasPrefix("Preferences") {
+                    submenu.performActionForItem(at: index)
+                    return
+                }
+            }
+        }
     }
 
     // MARK: - Quit
 
     private func quit() {
-        let logCleanerRef = logCleaner
         let pollerRef = poller
         let monitorRef = accountMonitor
         Task {
-            await logCleanerRef?.stop()
             await pollerRef?.stop()
             await monitorRef?.stop()
         }
