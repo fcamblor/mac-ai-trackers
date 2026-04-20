@@ -70,6 +70,7 @@ struct UsageDetailsView: View {
             } label: {
                 Image(systemName: "gearshape")
                     .frame(width: 16, height: 16)
+                    .hoverAffordance()
             }
             .buttonStyle(.borderless)
             .controlSize(.small)
@@ -99,6 +100,7 @@ struct UsageDetailsView: View {
                     }
                 }
                 .frame(width: 16, height: 16)
+                .hoverAffordance(isEnabled: !refreshing)
             }
             .buttonStyle(.borderless)
             .controlSize(.small)
@@ -127,9 +129,13 @@ struct UsageDetailsView: View {
     private var footer: some View {
         HStack {
             Spacer()
-            Button("Quit") {
+            Button {
                 onQuit()
+            } label: {
+                Text("Quit")
+                    .hoverAffordance()
             }
+            .buttonStyle(.borderless)
             .keyboardShortcut("q")
             .controlSize(.small)
             .focusable(false)
