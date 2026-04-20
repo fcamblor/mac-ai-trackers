@@ -1,0 +1,5 @@
+/commit amend
+
++ fix les problemes suivants:
+- le toggle "launch at login" ne paraît pas persisté (je l'active, puis quand je ré-ouvre la popup il est de nouveau inactif malgré que j'ai reçu une notification me disant que le démarrage au login serait de nouveau actif)
+- l'API polling interval affiché n'est pas mis à jour en fonction de la valeur sélectionnée sur le slider
