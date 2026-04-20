@@ -12,11 +12,9 @@ See `docs/ROADMAP.md` for the process and file conventions.
 graph TD
     log-cleanup["Log cleanup"]
     vendor-status-monitor["Vendor status monitor"]
-    settings-window["Settings window"]
     buy-me-a-coffee["Buy me a coffee"]
     codex-connector["Codex connector"]
     vendor-status-monitor --> codex-connector
-    settings-window --> codex-connector
     usage-history-snapshots["Usage history snapshots"]
 ```
 
@@ -24,7 +22,6 @@ graph TD
 
 1. `in-progress` — [Log cleanup](log-cleanup.md) — purge log entries older than 7 days at startup and once per day to keep log files bounded.
 2. `planned` — [Vendor status monitor](vendor-status-monitor.md) — surface active incidents from vendor status pages (Claude, and others as accounts are added) inside the app.
-3. `in-progress` — [Settings window](settings-window.md) — open a native macOS settings window via a cog button in the popover for app-wide configuration.
-4. `planned` — [Buy me a coffee](buy-me-a-coffee.md) — add a discreet donation button in the popover footer that opens the developer's donation page in the browser.
-5. `planned` — [Codex connector](codex-connector.md) — add OpenAI Codex CLI as a second tracked vendor alongside Claude.
-6. `planned` — [Usage history snapshots](usage-history-snapshots.md) — periodically record metric values to a JSONL file for future consumption graph views.
+3. `planned` — [Buy me a coffee](buy-me-a-coffee.md) — add a discreet donation button in the popover footer that opens the developer's donation page in the browser.
+4. `planned` — [Codex connector](codex-connector.md) — add OpenAI Codex CLI as a second tracked vendor alongside Claude.
+5. `planned` — [Usage history snapshots](usage-history-snapshots.md) — periodically record metric values to a JSONL file for future consumption graph views.
