@@ -161,15 +161,9 @@ struct SegmentEditor: View {
 
             Toggle("Colored status dot", isOn: displayBinding.showDot)
             HStack {
-                Toggle("Metric letter", isOn: displayBinding.showLetter)
-                TextField("", text: Binding(
-                    get: { displayBinding.wrappedValue.letter },
-                    set: { newValue in
-                        var d = displayBinding.wrappedValue
-                        d.letter = String(newValue.prefix(3))
-                        displayBinding.wrappedValue = d
-                    }
-                ))
+                Toggle("Metric short label", isOn: displayBinding.showLetter)
+                    .fixedSize()
+                TextField("", text: displayBinding.letter)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 48)
             }

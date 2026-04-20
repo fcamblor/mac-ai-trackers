@@ -136,27 +136,25 @@ private struct MenubarHintContent: View {
             .padding(.top, 12)
             .padding(.bottom, 4)
 
-            List {
-                ForEach(Array(AppDelegate.sharedPreferences.menuBarSegments.enumerated()), id: \.element.id) { index, _ in
-                    SegmentCardView(
-                        preferences: preferences,
-                        store: store,
-                        isDark: isDark,
-                        index: index,
-                        canMoveUp: index > 0,
-                        canMoveDown: index < AppDelegate.sharedPreferences.menuBarSegments.count - 1,
-                        onMoveUp: { move(from: index, to: index - 1) },
-                        onMoveDown: { move(from: index, to: index + 2) },
-                        onRequestDelete: { pendingDelete = AppDelegate.sharedPreferences.menuBarSegments[index].id }
-                    )
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(Array(AppDelegate.sharedPreferences.menuBarSegments.enumerated()), id: \.element.id) { index, _ in
+                        SegmentCardView(
+                            preferences: preferences,
+                            store: store,
+                            isDark: isDark,
+                            index: index,
+                            canMoveUp: index > 0,
+                            canMoveDown: index < AppDelegate.sharedPreferences.menuBarSegments.count - 1,
+                            onMoveUp: { move(from: index, to: index - 1) },
+                            onMoveDown: { move(from: index, to: index + 2) },
+                            onRequestDelete: { pendingDelete = AppDelegate.sharedPreferences.menuBarSegments[index].id }
+                        )
+                        Divider()
+                    }
                 }
-                .onMove { source, destination in
-                    var segments = AppDelegate.sharedPreferences.menuBarSegments
-                    segments.move(fromOffsets: source, toOffset: destination)
-                    AppDelegate.sharedPreferences.menuBarSegments = segments
-                }
+                .padding(.horizontal, 16)
             }
-            .listStyle(.inset)
         }
     }
 
