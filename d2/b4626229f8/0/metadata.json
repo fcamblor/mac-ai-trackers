@@ -1,0 +1,104 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "d2b4626229f8",
+  "session_id": "a31b4198-060a-4459-a54c-af9d7c35d3be",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-20T14:51:56.270885Z",
+  "branch": "archon/task-feat-settings-window",
+  "checkpoints_count": 5,
+  "files_touched": [
+    ".gitignore",
+    "AIUsagesTrackers/Package.swift",
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift",
+    "AIUsagesTrackers/Sources/AppIconKit/AppIconView.swift",
+    "AIUsagesTrackers/Sources/IconExporter/IconExporter.swift",
+    "scripts/build-app-bundle.sh"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "19ebddf4ac38",
+  "token_usage": {
+    "input_tokens": 112,
+    "cache_creation_tokens": 232026,
+    "cache_read_tokens": 6123136,
+    "output_tokens": 85399,
+    "api_call_count": 57
+  },
+  "session_metrics": {
+    "turn_count": 7
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-20T14:51:55.975782Z",
+    "agent_lines": 336,
+    "agent_removed": 1,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 336,
+    "total_lines_changed": 337,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 10,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 10,
+      "user_lines_removed": 0,
+      "agent_lines_added": 597,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 10,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1094,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10
+      }
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 10,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1668,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10
+      }
+    },
+    {
+      "checkpoint_number": 5,
+      "user_lines_added": 10,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1792,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10
+      }
+    },
+    {
+      "checkpoint_number": 6,
+      "user_lines_added": 10,
+      "user_lines_removed": 0,
+      "agent_lines_added": 2004,
+      "agent_lines_removed": 1,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10
+      }
+    }
+  ]
+}
