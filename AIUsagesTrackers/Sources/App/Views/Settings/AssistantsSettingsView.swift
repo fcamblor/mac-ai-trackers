@@ -40,22 +40,32 @@ struct AssistantsSettingsView: View {
         return minutes == 1 ? "1 minute" : "\(minutes) minutes"
     }
 
-    // Approximate macOS Slider thumb radius — used to inset tick labels so they
-    // align with the thumb's travel range rather than the slider's outer bounds.
-    private static let sliderThumbRadius: CGFloat = 11
+    // Half-width of the macOS SwiftUI Slider thumb. Tick labels are inset by this
+    // amount so their centres match the thumb's travel range, not the slider's
+    // outer bounds (where the thumb never reaches).
+    private static let sliderThumbRadius: CGFloat = 10
 
     var body: some View {
         Form {
             Section("Claude") {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("API polling interval")
+                        Spacer()
+                        Text(currentMinutesLabel)
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
                     Slider(
                         value: selectedStepIndex,
                         in: 0...Double(Self.pollingStepsMinutes.count - 1),
                         step: 1
                     ) {
-                        Text("API polling interval")
+                        EmptyView()
                     }
+                    .labelsHidden()
                     GeometryReader { geo in
+                        let travel = max(0, geo.size.width - 2 * Self.sliderThumbRadius)
                         ZStack(alignment: .topLeading) {
                             ForEach(Array(Self.pollingStepsMinutes.enumerated()), id: \.offset) { idx, minutes in
                                 let fraction = CGFloat(idx) / CGFloat(Self.pollingStepsMinutes.count - 1)
@@ -63,13 +73,12 @@ struct AssistantsSettingsView: View {
                                     .font(.caption2)
                                     .foregroundStyle(.tertiary)
                                     .fixedSize()
-                                    .position(x: geo.size.width * fraction, y: 8)
+                                    .position(x: Self.sliderThumbRadius + travel * fraction, y: 8)
                             }
                         }
                     }
                     .frame(height: 16)
-                    .padding(.horizontal, Self.sliderThumbRadius)
-                    Text("Fetching every \(currentMinutesLabel) from the Claude API.")
+                    Text("How often usage data is fetched from the Claude API.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

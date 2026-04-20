@@ -19,6 +19,6 @@ struct SettingsView: View {
             AssistantsSettingsView(preferences: preferences)
                 .tabItem { Label("Assistants", systemImage: "sparkles") }
         }
-        .frame(width: 520)
+        .frame(minWidth: 680, idealWidth: 720, minHeight: 520, idealHeight: 600)
     }
 }
