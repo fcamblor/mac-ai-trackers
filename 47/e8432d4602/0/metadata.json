@@ -1,0 +1,61 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "47e8432d4602",
+  "session_id": "3bb9c5b9-12fa-434d-8faa-2e4cb44d62c0",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-20T00:12:14.714888Z",
+  "branch": "archon/task-feat-settings-window",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "roadmap/index.md",
+    "roadmap/settings-window.md",
+    "roadmap/settings-window.plan.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-7[1m]",
+  "turn_id": "17a5605bc161",
+  "token_usage": {
+    "input_tokens": 26,
+    "cache_creation_tokens": 36559,
+    "cache_read_tokens": 272835,
+    "output_tokens": 3565,
+    "api_call_count": 7
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-20T00:12:14.636087Z",
+    "agent_lines": 3,
+    "agent_removed": 184,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 3,
+    "total_lines_changed": 187,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 10,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 10,
+      "user_lines_removed": 0,
+      "agent_lines_added": 3,
+      "agent_lines_removed": 184,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10
+      }
+    }
+  ]
+}

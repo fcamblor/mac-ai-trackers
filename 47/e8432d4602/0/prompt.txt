@@ -1,0 +1,1 @@
+supprime le plan roadmap/settings-window.plan.md ainsi que l'entrée dans settings-window dans la roadmap

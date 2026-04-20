@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "47e8432d4602",
+  "strategy": "manual-commit",
+  "branch": "archon/task-feat-settings-window",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "roadmap/index.md",
+    "roadmap/settings-window.md",
+    "roadmap/settings-window.plan.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/47/e8432d4602/0/metadata.json",
+      "transcript": "/47/e8432d4602/0/full.jsonl",
+      "content_hash": "/47/e8432d4602/0/content_hash.txt",
+      "prompt": "/47/e8432d4602/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 26,
+    "cache_creation_tokens": 36559,
+    "cache_read_tokens": 272835,
+    "output_tokens": 3565,
+    "api_call_count": 7
+  }
+}
