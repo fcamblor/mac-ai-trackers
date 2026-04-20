@@ -1,0 +1,11 @@
+quand je lance l'app et que j'ouvre le panel des préférences, j'ai une icone dédiée qui apparaît lorsque je fais un cmd+space (dans la liste des fenêtres des apps ouvertes) et ce, même une fois que je ferme la fenêtre des préférences
+
+y a-t-il un paramétrage swift pour éviter cela ?
+
+---
+
+oui
+
+---
+
+je viens de tester et ça ne fonctionne pas
