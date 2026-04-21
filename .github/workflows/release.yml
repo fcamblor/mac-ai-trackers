@@ -88,9 +88,53 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Compute SHA256 for Homebrew
+        id: sha
+        run: |
+          SHA=$(shasum -a 256 dist/AI-Usages-Tracker.zip | awk '{print $1}')
+          echo "sha256=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "SHA256: ${SHA}"
+
       - name: Summary
         run: |
           echo "🎉 Release ${{ github.ref_name }} published"
           echo ""
           echo "⚠️  Ad-hoc signed build (no Apple notarization)"
           echo "   First launch: right-click > Open to bypass Gatekeeper"
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      sha256: ${{ steps.sha.outputs.sha256 }}
+
+  update-tap:
+    name: Update Homebrew Tap
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+        with:
+          repository: fcamblor/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Update cask file
+        run: |
+          CASK="Casks/ai-usages-tracker.rb"
+          [ -f "$CASK" ] || { echo "$CASK missing in tap"; exit 1; }
+
+          sed -i "s/version \".*\"/version \"${{ needs.release.outputs.version }}\"/" "$CASK"
+          sed -i "s/sha256 \".*\"/sha256 \"${{ needs.release.outputs.sha256 }}\"/" "$CASK"
+
+          grep -q "version \"${{ needs.release.outputs.version }}\"" "$CASK"
+          grep -q "sha256 \"${{ needs.release.outputs.sha256 }}\"" "$CASK"
+
+          echo "--- Updated cask ---"
+          cat "$CASK"
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/ai-usages-tracker.rb
+          git commit -m "chore: bump ai-usages-tracker to ${{ needs.release.outputs.version }}"
+          git push
