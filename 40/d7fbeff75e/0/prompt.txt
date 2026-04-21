@@ -1,0 +1,83 @@
+encore une erreur un peu plus loin dans le build:
+Run ./scripts/build-app-bundle.sh
+→ Building release binaries
+Fetching https://github.com/SimplyDanny/SwiftLintPlugins
+[1/326] Fetching swiftlintplugins
+Fetched https://github.com/SimplyDanny/SwiftLintPlugins from cache (0.55s)
+Computing version for https://github.com/SimplyDanny/SwiftLintPlugins
+Computed https://github.com/SimplyDanny/SwiftLintPlugins at 0.63.2 (1.18s)
+Computed https://github.com/SimplyDanny/SwiftLintPlugins at 0.63.2 (0.00s)
+Creating working copy for https://github.com/SimplyDanny/SwiftLintPlugins
+Working copy of https://github.com/SimplyDanny/SwiftLintPlugins resolved at 0.63.2
+Downloading binary artifact https://github.com/realm/SwiftLint/releases/download/0.63.2/SwiftLintBinary.artifactbundle.zip
+[16375/72588246] Downloading https://github.com/realm/SwiftLint/releases/download/0.63.2/SwiftLintBinary.artifactbundle.zip
+Downloaded https://github.com/realm/SwiftLint/releases/download/0.63.2/SwiftLintBinary.artifactbundle.zip (5.62s)
+Building for production...
+[0/6] Write sources
+[3/6] Write swift-version--79AA4F9932D1E87A.txt
+[5/8] Compiling AIUsagesTrackersLib ClaudeActiveAccountMonitor.swift
+/Users/runner/work/mac-ai-trackers/mac-ai-trackers/AIUsagesTrackers/Sources/AIUsagesTrackers/Store/UsageStore.swift:137:5: error: 'isolated' deinit requires frontend flag -enable-experimental-feature IsolatedDeinit to enable the usage of this language feature
+135 | 
+136 |     // Defensive: cancels tasks when the store is released without an explicit stop() call.
+137 |     @MainActor deinit { stop() }
+    |     `- error: 'isolated' deinit requires frontend flag -enable-experimental-feature IsolatedDeinit to enable the usage of this language feature
+138 | 
+139 |     // MARK: - Processing
+/Users/runner/work/mac-ai-trackers/mac-ai-trackers/AIUsagesTrackers/Sources/AIUsagesTrackers/Store/UsageStore.swift:137:25: error: call to main actor-isolated instance method 'stop()' in a synchronous nonisolated context
+127 | 
+128 |     /// Stop all background tasks. Idempotent.
+129 |     public func stop() {
+    |                 `- note: calls to instance method 'stop()' from outside of its actor context are implicitly asynchronous
+130 |         watchTask?.cancel()
+131 |         watchTask = nil
+    :
+135 | 
+136 |     // Defensive: cancels tasks when the store is released without an explicit stop() call.
+137 |     @MainActor deinit { stop() }
+    |                         `- error: call to main actor-isolated instance method 'stop()' in a synchronous nonisolated context
+138 | 
+139 |     // MARK: - Processing
+Error: Process completed with exit code 1.
+
+---
+
+encore une erreur un peu plus loin dans le build:
+Run ./scripts/build-app-bundle.sh
+→ Building release binaries
+Fetching https://github.com/SimplyDanny/SwiftLintPlugins
+[1/326] Fetching swiftlintplugins
+Fetched https://github.com/SimplyDanny/SwiftLintPlugins from cache (0.55s)
+Computing version for https://github.com/SimplyDanny/SwiftLintPlugins
+Computed https://github.com/SimplyDanny/SwiftLintPlugins at 0.63.2 (1.18s)
+Computed https://github.com/SimplyDanny/SwiftLintPlugins at 0.63.2 (0.00s)
+Creating working copy for https://github.com/SimplyDanny/SwiftLintPlugins
+Working copy of https://github.com/SimplyDanny/SwiftLintPlugins resolved at 0.63.2
+Downloading binary artifact https://github.com/realm/SwiftLint/releases/download/0.63.2/SwiftLintBinary.artifactbundle.zip
+[16375/72588246] Downloading https://github.com/realm/SwiftLint/releases/download/0.63.2/SwiftLintBinary.artifactbundle.zip
+Downloaded https://github.com/realm/SwiftLint/releases/download/0.63.2/SwiftLintBinary.artifactbundle.zip (5.62s)
+Building for production...
+[0/6] Write sources
+[3/6] Write swift-version--79AA4F9932D1E87A.txt
+[5/8] Compiling AIUsagesTrackersLib ClaudeActiveAccountMonitor.swift
+/Users/runner/work/mac-ai-trackers/mac-ai-trackers/AIUsagesTrackers/Sources/AIUsagesTrackers/Store/UsageStore.swift:137:5: error: 'isolated' deinit requires frontend flag -enable-experimental-feature IsolatedDeinit to enable the usage of this language feature
+135 | 
+136 |     // Defensive: cancels tasks when the store is released without an explicit stop() call.
+137 |     @MainActor deinit { stop() }
+    |     `- error: 'isolated' deinit requires frontend flag -enable-experimental-feature IsolatedDeinit to enable the usage of this language feature
+138 | 
+139 |     // MARK: - Processing
+/Users/runner/work/mac-ai-trackers/mac-ai-trackers/AIUsagesTrackers/Sources/AIUsagesTrackers/Store/UsageStore.swift:137:25: error: call to main actor-isolated instance method 'stop()' in a synchronous nonisolated context
+127 | 
+128 |     /// Stop all background tasks. Idempotent.
+129 |     public func stop() {
+    |                 `- note: calls to instance method 'stop()' from outside of its actor context are implicitly asynchronous
+130 |         watchTask?.cancel()
+131 |         watchTask = nil
+    :
+135 | 
+136 |     // Defensive: cancels tasks when the store is released without an explicit stop() call.
+137 |     @MainActor deinit { stop() }
+    |                         `- error: call to main actor-isolated instance method 'stop()' in a synchronous nonisolated context
+138 | 
+139 |     // MARK: - Processing
+Error: Process completed with exit code 1.
