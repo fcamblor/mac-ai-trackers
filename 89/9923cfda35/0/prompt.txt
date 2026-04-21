@@ -1,0 +1,21 @@
+le build est toujours en erreur:
+Run ./scripts/build-app-bundle.sh
+  
+→ Building release binaries
+Fetching https://github.com/SimplyDanny/SwiftLintPlugins
+[1/326] Fetching swiftlintplugins
+Fetched https://github.com/SimplyDanny/SwiftLintPlugins from cache (1.07s)
+Computing version for https://github.com/SimplyDanny/SwiftLintPlugins
+Computed https://github.com/SimplyDanny/SwiftLintPlugins at 0.63.2 (1.86s)
+Computed https://github.com/SimplyDanny/SwiftLintPlugins at 0.63.2 (0.00s)
+Creating working copy for https://github.com/SimplyDanny/SwiftLintPlugins
+Working copy of https://github.com/SimplyDanny/SwiftLintPlugins resolved at 0.63.2
+Downloading binary artifact https://github.com/realm/SwiftLint/releases/download/0.63.2/SwiftLintBinary.artifactbundle.zip
+[15586/72588246] Downloading https://github.com/realm/SwiftLint/releases/download/0.63.2/SwiftLintBinary.artifactbundle.zip
+Downloaded https://github.com/realm/SwiftLint/releases/download/0.63.2/SwiftLintBinary.artifactbundle.zip (5.50s)
+Building for production...
+[0/6] Write sources
+[3/6] Write swift-version--79AA4F9932D1E87A.txt
+[5/8] Compiling AIUsagesTrackersLib ClaudeActiveAccountMonitor.swift
+<unknown>:0: error: experimental feature 'IsolatedDeinit' cannot be enabled in production compiler
+Error: Process completed with exit code 1.
