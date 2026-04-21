@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    name: Build and Release
+    runs-on: macos-15
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        # Swift 6.2 (Xcode 26) is required because the codebase uses stable
+        # @MainActor deinit, which is experimental in Swift 6.1 (Xcode 16.x).
+        run: |
+          XCODE_PATH=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE_PATH" ]; then
+            echo "No Xcode 26.x found on runner. Available:"
+            ls -d /Applications/Xcode*.app
+            exit 1
+          fi
+          echo "Using: $XCODE_PATH"
+          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+
+      - name: Show Build Environment
+        run: |
+          xcodebuild -version
+          swift --version
+          echo "macOS: $(sw_vers -productVersion)"
+          echo "Tag: ${{ github.ref_name }}"
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Version: ${VERSION}"
+
+      - name: Strip SwiftLint plugin for CI build
+        run: |
+          # SwiftLintPlugins fails on CI runners with "prebuild command cannot
+          # use executables built from source". Lint is a dev/PR concern, not
+          # a release concern — strip the plugin so the release build proceeds.
+          python3 -c "
+          import re, pathlib
+          p = pathlib.Path('AIUsagesTrackers/Package.swift')
+          s = p.read_text()
+          s = re.sub(r',\s*plugins:\s*\[[^\]]*\]', '', s)
+          p.write_text(s)
+          "
+          echo "--- Patched Package.swift ---"
+          cat AIUsagesTrackers/Package.swift
+
+      - name: Build app bundle
+        env:
+          BUNDLE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          ./scripts/build-app-bundle.sh
+          echo "✅ Build completed"
+
+      - name: Create release artifact
+        id: artifact
+        run: |
+          cd dist
+          ditto -c -k --keepParent "AI Usages Tracker.app" "AI-Usages-Tracker.zip"
+          shasum -a 256 "AI-Usages-Tracker.zip" > "AI-Usages-Tracker.zip.sha256"
+          echo "SHA256:"
+          cat "AI-Usages-Tracker.zip.sha256"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          draft: false
+          generate_release_notes: true
+          files: |
+            dist/AI-Usages-Tracker.zip
+            dist/AI-Usages-Tracker.zip.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute SHA256 for Homebrew
+        id: sha
+        run: |
+          SHA=$(shasum -a 256 dist/AI-Usages-Tracker.zip | awk '{print $1}')
+          echo "sha256=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "SHA256: ${SHA}"
+
+      - name: Summary
+        run: |
+          echo "🎉 Release ${{ github.ref_name }} published"
+          echo ""
+          echo "⚠️  Ad-hoc signed build (no Apple notarization)"
+          echo "   First launch: right-click > Open to bypass Gatekeeper"
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      sha256: ${{ steps.sha.outputs.sha256 }}
+
+  update-tap:
+    name: Update Homebrew Tap
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+        with:
+          repository: fcamblor/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Update cask file
+        run: |
+          CASK="Casks/ai-usages-tracker.rb"
+          [ -f "$CASK" ] || { echo "$CASK missing in tap"; exit 1; }
+
+          sed -i "s/version \".*\"/version \"${{ needs.release.outputs.version }}\"/" "$CASK"
+          sed -i "s/sha256 \".*\"/sha256 \"${{ needs.release.outputs.sha256 }}\"/" "$CASK"
+
+          grep -q "version \"${{ needs.release.outputs.version }}\"" "$CASK"
+          grep -q "sha256 \"${{ needs.release.outputs.sha256 }}\"" "$CASK"
+
+          echo "--- Updated cask ---"
+          cat "$CASK"
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/ai-usages-tracker.rb
+          git commit -m "chore: bump ai-usages-tracker to ${{ needs.release.outputs.version }}"
+          git push
