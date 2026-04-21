@@ -31,6 +31,21 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Version: ${VERSION}"
 
+      - name: Strip SwiftLint plugin for CI build
+        run: |
+          # SwiftLintPlugins fails on CI runners with "prebuild command cannot
+          # use executables built from source". Lint is a dev/PR concern, not
+          # a release concern — strip the plugin so the release build proceeds.
+          python3 -c "
+          import re, pathlib
+          p = pathlib.Path('AIUsagesTrackers/Package.swift')
+          s = p.read_text()
+          s = re.sub(r',\s*plugins:\s*\[[^\]]*\]', '', s)
+          p.write_text(s)
+          "
+          echo "--- Patched Package.swift ---"
+          cat AIUsagesTrackers/Package.swift
+
       - name: Build app bundle
         env:
           BUNDLE_VERSION: ${{ steps.version.outputs.version }}
