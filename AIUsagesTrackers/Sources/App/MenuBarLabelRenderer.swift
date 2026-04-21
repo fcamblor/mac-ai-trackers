@@ -57,11 +57,13 @@ enum MenuBarLabelRenderer {
                     attributes: [.font: font, .foregroundColor: textColor]
                 ))
             }
-            let dotColor = segment.tier?.nsColor ?? textColor
-            result.append(NSAttributedString(
-                string: dot,
-                attributes: [.font: font, .foregroundColor: dotColor]
-            ))
+            if segment.showDot {
+                let dotColor = segment.tier?.nsColor ?? textColor
+                result.append(NSAttributedString(
+                    string: dot,
+                    attributes: [.font: font, .foregroundColor: dotColor]
+                ))
+            }
             result.append(NSAttributedString(
                 string: segment.text,
                 attributes: [.font: font, .foregroundColor: textColor]

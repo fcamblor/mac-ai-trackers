@@ -35,8 +35,16 @@ The menu bar label itself is rasterised into a non-template `NSImage` by `MenuBa
 
 A separate monitoring actor polls the vendor's local config file at a short fixed interval to detect account switches in real time. When a switch is detected, it updates the `isActive` flag on the corresponding persistence entry without waiting for the next usage fetch. This separation keeps account-status latency low without coupling it to the (slower) API polling cadence.
 
+## Preferences
+
+An injectable preferences protocol backed by `UserDefaults` is the single source of truth for user-adjustable runtime behaviour. Two consumers read it: the polling actor (refresh cadence) and the logging subsystem (verbosity). Changes made in the settings window take effect immediately — the poller re-reads the interval on every tick, and the logger resolves its effective level on every log call.
+
+The settings window is a standard SwiftUI `Settings` scene (tabbed, HIG chrome, `Cmd+,`). Because the app uses `.accessory` activation policy, opening the window requires explicitly activating the app before sending the `showSettingsWindow:` action.
+
+Launch-at-login state is reconciled at startup: if the user toggled the entry in System Settings > Login Items, the preferences store is updated to match the system state rather than overriding it.
+
 ## Logging
 
-Two log files live under `~/.cache/ai-usages-tracker/`: one for the app lifecycle and poller events, another for connector-specific activity. Log level is configurable via the `AI_TRACKER_LOG_LEVEL` environment variable. Size-based rotation keeps each file under 5 MB with one backup. A retention purge removes entries older than 7 days from all managed log files at startup and every 24 hours, using atomic rewrites so a crash mid-cleanup leaves the previous file intact.
+Two log files live under `~/.cache/ai-usages-tracker/`: one for the app lifecycle and poller events, another for connector-specific activity. Log level is configurable via the `AI_TRACKER_LOG_LEVEL` environment variable; when that variable is absent, the level falls back to the user's setting in the preferences window (default: info). Size-based rotation keeps each file under 5 MB with one backup. A retention purge removes entries older than 7 days from all managed log files at startup and every 24 hours, using atomic rewrites so a crash mid-cleanup leaves the previous file intact.
 
 For authoritative details (Swift tools version, platform minimums, target layout), read the package manifest rather than mirroring them here.

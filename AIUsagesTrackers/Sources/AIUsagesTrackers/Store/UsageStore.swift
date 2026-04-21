@@ -15,15 +15,25 @@ public struct SystemClock: ClockProvider {
 
 // MARK: - Store
 
-/// One segment of the menu bar label — a single metric's formatted text and its tier.
-public struct MenuBarSegment: Sendable {
+/// One segment of the menu bar label — a single metric's formatted text, its tier,
+/// and whether the leading colored dot should be drawn. Pay-as-you-go segments
+/// render without a dot; time-window segments respect the user's `showDot` toggle.
+public struct MenuBarSegment: Sendable, Equatable {
     public let text: String
     public let tier: ConsumptionTier?
+    public let showDot: Bool
+
+    public init(text: String, tier: ConsumptionTier?, showDot: Bool) {
+        self.text = text
+        self.tier = tier
+        self.showDot = showDot
+    }
 }
 
-/// Formats the active Claude account's time-window metrics for the menu bar.
-/// Example: `S 48% 2h 13m | W 7% 6d 6h 13m`. Falls back to `"--"` when data is
-/// unavailable, malformed, or no active account is found.
+/// Formats the user-configured menu bar segments. Iterates the segments declared
+/// in `AppPreferences.menuBarSegments`, resolves each against the latest usages
+/// file contents, and exposes the rendered label text + per-segment payloads.
+/// Falls back to `"--"` when no segment can be rendered.
 @Observable
 @MainActor
 public final class UsageStore {
@@ -40,6 +50,7 @@ public final class UsageStore {
     private let fileWatcher: FileWatching
     private let clock: ClockProvider
     private let logger: FileLogger
+    private let preferences: any AppPreferences
     private let countdownRefreshSeconds: UInt64
 
     public static let defaultCountdownRefreshSeconds: UInt64 = 60
@@ -55,15 +66,6 @@ public final class UsageStore {
         return "hex:\(hex)"
     }
 
-    private static let targetVendor: Vendor = .claude
-    // Only top-level aggregate metrics belong in the compact menu bar label; per-model breakdowns live in the popover only
-    private static let menuBarMetricNames: Set<String> = ["5h sessions (all models)", "Weekly (all models)"]
-    // Explicit short abbreviations for menu bar display — descriptive names start with digits or lowercase
-    private static let menuBarAbbreviations: [String: String] = [
-        "5h sessions (all models)": "S",
-        "Weekly (all models)": "W",
-    ]
-
     // Latest decoded file kept for countdown refresh without re-reading disk
     private var lastFile: UsagesFile?
 
@@ -74,12 +76,24 @@ public final class UsageStore {
         fileWatcher: FileWatching,
         clock: ClockProvider = SystemClock(),
         logger: FileLogger = Loggers.app,
+        preferences: (any AppPreferences)? = nil,
         countdownRefreshSeconds: UInt64 = UsageStore.defaultCountdownRefreshSeconds
     ) {
         self.fileWatcher = fileWatcher
         self.clock = clock
         self.logger = logger
+        // Default preferences mirror the pre-settings-window behaviour (S + W for
+        // currently-active Claude account) so existing callers and tests that
+        // don't supply a preferences store still get meaningful output.
+        self.preferences = preferences ?? Self.makeDefaultPreferences()
         self.countdownRefreshSeconds = countdownRefreshSeconds
+    }
+
+    private static func makeDefaultPreferences() -> any AppPreferences {
+        InMemoryAppPreferences(
+            menuBarSegments: MenuBarSegmentsSeeder.defaultSegments(),
+            menuBarSegmentsInitialized: true
+        )
     }
 
     // MARK: Lifecycle
@@ -107,6 +121,8 @@ public final class UsageStore {
                 self.refreshMenuBarText()
             }
         }
+
+        trackPreferencesChanges()
     }
 
     /// Stop all background tasks. Idempotent.
@@ -128,10 +144,7 @@ public final class UsageStore {
             let file = try JSONDecoder().decode(UsagesFile.self, from: data)
             lastFile = file
             entries = file.usages
-            let result = format(file: file)
-            menuBarText = result.text
-            menuBarTier = result.tier
-            menuBarSegments = result.segments
+            applyFormat()
         } catch {
             let preview = Self.rawPreview(data)
             logger.log(.error, "UsageStore: JSON decode failed: \(error) — bytes=\(data.count), preview=\(preview)")
@@ -144,69 +157,41 @@ public final class UsageStore {
     }
 
     private func refreshMenuBarText() {
-        guard let file = lastFile else { return }
-        let result = format(file: file)
-        menuBarText = result.text
-        menuBarTier = result.tier
-        menuBarSegments = result.segments
+        guard lastFile != nil else { return }
+        applyFormat()
+    }
+
+    /// Re-runs formatting whenever `preferences.menuBarSegments` changes so the
+    /// menu bar updates as the user edits the segment configuration. Tracking
+    /// fires once per registration — re-arm inside the callback.
+    private func trackPreferencesChanges() {
+        withObservationTracking {
+            _ = preferences.menuBarSegments
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                self.refreshMenuBarText()
+                self.trackPreferencesChanges()
+            }
+        }
     }
 
     // MARK: - Formatting
 
-    private struct FormatResult {
-        let segments: [MenuBarSegment]
-        let text: String
-        let tier: ConsumptionTier?
-    }
-
-    private func format(file: UsagesFile) -> FormatResult {
-        guard let entry = file.usages.first(where: {
-            $0.vendor == Self.targetVendor && $0.isActive
-        }) else {
-            return FormatResult(segments: [], text: Self.fallbackText, tier: nil)
-        }
-
+    private func applyFormat() {
         let now = clock.now()
-        var segments: [MenuBarSegment] = []
-
-        for metric in entry.metrics {
-            guard let segment = formatTimeWindowSegment(metric, now: now) else { continue }
-            segments.append(segment)
+        let configs = preferences.menuBarSegments
+        var rendered: [MenuBarSegment] = []
+        for config in configs {
+            let resolution = MenuBarSegmentResolver.resolve(config: config, entries: entries, now: now)
+            if let segment = resolution.rendered {
+                rendered.append(segment)
+            } else if let issue = resolution.issue {
+                logger.log(.debug, "UsageStore: skipping segment \(config.metricName) — \(issue)")
+            }
         }
-
-        let worstTier = segments.compactMap(\.tier).max()
-        let text = segments.isEmpty ? Self.fallbackText : segments.map(\.text).joined(separator: " | ")
-        return FormatResult(segments: segments, text: text, tier: segments.isEmpty ? nil : worstTier)
-    }
-
-    private func formatTimeWindowSegment(_ metric: UsageMetric, now: Date) -> MenuBarSegment? {
-        if case let .unknown(t) = metric {
-            logger.log(.debug, "UsageStore: skipping unknown metric type '\(t)'")
-        }
-        guard case let .timeWindow(name, resetAt, windowDuration, usagePercent) = metric else {
-            return nil
-        }
-        guard Self.menuBarMetricNames.contains(name) else { return nil }
-
-        let abbreviation = Self.menuBarAbbreviations[name] ?? String(name.prefix(1)).uppercased()
-        // A metric with an empty name cannot be abbreviated — skip to avoid a leading space in output
-        guard !abbreviation.isEmpty else { return nil }
-
-        let remaining = resetAt.map { formatRemainingTime(resetAt: $0, now: now) } ?? "???"
-        let text = "\(abbreviation) \(usagePercent.rawValue)% \(remaining)"
-
-        let theoretical = resetAt.map { theoreticalFraction(resetAt: $0, windowDuration: windowDuration, now: now) } ?? 0.0
-        let tier = consumptionRatio(actualPercent: usagePercent, theoreticalFraction: theoretical)
-            .map { consumptionTier(ratio: $0) }
-
-        return MenuBarSegment(text: text, tier: tier)
-    }
-
-    private func formatRemainingTime(resetAt: ISODate, now: Date) -> String {
-        guard resetAt.date != nil else {
-            logger.log(.warning, "UsageStore: invalid ISO8601 resetAt value: \(resetAt.rawValue)")
-            return "--"
-        }
-        return AIUsagesTrackersLib.formatRemainingTime(resetAt: resetAt, now: now)
+        menuBarSegments = rendered
+        menuBarText = rendered.isEmpty ? Self.fallbackText : rendered.map(\.text).joined(separator: " | ")
+        menuBarTier = rendered.compactMap(\.tier).max()
     }
 }

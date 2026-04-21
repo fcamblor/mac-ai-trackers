@@ -2,6 +2,17 @@ import Foundation
 import Testing
 @testable import AIUsagesTrackersLib
 
+/// Thread-safe mutable LogLevel for testing dynamic level resolution.
+private final class MutableLogLevel: @unchecked Sendable { // @unchecked Sendable justified: NSLock guards _value; only this test file mutates it
+    private let lock = NSLock()
+    private var _value: LogLevel
+    init(_ value: LogLevel) { _value = value }
+    var value: LogLevel {
+        get { lock.withLock { _value } }
+        set { lock.withLock { _value = newValue } }
+    }
+}
+
 @Suite("FileLogger")
 struct FileLoggerTests {
     private func makeTempPath() -> String {
@@ -223,6 +234,35 @@ struct FileLoggerTests {
             let stamp = String(line[line.index(after: open)..<close])
             #expect(formatter.date(from: stamp) != nil, "Invalid ISO8601: \(stamp)")
         }
+    }
+
+    @Test("dynamicLevel overrides static minLevel")
+    func dynamicLevelOverride() {
+        let path = makeTempPath()
+        let levelHolder = MutableLogLevel(.debug)
+        let logger = FileLogger(filePath: path, dynamicLevel: { levelHolder.value })
+
+        logger.log(.debug, "should appear")
+        logger.waitForPendingWrites()
+        let content1 = try! String(contentsOfFile: path, encoding: .utf8)
+        #expect(content1.contains("should appear"))
+
+        // Switch dynamic level to error — debug messages should be suppressed
+        levelHolder.value = .error
+        logger.log(.debug, "should not appear")
+        logger.waitForPendingWrites()
+        let content2 = try! String(contentsOfFile: path, encoding: .utf8)
+        #expect(!content2.contains("should not appear"))
+    }
+
+    @Test("effectiveMinLevel returns dynamicLevel when set")
+    func effectiveMinLevel() {
+        let path = makeTempPath()
+        let staticLogger = FileLogger(filePath: path, minLevel: .warning)
+        #expect(staticLogger.effectiveMinLevel == .warning)
+
+        let dynamicLogger = FileLogger(filePath: path, dynamicLevel: { .debug })
+        #expect(dynamicLogger.effectiveMinLevel == .debug)
     }
 
     @Test("rotates log file when exceeding max size")
