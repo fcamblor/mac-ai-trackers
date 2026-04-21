@@ -1,0 +1,51 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "a8d65aa0b1e4",
+  "session_id": "37c9f1a2-ab73-48be-810b-1a9a6ef24897",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-21T17:07:13.953865Z",
+  "branch": "archon/task-feat-settings-window",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".github/workflows/release.yml"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "924feffe15c3",
+  "checkpoint_transcript_start": 146,
+  "transcript_lines_at_start": 146,
+  "token_usage": {
+    "input_tokens": 10,
+    "cache_creation_tokens": 11533,
+    "cache_read_tokens": 309383,
+    "output_tokens": 6051,
+    "api_call_count": 5
+  },
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-21T17:07:13.796535Z",
+    "agent_lines": 15,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 15,
+    "total_lines_changed": 15,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 10,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10
+      }
+    }
+  ]
+}

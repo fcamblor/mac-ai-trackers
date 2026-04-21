@@ -1,0 +1,17 @@
+j'ai une erreur lors du build:
+Run ./scripts/build-app-bundle.sh
+→ Building release binaries
+Fetching https://github.com/SimplyDanny/SwiftLintPlugins
+[1/326] Fetching swiftlintplugins
+Fetched https://github.com/SimplyDanny/SwiftLintPlugins from cache (0.54s)
+Computing version for https://github.com/SimplyDanny/SwiftLintPlugins
+Computed https://github.com/SimplyDanny/SwiftLintPlugins at 0.63.2 (0.89s)
+Computed https://github.com/SimplyDanny/SwiftLintPlugins at 0.63.2 (0.00s)
+Creating working copy for https://github.com/SimplyDanny/SwiftLintPlugins
+Working copy of https://github.com/SimplyDanny/SwiftLintPlugins resolved at 0.63.2
+Downloading binary artifact https://github.com/realm/SwiftLint/releases/download/0.63.2/SwiftLintBinary.artifactbundle.zip
+[4125/72588246] Downloading https://github.com/realm/SwiftLint/releases/download/0.63.2/SwiftLintBinary.artifactbundle.zip
+Downloaded https://github.com/realm/SwiftLint/releases/download/0.63.2/SwiftLintBinary.artifactbundle.zip (3.84s)
+error: a prebuild command cannot use executables built from source, including executable target 'swiftlint'
+error: build planning stopped due to build-tool plugin failures
+Error: Process completed with exit code 1.
