@@ -1,0 +1,65 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "7420205afc06",
+  "session_id": "5a470dae-33c3-419a-a299-1ef3efb31ab8",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-21T21:16:57.173003Z",
+  "branch": "archon/task-feat-vendor-status-monitor",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/UsageModels.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/ValueObjects.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/UsagesFileManager.swift",
+    "AIUsagesTrackers/Sources/App/Views/VendorStatusBanner.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageModelsTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageStoreTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsagesFileManagerTests.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "2c52d5425030",
+  "token_usage": {
+    "input_tokens": 92,
+    "cache_creation_tokens": 284611,
+    "cache_read_tokens": 4679100,
+    "output_tokens": 34250,
+    "api_call_count": 50
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-21T21:16:56.728294Z",
+    "agent_lines": 213,
+    "agent_removed": 413,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 213,
+    "total_lines_changed": 626,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 10,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 10,
+      "user_lines_removed": 0,
+      "agent_lines_added": 213,
+      "agent_lines_removed": 413,
+      "user_added_per_file": {
+        ".idea/.gitignore": 10
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+j'aimerais bien que tu reviennes sur le fait de changer la structure du fichier usages.json de manière backward incompatible
+
+J'aimerais que tu reviennes à la structure d'origine MAIS que tu rajoutes un nouveau noeud à coté de usages, qui ressemblera à :
+"outages":[{
+  "vendor": "claude",
+  "errorMessage": "Elevated errors on Claude.ai, API, Claude Code",
+  "since": "2026-04-15T14:53:00Z",
+  "href": "https://status.claude.com/incidents/f00h6l76tsjs"
+}]
+
+Lorsqu'on teste status.claude.com et qu'aucun outage n'est ongoing, il faudra supprimer l'entrée de "outages".
+
+---
+
+- je pense que tu peux rajouter severity pour connaître le tint de couleur
+- je ne pense pas qu'il faille considérer href comme obligatoire: lorsque non défini, il ne faut simplement pas rendre le message cliquable
