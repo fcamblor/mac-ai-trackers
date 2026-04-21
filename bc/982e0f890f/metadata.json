@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "bc982e0f890f",
+  "strategy": "manual-commit",
+  "branch": "archon/task-feat-settings-window",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".github/workflows/release.yml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/bc/982e0f890f/0/metadata.json",
+      "transcript": "/bc/982e0f890f/0/full.jsonl",
+      "content_hash": "/bc/982e0f890f/0/content_hash.txt",
+      "prompt": "/bc/982e0f890f/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 9,
+    "cache_creation_tokens": 4356,
+    "cache_read_tokens": 333143,
+    "output_tokens": 2658,
+    "api_call_count": 4
+  }
+}
