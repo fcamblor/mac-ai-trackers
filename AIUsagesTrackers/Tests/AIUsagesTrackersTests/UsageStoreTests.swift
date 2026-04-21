@@ -79,40 +79,41 @@ private func makeUsagesJSON(
     return try JSONSerialization.data(withJSONObject: root)
 }
 
-/// Creates a v2 JSON payload with optional outages for a vendor.
-private func makeV2UsagesJSON(
+/// Creates a flat-shape JSON payload with an optional sibling outages array.
+private func makeUsagesWithOutagesJSON(
     vendor: String = "claude",
     account: String = "user@example.com",
     isActive: Bool = true,
     metrics: [[String: Any]] = [],
     outages: [[String: Any]] = []
 ) throws -> Data {
-    let accountEntry: [String: Any] = [
+    let entry: [String: Any] = [
+        "vendor": vendor,
         "account": account,
         "isActive": isActive,
         "metrics": metrics,
     ]
-    var vendorSection: [String: Any] = ["accounts": [accountEntry]]
+    var root: [String: Any] = ["usages": [entry]]
     if !outages.isEmpty {
-        vendorSection["outages"] = outages
+        root["outages"] = outages
     }
-    let root: [String: Any] = [
-        "schemaVersion": 2,
-        "vendors": [vendor: vendorSection],
-    ]
     return try JSONSerialization.data(withJSONObject: root)
 }
 
 private func outageJSON(
-    id: String = "inc-1",
-    title: String = "API issues",
+    vendor: String = "claude",
+    errorMessage: String = "API issues",
     severity: String = "major",
-    affectedComponents: [String] = []
+    since: String = "2026-04-15T14:53:00Z",
+    href: String? = nil
 ) -> [String: Any] {
-    var json: [String: Any] = ["id": id, "title": title, "severity": severity]
-    if !affectedComponents.isEmpty {
-        json["affectedComponents"] = affectedComponents
-    }
+    var json: [String: Any] = [
+        "vendor": vendor,
+        "errorMessage": errorMessage,
+        "severity": severity,
+        "since": since,
+    ]
+    if let href { json["href"] = href }
     return json
 }
 
@@ -1079,7 +1080,7 @@ struct UsageStoreOutageRoundTripTests {
         store.start()
 
         // Step 1: file with no outages
-        let noOutageData = try makeV2UsagesJSON(
+        let noOutageData = try makeUsagesWithOutagesJSON(
             metrics: [timeWindowMetric()],
             outages: []
         )
@@ -1089,21 +1090,22 @@ struct UsageStoreOutageRoundTripTests {
         #expect(store.entries.count == 1)
 
         // Step 2: upstream writes an outage into the file
-        let withOutageData = try makeV2UsagesJSON(
+        let withOutageData = try makeUsagesWithOutagesJSON(
             metrics: [timeWindowMetric()],
-            outages: [outageJSON(id: "inc-42", title: "Messages API latency spike", severity: "critical",
-                                 affectedComponents: ["Claude API"])]
+            outages: [outageJSON(errorMessage: "Messages API latency spike", severity: "critical",
+                                 since: "2026-04-15T14:53:00Z",
+                                 href: "https://status.claude.com/incidents/x")]
         )
         watcher.send(withOutageData)
         try await eventually { !store.outagesByVendor.isEmpty }
 
         let outages = store.outagesByVendor[.claude]
         #expect(outages?.count == 1)
-        #expect(outages?[0].id == OutageId(rawValue: "inc-42"))
+        #expect(outages?[0].errorMessage == "Messages API latency spike")
         #expect(outages?[0].severity == .critical)
 
         // Step 3: upstream resolves the incident
-        let resolvedData = try makeV2UsagesJSON(
+        let resolvedData = try makeUsagesWithOutagesJSON(
             metrics: [timeWindowMetric()],
             outages: []
         )
@@ -1131,45 +1133,31 @@ struct UsageStoreOutagesTests {
     }
 
     @MainActor
-    @Test("outagesByVendor populated from v2 file with outages")
-    func populatedFromV2WithOutages() async throws {
+    @Test("outagesByVendor populated from file with outages array")
+    func populatedWithOutages() async throws {
         let watcher = MockFileWatcher()
         let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
         store.start()
 
-        let data = try makeV2UsagesJSON(outages: [
-            outageJSON(id: "inc-1", title: "Elevated error rate", severity: "major",
-                       affectedComponents: ["Claude API", "Console"]),
+        let data = try makeUsagesWithOutagesJSON(outages: [
+            outageJSON(errorMessage: "Elevated error rate", severity: "major",
+                       since: "2026-04-15T14:53:00Z",
+                       href: "https://status.claude.com/incidents/x"),
         ])
         watcher.send(data)
         try await eventually { !store.outagesByVendor.isEmpty }
 
         let claudeOutages = store.outagesByVendor[.claude]
         #expect(claudeOutages?.count == 1)
-        #expect(claudeOutages?[0].title == "Elevated error rate")
+        #expect(claudeOutages?[0].errorMessage == "Elevated error rate")
         #expect(claudeOutages?[0].severity == .major)
-        #expect(claudeOutages?[0].affectedComponents == ["Claude API", "Console"])
+        #expect(claudeOutages?[0].href?.absoluteString == "https://status.claude.com/incidents/x")
         store.stop()
     }
 
     @MainActor
-    @Test("outagesByVendor empty when v2 file has no outages")
+    @Test("outagesByVendor empty when file has no outages key")
     func emptyWhenNoOutages() async throws {
-        let watcher = MockFileWatcher()
-        let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
-        store.start()
-
-        let data = try makeV2UsagesJSON(outages: [])
-        watcher.send(data)
-        try await eventually { store.dataProcessedCount == 1 }
-
-        #expect(store.outagesByVendor.isEmpty)
-        store.stop()
-    }
-
-    @MainActor
-    @Test("outagesByVendor empty when legacy v1 shape is loaded")
-    func emptyFromLegacyShape() async throws {
         let watcher = MockFileWatcher()
         let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
         store.start()
@@ -1190,7 +1178,7 @@ struct UsageStoreOutagesTests {
         store.start()
 
         // First: valid data with outages
-        let data = try makeV2UsagesJSON(outages: [outageJSON()])
+        let data = try makeUsagesWithOutagesJSON(outages: [outageJSON()])
         watcher.send(data)
         try await eventually { !store.outagesByVendor.isEmpty }
         #expect(store.outagesByVendor[.claude] != nil)
@@ -1210,12 +1198,12 @@ struct UsageStoreOutagesTests {
         store.start()
 
         // Send data with outages
-        let withOutages = try makeV2UsagesJSON(outages: [outageJSON()])
+        let withOutages = try makeUsagesWithOutagesJSON(outages: [outageJSON()])
         watcher.send(withOutages)
         try await eventually { !store.outagesByVendor.isEmpty }
 
-        // Send data without outages
-        let withoutOutages = try makeV2UsagesJSON(outages: [])
+        // Send data without outages (outages key absent)
+        let withoutOutages = try makeUsagesWithOutagesJSON(outages: [])
         watcher.send(withoutOutages)
         try await eventually { store.outagesByVendor.isEmpty }
         #expect(store.outagesByVendor.isEmpty)

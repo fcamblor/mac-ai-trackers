@@ -63,17 +63,15 @@ public actor UsagesFileManager {
         do {
             try await withFileLock(mode: LOCK_EX) {
                 var file = readUnsafe()
-                guard var section = file.vendors[vendor] else { return }
                 var changed = false
-                for i in section.accounts.indices {
-                    let newActive = section.accounts[i].account == activeAccount
-                    if section.accounts[i].isActive != newActive {
-                        section.accounts[i].isActive = newActive
+                for i in file.usages.indices where file.usages[i].vendor == vendor {
+                    let newActive = file.usages[i].account == activeAccount
+                    if file.usages[i].isActive != newActive {
+                        file.usages[i].isActive = newActive
                         changed = true
                     }
                 }
                 if changed {
-                    file.vendors[vendor] = section
                     writeUnsafe(file)
                 }
             }
@@ -87,8 +85,8 @@ public actor UsagesFileManager {
     // MARK: - Merge logic
 
     func merge(existing: UsagesFile, incoming: [VendorUsageEntry]) -> UsagesFile {
-        // Operate on the flattened usages for backward-compatible merge semantics,
-        // then rebuild the vendor-keyed structure preserving existing outages.
+        // Connectors never provide outages, so the existing file's outages survive
+        // the merge unchanged — the upstream status-fetcher owns that field.
         var usages = existing.usages
         var indexByKey: [String: Int] = [:]
         for (i, entry) in usages.enumerated() {
@@ -118,11 +116,7 @@ public actor UsagesFileManager {
             }
         }
 
-        // Rebuild with preserved outages: connectors never provide outages,
-        // so the existing file's outages survive the merge unchanged.
-        var result = existing
-        result.usages = usages
-        return result
+        return UsagesFile(usages: usages, outages: existing.outages)
     }
 
     // MARK: - Lock-guarded internals

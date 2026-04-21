@@ -2,180 +2,48 @@ import Foundation
 
 // MARK: - Root
 
-/// The top-level file model.
+/// The top-level file model: `{ usages: [...], outages?: [...] }`.
 ///
-/// **Schema v2** (new shape): `{ schemaVersion: 2, vendors: { "claude": { accounts: [...], outages: [...] } } }`
-/// **Schema v1** (legacy flat shape): `{ usages: [...] }` — decoded transparently and upgraded on next write.
-///
-/// Internal storage is always the v2 vendor-keyed map. The `usages` computed property
-/// flattens it back to `[VendorUsageEntry]` so existing UI and merge code keeps compiling.
-public struct UsagesFile: Equatable, Sendable {
-    private static let currentSchemaVersion = 2
-
-    public var vendors: [Vendor: VendorSection]
-
-    public init(vendors: [Vendor: VendorSection] = [:]) {
-        self.vendors = vendors
-    }
-
-    /// Backward-compatible initialiser: builds vendor sections from a flat entry list (no outages).
-    public init(usages: [VendorUsageEntry]) {
-        var sections: [Vendor: VendorSection] = [:]
-        for entry in usages {
-            var section = sections[entry.vendor] ?? VendorSection()
-            section.accounts.append(VendorAccountEntry(from: entry))
-            sections[entry.vendor] = section
-        }
-        self.vendors = sections
-    }
-
-    /// Flattened view for backward-compatible access. Each account entry is annotated
-    /// with its parent vendor so callers that filter by vendor keep working.
-    public var usages: [VendorUsageEntry] {
-        get {
-            vendors.flatMap { vendor, section in
-                section.accounts.map { $0.toUsageEntry(vendor: vendor) }
-            }
-        }
-        set {
-            var sections: [Vendor: VendorSection] = [:]
-            // Preserve existing outages when rebuilding from a flat list
-            for (vendor, existingSection) in vendors {
-                sections[vendor] = VendorSection(accounts: [], outages: existingSection.outages)
-            }
-            for entry in newValue {
-                var section = sections[entry.vendor] ?? VendorSection()
-                section.accounts.append(VendorAccountEntry(from: entry))
-                sections[entry.vendor] = section
-            }
-            vendors = sections
-        }
-    }
-
-    /// Per-vendor outages for display; vendors without outages are omitted.
-    public var outagesByVendor: [Vendor: [Outage]] {
-        vendors.compactMapValues { section in
-            section.outages.isEmpty ? nil : section.outages
-        }
-    }
-}
-
-// MARK: UsagesFile Codable
-
-extension UsagesFile: Codable {
-    private enum RootKeys: String, CodingKey {
-        case schemaVersion, vendors, usages
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: RootKeys.self)
-        if container.contains(.schemaVersion) {
-            // v2: vendor-keyed shape
-            let vendorDict = try container.decode([String: VendorSection].self, forKey: .vendors)
-            var typed: [Vendor: VendorSection] = [:]
-            for (key, section) in vendorDict {
-                typed[Vendor(rawValue: key)] = section
-            }
-            self.init(vendors: typed)
-        } else if container.contains(.usages) {
-            // v1: legacy flat array — lift into sections with no outages
-            let entries = try container.decode([VendorUsageEntry].self, forKey: .usages)
-            self.init(usages: entries)
-        } else {
-            // Neither v2 sentinel nor v1 usages key — payload is corrupt or unrecognised
-            throw DecodingError.dataCorrupted(
-                DecodingError.Context(
-                    codingPath: container.codingPath,
-                    debugDescription: "Expected 'schemaVersion' (v2) or 'usages' (v1) key"))
-        }
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: RootKeys.self)
-        try container.encode(Self.currentSchemaVersion, forKey: .schemaVersion)
-        // Encode vendor map with string keys
-        var stringKeyed: [String: VendorSection] = [:]
-        for (vendor, section) in vendors {
-            stringKeyed[vendor.rawValue] = section
-        }
-        try container.encode(stringKeyed, forKey: .vendors)
-    }
-}
-
-// MARK: - VendorSection
-
-/// Per-vendor container: the accounts configured for this vendor and any active outages
-/// written by an upstream status-fetching process.
-public struct VendorSection: Codable, Equatable, Sendable {
-    public var accounts: [VendorAccountEntry]
+/// `outages` is an optional sibling written by an upstream status-fetching process.
+/// When no incident is ongoing the upstream writer is expected to drop the key
+/// entirely; the encoder here honours that convention by emitting nothing when
+/// the in-memory array is empty.
+public struct UsagesFile: Codable, Equatable, Sendable {
+    public var usages: [VendorUsageEntry]
     public var outages: [Outage]
 
-    public init(accounts: [VendorAccountEntry] = [], outages: [Outage] = []) {
-        self.accounts = accounts
+    public init(usages: [VendorUsageEntry] = [], outages: [Outage] = []) {
+        self.usages = usages
         self.outages = outages
     }
 
+    /// Grouped view for the UI — vendors without outages are omitted.
+    public var outagesByVendor: [Vendor: [Outage]] {
+        Dictionary(grouping: outages, by: \.vendor)
+    }
+
     private enum CodingKeys: String, CodingKey {
-        case accounts, outages
+        case usages, outages
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        accounts = try container.decode([VendorAccountEntry].self, forKey: .accounts)
+        usages = try container.decodeIfPresent([VendorUsageEntry].self, forKey: .usages) ?? []
         outages = try container.decodeIfPresent([Outage].self, forKey: .outages) ?? []
     }
-}
 
-// MARK: - VendorAccountEntry (persisted shape — no vendor field)
-
-/// The persisted shape of an account inside a vendor section. The vendor is implicit
-/// from the parent key, so it is not stored here.
-public struct VendorAccountEntry: Codable, Equatable, Sendable, Identifiable {
-    public var id: String { account.rawValue }
-
-    public let account: AccountEmail
-    public var isActive: Bool
-    public var lastAcquiredOn: ISODate?
-    public var lastError: UsageError?
-    public var metrics: [UsageMetric]
-
-    public init(
-        account: AccountEmail,
-        isActive: Bool = false,
-        lastAcquiredOn: ISODate? = nil,
-        lastError: UsageError? = nil,
-        metrics: [UsageMetric] = []
-    ) {
-        self.account = account
-        self.isActive = isActive
-        self.lastAcquiredOn = lastAcquiredOn
-        self.lastError = lastError
-        self.metrics = metrics
-    }
-
-    /// Converts from the display-facing VendorUsageEntry (drops the vendor field).
-    public init(from entry: VendorUsageEntry) {
-        self.account = entry.account
-        self.isActive = entry.isActive
-        self.lastAcquiredOn = entry.lastAcquiredOn
-        self.lastError = entry.lastError
-        self.metrics = entry.metrics
-    }
-
-    /// Inflates back to VendorUsageEntry by attaching the vendor.
-    public func toUsageEntry(vendor: Vendor) -> VendorUsageEntry {
-        VendorUsageEntry(
-            vendor: vendor,
-            account: account,
-            isActive: isActive,
-            lastAcquiredOn: lastAcquiredOn,
-            lastError: lastError,
-            metrics: metrics
-        )
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(usages, forKey: .usages)
+        // Upstream convention: absent key when no ongoing outage — mirror that on write
+        // so the file never carries a stale empty array between incidents.
+        if !outages.isEmpty {
+            try container.encode(outages, forKey: .outages)
+        }
     }
 }
 
-// MARK: - VendorUsageEntry (display-facing view model)
+// MARK: - VendorUsageEntry
 
 public struct VendorUsageEntry: Codable, Equatable, Sendable, Identifiable {
     public var id: String { "\(vendor.rawValue):\(account.rawValue)" }
@@ -219,54 +87,54 @@ public struct UsageError: Codable, Equatable, Sendable {
 // MARK: - Outage
 
 /// An active incident on a vendor's platform, written by an upstream status-fetching process.
+/// The upstream writer removes entries as incidents resolve, so a missing or empty
+/// `outages` array means "all clear".
 public struct Outage: Codable, Equatable, Sendable, Identifiable {
-    public let id: OutageId
-    public let title: String
+    public let vendor: Vendor
+    public let errorMessage: String
     public let severity: OutageSeverity
-    public let affectedComponents: [String]
-    public let status: String?
-    public let startedAt: ISODate?
-    public let url: URL?
+    public let since: ISODate
+    public let href: URL?
+
+    /// Composite id — outages have no stable upstream id in this shape, so we
+    /// derive one from the fields that together identify a single incident row.
+    public var id: String {
+        "\(vendor.rawValue)|\(since.rawValue)|\(href?.absoluteString ?? "")"
+    }
 
     public init(
-        id: OutageId,
-        title: String,
+        vendor: Vendor,
+        errorMessage: String,
         severity: OutageSeverity,
-        affectedComponents: [String] = [],
-        status: String? = nil,
-        startedAt: ISODate? = nil,
-        url: URL? = nil
+        since: ISODate,
+        href: URL? = nil
     ) {
-        self.id = id
-        self.title = title
+        self.vendor = vendor
+        self.errorMessage = errorMessage
         self.severity = severity
-        self.affectedComponents = affectedComponents
-        self.status = status
-        self.startedAt = startedAt
-        self.url = url
+        self.since = since
+        self.href = href
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, severity, affectedComponents, status, startedAt, url
+        case vendor, errorMessage, severity, since, href
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(OutageId.self, forKey: .id)
-        title = try container.decode(String.self, forKey: .title)
+        vendor = try container.decode(Vendor.self, forKey: .vendor)
+        errorMessage = try container.decode(String.self, forKey: .errorMessage)
         severity = try container.decode(OutageSeverity.self, forKey: .severity)
-        affectedComponents = try container.decodeIfPresent([String].self, forKey: .affectedComponents) ?? []
-        status = try container.decodeIfPresent(String.self, forKey: .status)
-        startedAt = try container.decodeIfPresent(ISODate.self, forKey: .startedAt)
-        if let urlString = try container.decodeIfPresent(String.self, forKey: .url) {
-            guard let parsed = URL(string: urlString) else {
+        since = try container.decode(ISODate.self, forKey: .since)
+        if let hrefString = try container.decodeIfPresent(String.self, forKey: .href) {
+            guard let parsed = URL(string: hrefString) else {
                 throw DecodingError.dataCorruptedError(
-                    forKey: .url, in: container,
-                    debugDescription: "Invalid URL string: \(urlString)")
+                    forKey: .href, in: container,
+                    debugDescription: "Invalid URL string: \(hrefString)")
             }
-            url = parsed
+            href = parsed
         } else {
-            url = nil
+            href = nil
         }
     }
 }

@@ -94,38 +94,34 @@ struct OutageCodableTests {
     @Test("full outage round-trips through JSON")
     func fullRoundTrip() throws {
         let outage = Outage(
-            id: "abcd-1234",
-            title: "Elevated error rate on Messages API",
+            vendor: "claude",
+            errorMessage: "Elevated errors on Claude.ai, API, Claude Code",
             severity: .major,
-            affectedComponents: ["Claude API", "Console"],
-            status: "investigating",
-            startedAt: "2026-04-19T11:32:00Z",
-            url: URL(string: "https://status.claude.com/incidents/abcd-1234")!
+            since: "2026-04-15T14:53:00Z",
+            href: URL(string: "https://status.claude.com/incidents/f00h6l76tsjs")!
         )
         let data = try encoder.encode(outage)
         let decoded = try decoder.decode(Outage.self, from: data)
         #expect(decoded == outage)
     }
 
-    @Test("minimal outage (only required fields) decodes successfully")
+    @Test("outage without href decodes successfully and renders as non-clickable")
     func minimalDecode() throws {
         let json = """
-        {"id":"x","title":"Test","severity":"minor"}
+        {"vendor":"claude","errorMessage":"T","severity":"minor","since":"2026-04-15T14:53:00Z"}
         """.data(using: .utf8)!
         let decoded = try decoder.decode(Outage.self, from: json)
-        #expect(decoded.id == OutageId(rawValue: "x"))
-        #expect(decoded.title == "Test")
+        #expect(decoded.vendor == .claude)
+        #expect(decoded.errorMessage == "T")
         #expect(decoded.severity == .minor)
-        #expect(decoded.affectedComponents.isEmpty)
-        #expect(decoded.status == nil)
-        #expect(decoded.startedAt == nil)
-        #expect(decoded.url == nil)
+        #expect(decoded.since == ISODate(rawValue: "2026-04-15T14:53:00Z"))
+        #expect(decoded.href == nil)
     }
 
     @Test("unknown severity decodes without throwing")
     func unknownSeverity() throws {
         let json = """
-        {"id":"x","title":"T","severity":"partial_outage"}
+        {"vendor":"claude","errorMessage":"T","severity":"partial_outage","since":"2026-04-15T14:53:00Z"}
         """.data(using: .utf8)!
         let decoded = try decoder.decode(Outage.self, from: json)
         #expect(decoded.severity == OutageSeverity(rawValue: "partial_outage"))
@@ -134,12 +130,13 @@ struct OutageCodableTests {
     @Test("missing required field throws")
     func missingRequiredField() {
         let json = """
-        {"id":"x","severity":"major"}
+        {"vendor":"claude","severity":"major"}
         """.data(using: .utf8)!
         #expect(throws: (any Error).self) {
             try decoder.decode(Outage.self, from: json)
         }
     }
+
 }
 
 // MARK: - VendorUsageEntry
@@ -199,6 +196,7 @@ struct UsagesFileTests {
         let data = try encoder.encode(file)
         let decoded = try decoder.decode(UsagesFile.self, from: data)
         #expect(decoded.usages.isEmpty)
+        #expect(decoded.outages.isEmpty)
     }
 
     @Test("file with multiple vendors round-trips")
@@ -215,99 +213,57 @@ struct UsagesFileTests {
         let data = try encoder.encode(file)
         let decoded = try decoder.decode(UsagesFile.self, from: data)
         #expect(decoded.usages.count == 2)
-        // Entries are the same but order may differ (dictionary iteration)
         #expect(Set(decoded.usages.map(\.id)) == Set(file.usages.map(\.id)))
     }
 
-    @Test("legacy v1 shape decodes transparently")
-    func legacyV1Decode() throws {
+    @Test("file with outages round-trips")
+    func fileWithOutagesRoundTrip() throws {
+        let file = UsagesFile(
+            usages: [VendorUsageEntry(vendor: "claude", account: "a@b.com")],
+            outages: [
+                Outage(vendor: "claude",
+                       errorMessage: "API issues",
+                       severity: .major,
+                       since: "2026-04-15T14:53:00Z",
+                       href: URL(string: "https://status.claude.com/incidents/x")!),
+            ]
+        )
+        let data = try encoder.encode(file)
+        let decoded = try decoder.decode(UsagesFile.self, from: data)
+        #expect(decoded.outages.count == 1)
+        #expect(decoded.outages[0].errorMessage == "API issues")
+        #expect(decoded.outagesByVendor[.claude]?.count == 1)
+    }
+
+    @Test("encoder omits outages key when array is empty")
+    func encoderOmitsOutagesWhenEmpty() throws {
+        let file = UsagesFile(usages: [VendorUsageEntry(vendor: "claude", account: "a@b.com")])
+        let data = try encoder.encode(file)
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        #expect(json["usages"] != nil)
+        #expect(json["outages"] == nil)
+    }
+
+    @Test("decoder tolerates missing outages key (legacy file)")
+    func decoderToleratesMissingOutages() throws {
         let json = """
         {"usages":[{"vendor":"claude","account":"a@b.com","isActive":true,"metrics":[]}]}
         """.data(using: .utf8)!
         let file = try decoder.decode(UsagesFile.self, from: json)
         #expect(file.usages.count == 1)
-        #expect(file.usages[0].vendor == .claude)
-        #expect(file.usages[0].account == AccountEmail(rawValue: "a@b.com"))
-        // No outages from legacy shape
+        #expect(file.outages.isEmpty)
         #expect(file.outagesByVendor.isEmpty)
     }
 
-    @Test("v2 shape with outages decodes correctly")
-    func v2WithOutages() throws {
-        let json = """
-        {
-          "schemaVersion": 2,
-          "vendors": {
-            "claude": {
-              "accounts": [
-                {"account":"a@b.com","isActive":true,"metrics":[]}
-              ],
-              "outages": [
-                {"id":"inc-1","title":"API issues","severity":"major"}
-              ]
-            }
-          }
-        }
-        """.data(using: .utf8)!
-        let file = try decoder.decode(UsagesFile.self, from: json)
-        #expect(file.usages.count == 1)
-        #expect(file.usages[0].vendor == .claude)
-        #expect(file.outagesByVendor[.claude]?.count == 1)
-        #expect(file.outagesByVendor[.claude]?[0].title == "API issues")
-    }
-
-    @Test("encode always emits v2 with schemaVersion")
-    func encodeAlwaysV2() throws {
-        let file = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com"),
+    @Test("outagesByVendor groups by vendor and omits absent vendors")
+    func outagesByVendorGrouping() {
+        let file = UsagesFile(outages: [
+            Outage(vendor: "claude", errorMessage: "A", severity: .major, since: "2026-04-15T14:53:00Z"),
+            Outage(vendor: "claude", errorMessage: "B", severity: .minor, since: "2026-04-15T15:00:00Z"),
+            Outage(vendor: "codex",  errorMessage: "C", severity: .minor, since: "2026-04-15T16:00:00Z"),
         ])
-        let data = try encoder.encode(file)
-        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-        #expect(json["schemaVersion"] as? Int == 2)
-        #expect(json["vendors"] != nil)
-        #expect(json["usages"] == nil)
-    }
-
-    @Test("legacy decode then encode produces v2 shape")
-    func legacyMigrationOnEncode() throws {
-        let v1 = """
-        {"usages":[{"vendor":"claude","account":"a@b.com","isActive":true,"metrics":[]}]}
-        """.data(using: .utf8)!
-        let file = try decoder.decode(UsagesFile.self, from: v1)
-        let encoded = try encoder.encode(file)
-        let json = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
-        #expect(json["schemaVersion"] as? Int == 2)
-        #expect(json["usages"] == nil)
-    }
-
-    @Test("outagesByVendor omits vendors with no outages")
-    func outagesByVendorFiltering() {
-        let file = UsagesFile(vendors: [
-            .claude: VendorSection(
-                accounts: [VendorAccountEntry(account: "a@b.com")],
-                outages: [Outage(id: "x", title: "T", severity: .minor)]
-            ),
-            Vendor(rawValue: "codex"): VendorSection(
-                accounts: [VendorAccountEntry(account: "c@d.com")],
-                outages: []
-            ),
-        ])
-        #expect(file.outagesByVendor.count == 1)
-        #expect(file.outagesByVendor[.claude] != nil)
-    }
-
-    @Test("usages setter preserves existing outages")
-    func usagesSetterPreservesOutages() {
-        var file = UsagesFile(vendors: [
-            .claude: VendorSection(
-                accounts: [VendorAccountEntry(account: "a@b.com")],
-                outages: [Outage(id: "x", title: "T", severity: .major)]
-            ),
-        ])
-        // Overwriting usages should keep outages
-        file.usages = [VendorUsageEntry(vendor: "claude", account: "new@b.com")]
-        #expect(file.outagesByVendor[.claude]?.count == 1)
-        #expect(file.usages.count == 1)
-        #expect(file.usages[0].account == AccountEmail(rawValue: "new@b.com"))
+        #expect(file.outagesByVendor[.claude]?.count == 2)
+        #expect(file.outagesByVendor[Vendor(rawValue: "codex")]?.count == 1)
+        #expect(file.outagesByVendor.count == 2)
     }
 }

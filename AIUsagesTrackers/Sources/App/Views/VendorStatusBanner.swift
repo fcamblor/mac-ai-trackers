@@ -2,7 +2,7 @@ import SwiftUI
 import AIUsagesTrackersLib
 
 /// Displays active outages for a single vendor as a coloured banner.
-/// Tapped incidents open the incident URL in the default browser when present.
+/// Rows with a non-nil `href` open the incident URL in the default browser on tap.
 struct VendorStatusBanner: View {
     let outages: [Outage]
 
@@ -25,16 +25,13 @@ struct VendorStatusBanner: View {
                 .padding(.top, 1)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(outage.title)
+                Text(outage.errorMessage)
                     .font(.system(size: 11, weight: .medium))
-                    .lineLimit(2)
+                    .lineLimit(3)
 
-                if !outage.affectedComponents.isEmpty {
-                    Text(outage.affectedComponents.joined(separator: ", "))
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
+                Text(Self.sinceLabel(for: outage.since))
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
             }
 
             Spacer()
@@ -47,7 +44,7 @@ struct VendorStatusBanner: View {
         )
         .contentShape(Rectangle())
         .onTapGesture {
-            if let url = outage.url {
+            if let url = outage.href {
                 NSWorkspace.shared.open(url)
             }
         }
@@ -62,4 +59,17 @@ struct VendorStatusBanner: View {
         default:                return .gray
         }
     }
+
+    /// Short rendering such as "Since Apr 15, 14:53", falling back to the raw ISO
+    /// string when the timestamp cannot be parsed (upstream quirks should not break the UI).
+    private static func sinceLabel(for iso: ISODate) -> String {
+        guard let date = iso.date else { return "Since \(iso.rawValue)" }
+        return "Since \(sinceFormatter.string(from: date))"
+    }
+
+    private static let sinceFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d, HH:mm"
+        return f
+    }()
 }

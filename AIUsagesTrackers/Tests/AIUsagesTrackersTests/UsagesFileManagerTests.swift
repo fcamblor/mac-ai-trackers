@@ -334,7 +334,7 @@ struct UsagesFileManagerTests {
         await mgr.update(with: [VendorUsageEntry(vendor: "claude", account: "a@b.com")])
         let raw = try! String(contentsOfFile: mgr.filePath, encoding: .utf8)
         #expect(raw.contains("\n"))
-        #expect(raw.contains("\"vendors\""))
+        #expect(raw.contains("\"usages\""))
     }
 
     // MARK: - updateIsActive
@@ -404,23 +404,18 @@ struct UsagesFileManagerTests {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
 
-        // Write initial v2 file with outages via raw JSON
-        let v2JSON = """
+        // Write an initial file containing an outage entry
+        let initialJSON = """
         {
-          "schemaVersion": 2,
-          "vendors": {
-            "claude": {
-              "accounts": [
-                {"account": "a@b.com", "isActive": true, "metrics": []}
-              ],
-              "outages": [
-                {"id": "inc-1", "title": "API issues", "severity": "major"}
-              ]
-            }
-          }
+          "usages": [
+            {"vendor": "claude", "account": "a@b.com", "isActive": true, "metrics": []}
+          ],
+          "outages": [
+            {"vendor": "claude", "errorMessage": "API issues", "severity": "major", "since": "2026-04-15T14:53:00Z"}
+          ]
         }
         """.data(using: .utf8)!
-        try v2JSON.write(to: URL(fileURLWithPath: mgr.filePath), options: .atomic)
+        try initialJSON.write(to: URL(fileURLWithPath: mgr.filePath), options: .atomic)
 
         // Connector provides fresh account data without outages
         let entry = VendorUsageEntry(
@@ -437,7 +432,7 @@ struct UsagesFileManagerTests {
         // Outages survive the merge
         let outages = result.outagesByVendor[.claude]
         #expect(outages?.count == 1)
-        #expect(outages?[0].id == OutageId(rawValue: "inc-1"))
+        #expect(outages?[0].errorMessage == "API issues")
     }
 
     @Test("merge does not create outages from connector entries")
@@ -452,23 +447,8 @@ struct UsagesFileManagerTests {
         #expect(result.outagesByVendor.isEmpty)
     }
 
-    @Test("read accepts legacy v1 shape and returns correct entries")
-    func readAcceptsLegacyShape() async throws {
-        let dir = makeTempDir()
-        let mgr = makeManager(dir: dir)
-        let v1JSON = """
-        {"usages":[{"vendor":"claude","account":"a@b.com","isActive":true,"metrics":[]}]}
-        """.data(using: .utf8)!
-        try v1JSON.write(to: URL(fileURLWithPath: mgr.filePath), options: .atomic)
-
-        let result = await mgr.read()
-        #expect(result.usages.count == 1)
-        #expect(result.usages[0].vendor == .claude)
-        #expect(result.outagesByVendor.isEmpty)
-    }
-
-    @Test("writeUnsafe always emits v2 shape with schemaVersion")
-    func writeAlwaysEmitsV2() async {
+    @Test("writeUnsafe omits outages key when there are none")
+    func writeOmitsEmptyOutages() async throws {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
 
@@ -476,11 +456,40 @@ struct UsagesFileManagerTests {
             VendorUsageEntry(vendor: "claude", account: "a@b.com"),
         ])
 
-        let raw = try! Data(contentsOf: URL(fileURLWithPath: mgr.filePath))
-        let json = try! JSONSerialization.jsonObject(with: raw) as! [String: Any]
-        #expect(json["schemaVersion"] as? Int == 2)
-        #expect(json["vendors"] != nil)
-        #expect(json["usages"] == nil)
+        let raw = try Data(contentsOf: URL(fileURLWithPath: mgr.filePath))
+        let json = try JSONSerialization.jsonObject(with: raw) as! [String: Any]
+        #expect(json["usages"] != nil)
+        #expect(json["outages"] == nil)
+    }
+
+    @Test("merge does not reintroduce outages once the upstream drops them")
+    func mergeHonoursOutageRemoval() async throws {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+
+        // Outage is active
+        let withOutage = """
+        {
+          "usages": [{"vendor":"claude","account":"a@b.com","isActive":true,"metrics":[]}],
+          "outages": [{"vendor":"claude","errorMessage":"X","severity":"major","since":"2026-04-15T14:53:00Z"}]
+        }
+        """.data(using: .utf8)!
+        try withOutage.write(to: URL(fileURLWithPath: mgr.filePath), options: .atomic)
+
+        // Upstream resolves: rewrites file without outages key
+        let resolved = """
+        {"usages":[{"vendor":"claude","account":"a@b.com","isActive":true,"metrics":[]}]}
+        """.data(using: .utf8)!
+        try resolved.write(to: URL(fileURLWithPath: mgr.filePath), options: .atomic)
+
+        // A connector now refreshes usage — merge should read the resolved file
+        // and not resurrect the prior outage.
+        await mgr.update(with: [
+            VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true),
+        ])
+
+        let result = await mgr.read()
+        #expect(result.outagesByVendor.isEmpty)
     }
 
     // MARK: - Lock error paths
