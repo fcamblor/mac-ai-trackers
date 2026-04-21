@@ -1,0 +1,23 @@
+j'aimerais mettre en place un Github Action de release déclenchée à partir d'un tag du type "vX.Y.Z" et qui:
+- builderait l'app
+- s'occuperait de la distribuer via un tap homebrew personnel
+
+Pourrais-tu t'inspirer de ce qui est fait ici pour ça: /Users/fcamblor/projects/third-party-oss/Claude-Usage-Tracker
+
+---
+
+- est-il obligatoire d'utiliser XCode pour pouvoir releaser ?
+- ok pour auto-generer le changelog
+- comment fonctionnent les tap custom, j'ai besoin que tu me guides (j'aimerais créer un tap qui puisse hoster ai-usage-tracker aujourd'hui, mais demain j'aimerais pouvoir y rajouter d'autres cask / formula
+- nom du zip distribué: AI-Usages-Tracker.zip OK
+- que dois-je mettre dans HOMEBREW_TAP_TOKEN ?
+
+---
+
+xcode obligatoire => d'accord avec toi, pas besoin de pin XCode
+ok pour fcamblor/homebrew-tap: je te laisse créer le repository public via la CLI gh, puis cloner le repository dans ~/projects/third-party-oss/homebrew-tab/ et créer un commit empty avec comme message "initial commit"
+Peux-tu me créer le Personal Access Token via la CLI gh avec les bons acces
+
+---
+
+j'ai créé le secret HOMEBREW_TAP_TOKEN avec un PAT fine grained, tu peux continuer
