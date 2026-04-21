@@ -17,8 +17,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Select Xcode 26
+        # Swift 6.2 (Xcode 26) is required because the codebase uses stable
+        # @MainActor deinit, which is experimental in Swift 6.1 (Xcode 16.x).
+        run: |
+          XCODE_PATH=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE_PATH" ]; then
+            echo "No Xcode 26.x found on runner. Available:"
+            ls -d /Applications/Xcode*.app
+            exit 1
+          fi
+          echo "Using: $XCODE_PATH"
+          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+
       - name: Show Build Environment
         run: |
+          xcodebuild -version
           swift --version
           echo "macOS: $(sw_vers -productVersion)"
           echo "Tag: ${{ github.ref_name }}"
