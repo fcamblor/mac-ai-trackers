@@ -1,0 +1,51 @@
+quand il y a un outage de défini dans le usages.json, j'ai l'impression que la plupart des infos ne sont pas utilisées: le vendor, le errorMessage, le lien (href)
+
+---
+
+il faut fixer les 2 premiers points: afficher le vendor dans le banner, ajouter une affordance visuelle pour href
+
+Par contre je suis d'accord avec le fait que même si on détecte un outage sur un vendor donné, si ce vendor n'est présent dans aucun des usages, alors on n'affiche pas l'outage
+
+---
+
+je trouve que le "CLAUDE STATUS" gagnerait à être mis à l'intérieur du bloc rouge, avec la couleur du bloc (rouge), afin d'être mieux vu
+
+Je ne vois pas du tout le message d'erreur
+
+---
+
+à quel fréquence les tests de status sont-ils rafraichis ? quand on fait un refresh global, font-ils parti des éléments rafraichis ?
+
+---
+
+oui, il faudrait un ClaudeStatusConnector pour ça
+
+---
+
+ok avec le fait de s'intégrer dans UsagePoller
+pas 100% d'accord avec le fait de préserver les outages existants: on préserve les outages existants AUTRES que ceux du vendor qu'on cherche à update
+
+Par exemple, si vendor=claude ET:
+- s'il y a un outage => remplacer les éventuelles entrées d'outage avec vendor=claude par celle-ci
+- s'il n'y a PAS d'outage => supprimer les éventuelles entrées d'outage avec vendor=claude
+
+Je suis par contre d'accord avec toi sur les règles de préservation: si pour X raison on n'arrive pas à avoir l'info pour un vendor donné, on ne touche pas aux outages de ce vendor dans le fichier
+
+pour tout le reste je suis d'accord avec toi
+
+Pour les questions:
+1/oui, utilises le name court
+2/ ok pour mutualiser la cadence du refreshInterval Claude
+3/ Un seul poller (StatusPoller)
+
+---
+
+crée un plan d'abord
+
+---
+
+crée un plan d'abord dans le workspace d'abord
+
+---
+
+/commit
