@@ -7,16 +7,40 @@ struct VendorStatusBanner: View {
     let outages: [Outage]
 
     var body: some View {
-        VStack(spacing: 4) {
+        // Callers only render this view when the vendor has at least one outage
+        // (see UsageDetailsView.vendorsNeedingBanner), so `outages.first` is the
+        // representative tint source.
+        let bannerTint = outages.first.map { Self.tintColor(for: $0.severity) } ?? .gray
+
+        VStack(alignment: .leading, spacing: 6) {
+            if let label = vendorLabel {
+                Text("\(label) status")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(bannerTint)
+                    .textCase(.uppercase)
+            }
             ForEach(outages) { outage in
                 outageRow(outage)
             }
         }
+        .padding(8)
+        .background(bannerTint.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(bannerTint.opacity(0.30), lineWidth: 1)
+        )
+    }
+
+    /// All outages passed to this banner share the same vendor (grouped by
+    /// `UsagesFile.outagesByVendor`), so the first entry is representative.
+    private var vendorLabel: String? {
+        outages.first.map { $0.vendor.rawValue.capitalized }
     }
 
     @ViewBuilder
     private func outageRow(_ outage: Outage) -> some View {
         let tint = Self.tintColor(for: outage.severity)
+        let isLink = outage.href != nil
 
         HStack(alignment: .top, spacing: 6) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -27,7 +51,9 @@ struct VendorStatusBanner: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(outage.errorMessage)
                     .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.primary)
                     .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Text(Self.sinceLabel(for: outage.since))
                     .font(.system(size: 10))
@@ -35,19 +61,29 @@ struct VendorStatusBanner: View {
             }
 
             Spacer()
+
+            if isLink {
+                Image(systemName: "arrow.up.right.square")
+                    .font(.system(size: 11))
+                    .foregroundStyle(tint)
+                    .padding(.top, 1)
+            }
         }
-        .padding(8)
-        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(tint.opacity(0.30), lineWidth: 1)
-        )
         .contentShape(Rectangle())
         .onTapGesture {
             if let url = outage.href {
                 NSWorkspace.shared.open(url)
             }
         }
+        .onHover { hovering in
+            guard isLink else { return }
+            if hovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+        .help(isLink ? "Open incident details" : "")
         .focusable(false)
     }
 

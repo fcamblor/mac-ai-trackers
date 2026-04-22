@@ -27,6 +27,29 @@ actor MockConnector: UsageConnector {
     }
 }
 
+// MARK: - Mock status connector
+
+actor MockStatusConnector: StatusConnector {
+    nonisolated let vendor: Vendor
+    private let outages: [Outage]
+    private let shouldThrow: Bool
+    private(set) var fetchCount = 0
+
+    init(vendor: Vendor, outages: [Outage] = [], shouldThrow: Bool = false) {
+        self.vendor = vendor
+        self.outages = outages
+        self.shouldThrow = shouldThrow
+    }
+
+    func fetchOutages() async throws -> [Outage] {
+        fetchCount += 1
+        if shouldThrow {
+            throw StatusConnectorError.unexpectedResponse(statusCode: 500, url: "mock")
+        }
+        return outages
+    }
+}
+
 // MARK: - Tests
 
 @Suite("UsagePoller")
@@ -350,6 +373,111 @@ struct UsagePollerTests {
         // Verify no crash occurred and poller is fully stopped
         let count = await connector.fetchCount
         #expect(count >= 0)
+    }
+
+    // MARK: - Status connector integration
+
+    @Test("pollOnce writes outages returned by status connector")
+    func statusConnectorWritesOutages() async {
+        let dir = makeTempDir()
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
+
+        let usage = MockConnector(vendor: "claude", entries: [
+            VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true),
+        ])
+        let outage = Outage(vendor: .claude, errorMessage: "boom",
+                            severity: .major, since: "2026-04-22T10:00:00Z")
+        let status = MockStatusConnector(vendor: .claude, outages: [outage])
+        let poller = UsagePoller(
+            connectors: [usage], statusConnectors: [status],
+            fileManager: fm, logger: logger
+        )
+
+        await poller.pollOnce()
+
+        let result = await fm.read()
+        #expect(result.outages.count == 1)
+        #expect(result.outages[0].errorMessage == "boom")
+    }
+
+    @Test("failing status connector preserves existing outages for that vendor")
+    func statusConnectorFailurePreservesOutages() async throws {
+        let dir = makeTempDir()
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
+
+        // Seed file with a pre-existing Claude outage
+        let seeded = UsagesFile(usages: [], outages: [
+            Outage(vendor: .claude, errorMessage: "pre-existing", severity: .critical,
+                   since: "2026-04-20T00:00:00Z"),
+        ])
+        let data = try JSONEncoder().encode(seeded)
+        try data.write(to: URL(fileURLWithPath: fm.filePath), options: .atomic)
+
+        let usage = MockConnector(vendor: "claude", entries: [
+            VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true),
+        ])
+        let status = MockStatusConnector(vendor: .claude, shouldThrow: true)
+        let poller = UsagePoller(
+            connectors: [usage], statusConnectors: [status],
+            fileManager: fm, logger: logger
+        )
+
+        await poller.pollOnce()
+
+        let result = await fm.read()
+        #expect(result.outages.count == 1)
+        #expect(result.outages[0].errorMessage == "pre-existing")
+    }
+
+    @Test("empty outage list from status connector clears that vendor's outages")
+    func statusConnectorEmptyListClearsVendor() async throws {
+        let dir = makeTempDir()
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
+
+        let seeded = UsagesFile(usages: [], outages: [
+            Outage(vendor: .claude, errorMessage: "old", severity: .major,
+                   since: "2026-04-20T00:00:00Z"),
+        ])
+        let data = try JSONEncoder().encode(seeded)
+        try data.write(to: URL(fileURLWithPath: fm.filePath), options: .atomic)
+
+        let usage = MockConnector(vendor: "claude", entries: [
+            VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true),
+        ])
+        let status = MockStatusConnector(vendor: .claude, outages: [])
+        let poller = UsagePoller(
+            connectors: [usage], statusConnectors: [status],
+            fileManager: fm, logger: logger
+        )
+
+        await poller.pollOnce()
+
+        let result = await fm.read()
+        #expect(result.outages.isEmpty)
+    }
+
+    @Test("forced refresh calls status connector exactly once per tick")
+    func statusConnectorCalledOncePerTick() async {
+        let dir = makeTempDir()
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
+
+        let usage = MockConnector(vendor: "claude", entries: [
+            VendorUsageEntry(vendor: "claude", account: "a@b.com"),
+        ])
+        let status = MockStatusConnector(vendor: .claude, outages: [])
+        let poller = UsagePoller(
+            connectors: [usage], statusConnectors: [status],
+            fileManager: fm, logger: logger
+        )
+
+        await poller.pollOnce(force: true)
+
+        let count = await status.fetchCount
+        #expect(count == 1)
     }
 
     @Test("start/stop lifecycle")

@@ -2,6 +2,7 @@ import Foundation
 
 public actor UsagePoller {
     public let connectors: [any UsageConnector]
+    public let statusConnectors: [any StatusConnector]
     public let fileManager: UsagesFileManager
     private let logger: FileLogger
     private let refreshState: RefreshState?
@@ -18,12 +19,14 @@ public actor UsagePoller {
     /// so changes take effect without restarting the poller.
     public init(
         connectors: [any UsageConnector],
+        statusConnectors: [any StatusConnector] = [],
         fileManager: UsagesFileManager = UsagesFileManager.shared,
         logger: FileLogger = Loggers.app,
         refreshState: RefreshState? = nil,
         preferences: any AppPreferences
     ) {
         self.connectors = connectors
+        self.statusConnectors = statusConnectors
         self.fileManager = fileManager
         self.logger = logger
         self.refreshState = refreshState
@@ -34,12 +37,14 @@ public actor UsagePoller {
     /// Test/legacy initializer — uses a fixed interval instead of preferences.
     public init(
         connectors: [any UsageConnector],
+        statusConnectors: [any StatusConnector] = [],
         interval: Duration = .seconds(180),
         fileManager: UsagesFileManager = UsagesFileManager.shared,
         logger: FileLogger = Loggers.app,
         refreshState: RefreshState? = nil
     ) {
         self.connectors = connectors
+        self.statusConnectors = statusConnectors
         self.fileManager = fileManager
         self.logger = logger
         self.refreshState = refreshState
@@ -126,8 +131,36 @@ public actor UsagePoller {
             return all
         }
 
-        guard !entries.isEmpty else {
-            if skippedCount == connectors.count {
+        // Status connectors run on every tick (no freshness cache) and in parallel with usages.
+        // Vendors whose fetch fails are omitted from the map so their prior outages survive.
+        let statusLog = self.logger
+        let outagesByVendor: [Vendor: [Outage]] = await withTaskGroup(
+            of: (Vendor, Result<[Outage], Error>).self
+        ) { group in
+            for statusConnector in statusConnectors {
+                group.addTask {
+                    do {
+                        let outages = try await statusConnector.fetchOutages()
+                        return (statusConnector.vendor, .success(outages))
+                    } catch {
+                        return (statusConnector.vendor, .failure(error))
+                    }
+                }
+            }
+            var byVendor: [Vendor: [Outage]] = [:]
+            for await (vendor, result) in group {
+                switch result {
+                case .success(let outages):
+                    byVendor[vendor] = outages
+                case .failure(let error):
+                    statusLog.log(.warning, "Status fetch failed for \(vendor): \(error) — preserving existing outages")
+                }
+            }
+            return byVendor
+        }
+
+        guard !entries.isEmpty || !outagesByVendor.isEmpty else {
+            if skippedCount == connectors.count && statusConnectors.isEmpty {
                 logger.log(.debug, "All \(connectors.count) connector(s) up-to-date — skipping file write")
             } else {
                 logger.log(.warning, "No entries returned from any connector")
@@ -135,7 +168,7 @@ public actor UsagePoller {
             return
         }
 
-        await fileManager.update(with: entries)
-        logger.log(.info, "Merged \(entries.count) entry/entries into usages file")
+        await fileManager.update(with: entries, outagesByVendor: outagesByVendor)
+        logger.log(.info, "Merged \(entries.count) usage entry/entries and \(outagesByVendor.count) outage vendor(s) into usages file")
     }
 }
