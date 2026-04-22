@@ -69,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let refreshState = RefreshState()
         let poller = UsagePoller(
             connectors: [ClaudeCodeConnector()],
+            statusConnectors: [ClaudeStatusConnector()],
             fileManager: fileManager,
             refreshState: refreshState,
             preferences: Self.sharedPreferences

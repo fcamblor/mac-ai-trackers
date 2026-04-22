@@ -44,10 +44,29 @@ public actor UsagesFileManager {
     }
 
     public func update(with entries: [VendorUsageEntry]) async {
+        await update(with: entries, outagesByVendor: [:])
+    }
+
+    /// Applies a usage merge plus per-vendor outage replacement in a single locked read-modify-write.
+    ///
+    /// Outage policy per vendor key in `outagesByVendor`:
+    /// - present, non-empty list → replaces all outages of that vendor
+    /// - present, empty list → removes all outages of that vendor ("all clear")
+    /// - absent → outages of that vendor are preserved as-is (fetch failed, or no connector for it)
+    public func update(
+        with entries: [VendorUsageEntry],
+        outagesByVendor: [Vendor: [Outage]]
+    ) async {
         do {
             try await withFileLock(mode: LOCK_EX) {
                 var file = readUnsafe()
                 file = merge(existing: file, incoming: entries)
+                if !outagesByVendor.isEmpty {
+                    file.outages = applyOutageReplacement(
+                        existing: file.outages,
+                        replacements: outagesByVendor
+                    )
+                }
                 writeUnsafe(file)
             }
         } catch is CancellationError {
@@ -64,8 +83,7 @@ public actor UsagesFileManager {
             try await withFileLock(mode: LOCK_EX) {
                 var file = readUnsafe()
                 var changed = false
-                for i in file.usages.indices {
-                    guard file.usages[i].vendor == vendor else { continue }
+                for i in file.usages.indices where file.usages[i].vendor == vendor {
                     let newActive = file.usages[i].account == activeAccount
                     if file.usages[i].isActive != newActive {
                         file.usages[i].isActive = newActive
@@ -83,9 +101,29 @@ public actor UsagesFileManager {
         }
     }
 
+    // MARK: - Outage replacement
+
+    /// Replaces outages per-vendor while preserving outages for vendors absent from `replacements`.
+    /// Vendors not covered by a status connector (or producers external to this app) keep their
+    /// entries untouched, so the file format stays open to multiple producers.
+    func applyOutageReplacement(
+        existing: [Outage],
+        replacements: [Vendor: [Outage]]
+    ) -> [Outage] {
+        var result = existing.filter { replacements[$0.vendor] == nil }
+        for (_, newOutages) in replacements {
+            result.append(contentsOf: newOutages)
+        }
+        return result
+    }
+
     // MARK: - Merge logic
 
     func merge(existing: UsagesFile, incoming: [VendorUsageEntry]) -> UsagesFile {
+        // Usage entries are vendor-keyed upserts; outages are handled separately by
+        // `applyOutageReplacement`, which the public `update(with:outagesByVendor:)` runs
+        // after this merge. The file format is open to external outage producers for
+        // vendors without a status connector.
         var usages = existing.usages
         var indexByKey: [String: Int] = [:]
         for (i, entry) in usages.enumerated() {
@@ -114,7 +152,8 @@ public actor UsagesFileManager {
                 usages.append(entry)
             }
         }
-        return UsagesFile(usages: usages)
+
+        return UsagesFile(usages: usages, outages: existing.outages)
     }
 
     // MARK: - Lock-guarded internals

@@ -44,6 +44,7 @@ public final class UsageStore {
     /// Tests use this as a reliable signal that the store has consumed the latest yielded item.
     public private(set) var dataProcessedCount: Int = 0
     public private(set) var entries: [VendorUsageEntry] = []
+    public private(set) var outagesByVendor: [Vendor: [Outage]] = [:]
 
     // MARK: Dependencies
 
@@ -144,12 +145,14 @@ public final class UsageStore {
             let file = try JSONDecoder().decode(UsagesFile.self, from: data)
             lastFile = file
             entries = file.usages
+            outagesByVendor = file.outagesByVendor
             applyFormat()
         } catch {
             let preview = Self.rawPreview(data)
             logger.log(.error, "UsageStore: JSON decode failed: \(error) — bytes=\(data.count), preview=\(preview)")
             lastFile = nil
             entries = []
+            outagesByVendor = [:]
             menuBarText = Self.fallbackText
             menuBarTier = nil
             menuBarSegments = []

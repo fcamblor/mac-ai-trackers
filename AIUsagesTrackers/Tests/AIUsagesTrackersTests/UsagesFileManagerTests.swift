@@ -334,7 +334,7 @@ struct UsagesFileManagerTests {
         await mgr.update(with: [VendorUsageEntry(vendor: "claude", account: "a@b.com")])
         let raw = try! String(contentsOfFile: mgr.filePath, encoding: .utf8)
         #expect(raw.contains("\n"))
-        #expect(raw.contains("\"vendor\""))
+        #expect(raw.contains("\"usages\""))
     }
 
     // MARK: - updateIsActive
@@ -395,6 +395,164 @@ struct UsagesFileManagerTests {
         await mgr.updateIsActive(vendor: "claude", activeAccount: "a@b.com")
         let result = await mgr.read()
         #expect(result.usages.isEmpty)
+    }
+
+    // MARK: - Outage preservation
+
+    @Test("merge preserves outages from existing file when connectors provide none")
+    func mergePreservesOutages() async throws {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+
+        // Write an initial file containing an outage entry
+        let initialJSON = """
+        {
+          "usages": [
+            {"vendor": "claude", "account": "a@b.com", "isActive": true, "metrics": []}
+          ],
+          "outages": [
+            {"vendor": "claude", "errorMessage": "API issues", "severity": "major", "since": "2026-04-15T14:53:00Z"}
+          ]
+        }
+        """.data(using: .utf8)!
+        try initialJSON.write(to: URL(fileURLWithPath: mgr.filePath), options: .atomic)
+
+        // Connector provides fresh account data without outages
+        let entry = VendorUsageEntry(
+            vendor: "claude", account: "a@b.com", isActive: true,
+            lastAcquiredOn: "2026-04-19T12:00:00Z",
+            metrics: [.timeWindow(name: "session", resetAt: "2026-04-19T15:00:00Z",
+                                  windowDuration: 300, usagePercent: 50)]
+        )
+        await mgr.update(with: [entry])
+
+        let result = await mgr.read()
+        #expect(result.usages.count == 1)
+        #expect(result.usages[0].metrics.count == 1)
+        // Outages survive the merge
+        let outages = result.outagesByVendor[.claude]
+        #expect(outages?.count == 1)
+        #expect(outages?[0].errorMessage == "API issues")
+    }
+
+    @Test("merge does not create outages from connector entries")
+    func mergeDoesNotCreateOutages() async {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+
+        await mgr.update(with: [
+            VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true),
+        ])
+        let result = await mgr.read()
+        #expect(result.outagesByVendor.isEmpty)
+    }
+
+    @Test("writeUnsafe omits outages key when there are none")
+    func writeOmitsEmptyOutages() async throws {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+
+        await mgr.update(with: [
+            VendorUsageEntry(vendor: "claude", account: "a@b.com"),
+        ])
+
+        let raw = try Data(contentsOf: URL(fileURLWithPath: mgr.filePath))
+        let json = try JSONSerialization.jsonObject(with: raw) as! [String: Any]
+        #expect(json["usages"] != nil)
+        #expect(json["outages"] == nil)
+    }
+
+    @Test("merge does not reintroduce outages once the upstream drops them")
+    func mergeHonoursOutageRemoval() async throws {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+
+        // Outage is active
+        let withOutage = """
+        {
+          "usages": [{"vendor":"claude","account":"a@b.com","isActive":true,"metrics":[]}],
+          "outages": [{"vendor":"claude","errorMessage":"X","severity":"major","since":"2026-04-15T14:53:00Z"}]
+        }
+        """.data(using: .utf8)!
+        try withOutage.write(to: URL(fileURLWithPath: mgr.filePath), options: .atomic)
+
+        // Upstream resolves: rewrites file without outages key
+        let resolved = """
+        {"usages":[{"vendor":"claude","account":"a@b.com","isActive":true,"metrics":[]}]}
+        """.data(using: .utf8)!
+        try resolved.write(to: URL(fileURLWithPath: mgr.filePath), options: .atomic)
+
+        // A connector now refreshes usage — merge should read the resolved file
+        // and not resurrect the prior outage.
+        await mgr.update(with: [
+            VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true),
+        ])
+
+        let result = await mgr.read()
+        #expect(result.outagesByVendor.isEmpty)
+    }
+
+    // MARK: - Per-vendor outage replacement
+
+    private func writeFileWithOutages(mgr: UsagesFileManager, outages: [Outage]) throws {
+        let file = UsagesFile(usages: [], outages: outages)
+        let data = try JSONEncoder().encode(file)
+        try data.write(to: URL(fileURLWithPath: mgr.filePath), options: .atomic)
+    }
+
+    @Test("update with [.claude: [outage]] replaces claude outages and preserves others")
+    func outageReplacementReplacesClaudePreservesOthers() async throws {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+        let old = [
+            Outage(vendor: "claude", errorMessage: "old", severity: .major, since: "2026-04-01T00:00:00Z"),
+            Outage(vendor: "gemini", errorMessage: "g-outage", severity: .minor, since: "2026-04-02T00:00:00Z"),
+        ]
+        try writeFileWithOutages(mgr: mgr, outages: old)
+
+        let fresh = Outage(vendor: "claude", errorMessage: "new", severity: .critical, since: "2026-04-22T00:00:00Z")
+        await mgr.update(with: [], outagesByVendor: [.claude: [fresh]])
+
+        let result = await mgr.read()
+        let claudeOutages = result.outages.filter { $0.vendor == .claude }
+        let geminiOutages = result.outages.filter { $0.vendor == "gemini" }
+        #expect(claudeOutages.count == 1)
+        #expect(claudeOutages[0].errorMessage == "new")
+        #expect(geminiOutages.count == 1)
+        #expect(geminiOutages[0].errorMessage == "g-outage")
+    }
+
+    @Test("update with [.claude: []] removes claude outages and preserves others")
+    func outageReplacementEmptyListRemovesVendor() async throws {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+        let old = [
+            Outage(vendor: "claude", errorMessage: "old", severity: .major, since: "2026-04-01T00:00:00Z"),
+            Outage(vendor: "gemini", errorMessage: "g-outage", severity: .minor, since: "2026-04-02T00:00:00Z"),
+        ]
+        try writeFileWithOutages(mgr: mgr, outages: old)
+
+        await mgr.update(with: [], outagesByVendor: [.claude: []])
+
+        let result = await mgr.read()
+        #expect(result.outages.filter { $0.vendor == .claude }.isEmpty)
+        #expect(result.outages.filter { $0.vendor == "gemini" }.count == 1)
+    }
+
+    @Test("update with empty outagesByVendor preserves all outages")
+    func outageReplacementEmptyMapPreservesAll() async throws {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+        let old = [
+            Outage(vendor: "claude", errorMessage: "old", severity: .major, since: "2026-04-01T00:00:00Z"),
+            Outage(vendor: "gemini", errorMessage: "g-outage", severity: .minor, since: "2026-04-02T00:00:00Z"),
+        ]
+        try writeFileWithOutages(mgr: mgr, outages: old)
+
+        await mgr.update(with: [], outagesByVendor: [:])
+
+        let result = await mgr.read()
+        #expect(result.outages.count == 2)
     }
 
     // MARK: - Lock error paths

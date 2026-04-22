@@ -36,7 +36,15 @@ struct UsageDetailsView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 8) {
-                        ForEach(sorted) { entry in
+                        // Track which vendors have already shown their status banner
+                        // using a running cursor — entries are sorted by vendor so
+                        // entries of the same vendor are contiguous.
+                        let vendorsWithBanner = vendorsNeedingBanner(in: sorted)
+                        ForEach(Array(sorted.enumerated()), id: \.element.id) { index, entry in
+                            if vendorsWithBanner[entry.vendor] == index,
+                               let outages = store.outagesByVendor[entry.vendor] {
+                                VendorStatusBanner(outages: outages)
+                            }
                             AccountCardView(
                                 entry: entry,
                                 showActiveBadge: multiVendors.contains(entry.vendor),
@@ -58,6 +66,17 @@ struct UsageDetailsView: View {
             footer
         }
         .frame(width: Self.popoverWidth)
+    }
+
+    /// Returns a map of vendor → first index in sorted, for vendors that have active outages.
+    private func vendorsNeedingBanner(in sorted: [VendorUsageEntry]) -> [Vendor: Int] {
+        var result: [Vendor: Int] = [:]
+        for (index, entry) in sorted.enumerated() where result[entry.vendor] == nil {
+            if store.outagesByVendor[entry.vendor] != nil {
+                result[entry.vendor] = index
+            }
+        }
+        return result
     }
 
     // MARK: - Subviews
