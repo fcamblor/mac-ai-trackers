@@ -1,0 +1,6 @@
+implémente l'item de roadmap claude-status-connector avec le workflow archon d'implémentation de roadmap, sans création de worktree car on est déjà dans un worktree
+
+---
+
+1.a commti le plan roadmap
+2. oui ton hypothèse est bonne
