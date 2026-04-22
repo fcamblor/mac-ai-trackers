@@ -3,9 +3,17 @@
   "checkpoint_id": "aaefecd5949c",
   "strategy": "manual-commit",
   "branch": "archon/task-feat-vendor-status-monitor",
-  "checkpoints_count": 11,
+  "checkpoints_count": 12,
   "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/ClaudeStatusConnector.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/StatusConnector.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/UsagesFileManager.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Scheduler/UsagePoller.swift",
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift",
     "AIUsagesTrackers/Sources/App/Views/VendorStatusBanner.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/ClaudeStatusConnectorTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsagePollerTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsagesFileManagerTests.swift",
     "roadmap/claude-status-connector.md",
     "roadmap/claude-status-connector.plan.md",
     "roadmap/index.md"
@@ -34,13 +42,19 @@
       "transcript": "/aa/efecd5949c/3/full.jsonl",
       "content_hash": "/aa/efecd5949c/3/content_hash.txt",
       "prompt": "/aa/efecd5949c/3/prompt.txt"
+    },
+    {
+      "metadata": "/aa/efecd5949c/4/metadata.json",
+      "transcript": "/aa/efecd5949c/4/full.jsonl",
+      "content_hash": "/aa/efecd5949c/4/content_hash.txt",
+      "prompt": "/aa/efecd5949c/4/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 181,
-    "cache_creation_tokens": 301925,
-    "cache_read_tokens": 6107519,
-    "output_tokens": 47093,
-    "api_call_count": 102
+    "input_tokens": 282,
+    "cache_creation_tokens": 551798,
+    "cache_read_tokens": 11098526,
+    "output_tokens": 73020,
+    "api_call_count": 160
   }
 }
