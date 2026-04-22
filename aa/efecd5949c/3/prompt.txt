@@ -1,0 +1,4 @@
+Generate a concise conversation title (3-6 words) for this user message. The title should capture the essence of what the user is asking or doing. Return ONLY the title text, nothing else — no quotes, no punctuation at the end, no explanation.
+
+Workflow: implement-roadmap-feature
+User message: claude-status-connector

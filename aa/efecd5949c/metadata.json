@@ -3,7 +3,7 @@
   "checkpoint_id": "aaefecd5949c",
   "strategy": "manual-commit",
   "branch": "archon/task-feat-vendor-status-monitor",
-  "checkpoints_count": 10,
+  "checkpoints_count": 11,
   "files_touched": [
     "AIUsagesTrackers/Sources/App/Views/VendorStatusBanner.swift",
     "roadmap/claude-status-connector.md",
@@ -28,13 +28,19 @@
       "transcript": "/aa/efecd5949c/2/full.jsonl",
       "content_hash": "/aa/efecd5949c/2/content_hash.txt",
       "prompt": "/aa/efecd5949c/2/prompt.txt"
+    },
+    {
+      "metadata": "/aa/efecd5949c/3/metadata.json",
+      "transcript": "/aa/efecd5949c/3/full.jsonl",
+      "content_hash": "/aa/efecd5949c/3/content_hash.txt",
+      "prompt": "/aa/efecd5949c/3/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 178,
-    "cache_creation_tokens": 283812,
+    "input_tokens": 181,
+    "cache_creation_tokens": 301925,
     "cache_read_tokens": 6107519,
-    "output_tokens": 47085,
-    "api_call_count": 101
+    "output_tokens": 47093,
+    "api_call_count": 102
   }
 }
