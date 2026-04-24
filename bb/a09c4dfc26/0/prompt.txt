@@ -43,3 +43,7 @@ S'assurer  de ces règles via des tests unitaires
 quand je regarde le contenu du fichier ~/.cache/ai-usages-tracker/usage-history/2026/04/2026-04-25.jsonl, je m'apercois qu'on a des lignes similaires dedans alors que c'est contraire a ce que j'avais demandé
 
 Tu peux reproduire avec un test unitaire ce cas et le fixer de manière pérenne grace au test U
+
+---
+
+/commit
