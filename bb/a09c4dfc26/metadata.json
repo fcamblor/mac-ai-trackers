@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "bba09c4dfc26",
+  "strategy": "manual-commit",
+  "branch": "codex-integ-wip",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/TickSnapshot.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/SnapshotRecorder.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Scheduler/SnapshotScheduler.swift",
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/SnapshotRecorderTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/SnapshotSchedulerTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/bb/a09c4dfc26/0/metadata.json",
+      "transcript": "/bb/a09c4dfc26/0/full.jsonl",
+      "content_hash": "/bb/a09c4dfc26/0/content_hash.txt",
+      "prompt": "/bb/a09c4dfc26/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 110,
+    "cache_creation_tokens": 528746,
+    "cache_read_tokens": 6641203,
+    "output_tokens": 54978,
+    "api_call_count": 81
+  }
+}

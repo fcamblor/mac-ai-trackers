@@ -1,0 +1,88 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "bba09c4dfc26",
+  "session_id": "b8c00acd-835c-4976-8924-cf8208215202",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-24T23:37:07.887698Z",
+  "branch": "codex-integ-wip",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/TickSnapshot.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/SnapshotRecorder.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Scheduler/SnapshotScheduler.swift",
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/SnapshotRecorderTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/SnapshotSchedulerTests.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "f57724dbf0cf",
+  "token_usage": {
+    "input_tokens": 110,
+    "cache_creation_tokens": 528746,
+    "cache_read_tokens": 6641203,
+    "output_tokens": 54978,
+    "api_call_count": 81
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-24T23:37:07.413079Z",
+    "agent_lines": 922,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 922,
+    "total_lines_changed": 922,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 188,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/plan.md": 94,
+        ".context/plans/plan-d-impl-mentation-usage-history-snapshots.md": 94
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 188,
+      "user_lines_removed": 0,
+      "agent_lines_added": 710,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/plan.md": 94,
+        ".context/plans/plan-d-impl-mentation-usage-history-snapshots.md": 94
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 188,
+      "user_lines_removed": 0,
+      "agent_lines_added": 814,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/plan.md": 94,
+        ".context/plans/plan-d-impl-mentation-usage-history-snapshots.md": 94
+      }
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 188,
+      "user_lines_removed": 0,
+      "agent_lines_added": 922,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/plan.md": 94,
+        ".context/plans/plan-d-impl-mentation-usage-history-snapshots.md": 94
+      }
+    }
+  ]
+}
