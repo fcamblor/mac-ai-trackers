@@ -1,0 +1,80 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "159ec1a6c8ef",
+  "session_id": "7d693d18-9e9d-4dea-8953-213ead6226de",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-24T14:40:46.913532Z",
+  "branch": "vk/ad28-fournis-une-impl",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexActiveAccountMonitor.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexAuth.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexConnector.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexStatusConnector.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Logging/Logger.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/ValueObjects.swift",
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CodexActiveAccountMonitorTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CodexAuthTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CodexConnectorTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CodexStatusConnectorTests.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-7[1m]",
+  "turn_id": "f6798aab4ee3",
+  "token_usage": {
+    "input_tokens": 970,
+    "cache_creation_tokens": 116017,
+    "cache_read_tokens": 76403,
+    "output_tokens": 2840,
+    "api_call_count": 3
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-24T14:40:46.85819Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 3,
+    "total_committed": 0,
+    "total_lines_changed": 3,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 1712,
+      "user_lines_removed": 3,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexActiveAccountMonitor.swift": 89,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexAuth.swift": 228,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexConnector.swift": 291,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexStatusConnector.swift": 90,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Logging/Logger.swift": 2,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/ValueObjects.swift": 1,
+        "AIUsagesTrackers/Sources/App/AppDelegate.swift": 14,
+        "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CodexActiveAccountMonitorTests.swift": 140,
+        "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CodexAuthTests.swift": 136,
+        "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CodexConnectorTests.swift": 547,
+        "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CodexStatusConnectorTests.swift": 174
+      },
+      "user_removed_per_file": {
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Logging/Logger.swift": 1,
+        "AIUsagesTrackers/Sources/App/AppDelegate.swift": 2
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1712,
+      "agent_lines_removed": 3
+    }
+  ]
+}

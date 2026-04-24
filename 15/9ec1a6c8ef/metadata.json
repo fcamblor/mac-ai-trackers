@@ -3,11 +3,19 @@
   "checkpoint_id": "159ec1a6c8ef",
   "strategy": "manual-commit",
   "branch": "vk/ad28-fournis-une-impl",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexActiveAccountMonitor.swift",
     "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexAuth.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexConnector.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexStatusConnector.swift",
     "AIUsagesTrackers/Sources/AIUsagesTrackers/Logging/Logger.swift",
-    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/ValueObjects.swift"
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/ValueObjects.swift",
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CodexActiveAccountMonitorTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CodexAuthTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CodexConnectorTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CodexStatusConnectorTests.swift"
   ],
   "sessions": [
     {
@@ -21,13 +29,19 @@
       "transcript": "/15/9ec1a6c8ef/1/full.jsonl",
       "content_hash": "/15/9ec1a6c8ef/1/content_hash.txt",
       "prompt": "/15/9ec1a6c8ef/1/prompt.txt"
+    },
+    {
+      "metadata": "/15/9ec1a6c8ef/2/metadata.json",
+      "transcript": "/15/9ec1a6c8ef/2/full.jsonl",
+      "content_hash": "/15/9ec1a6c8ef/2/content_hash.txt",
+      "prompt": "/15/9ec1a6c8ef/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 2496,
-    "cache_creation_tokens": 423558,
-    "cache_read_tokens": 5858634,
-    "output_tokens": 32065,
-    "api_call_count": 77
+    "input_tokens": 3466,
+    "cache_creation_tokens": 539575,
+    "cache_read_tokens": 5935037,
+    "output_tokens": 34905,
+    "api_call_count": 80
   }
 }
