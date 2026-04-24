@@ -37,6 +37,19 @@ struct CodexAuthTests {
         return path
     }
 
+    private func makeJWT(claims: String) -> String {
+        let header = #"{"alg":"none","typ":"JWT"}"#
+        return "\(base64URL(header)).\(base64URL(claims))."
+    }
+
+    private func base64URL(_ raw: String) -> String {
+        Data(raw.utf8)
+            .base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+
     private func makeAuth(codexHomePath: String) throws -> CodexAuth {
         let dir = NSTemporaryDirectory() + "ai-tracker-codex-auth-log-\(UUID().uuidString)"
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
@@ -60,8 +73,9 @@ struct CodexAuthTests {
     @Test("loads credentials from CODEX_HOME/auth.json")
     func loadsFromCodexHome() async throws {
         let dir = try makeTempDir()
+        let idToken = makeJWT(claims: #"{"email":"user@openai.com"}"#)
         _ = try writeAuthJSON(
-            #"{"tokens":{"access_token":"tok-abc","account_id":"acct-001"},"last_refresh":"2026-04-20T10:00:00.000Z"}"#,
+            #"{"tokens":{"access_token":"tok-abc","id_token":"\#(idToken)","account_id":"acct-001"},"last_refresh":"2026-04-20T10:00:00.000Z"}"#,
             in: dir
         )
         let auth = try makeAuth(codexHomePath: dir)
@@ -69,6 +83,7 @@ struct CodexAuthTests {
 
         #expect(credentials.accessToken == "tok-abc")
         #expect(credentials.accountId == "acct-001")
+        #expect(credentials.accountEmail == "user@openai.com")
         #expect(credentials.lastRefreshedAt != nil)
     }
 
@@ -102,6 +117,7 @@ struct CodexAuthTests {
         let credentials = try await auth.load()
 
         #expect(credentials.lastRefreshedAt == nil)
+        #expect(credentials.accountEmail == nil)
     }
 
     @Test("throws parseFailed when JSON is malformed")
@@ -164,6 +180,52 @@ struct CodexAuthTests {
 
         #expect(credentials.accessToken == "tok")
         #expect(credentials.accountId == "acct-001")
+    }
+
+    @Test("extracts accountEmail from id_token email claim")
+    func extractsAccountEmailFromIDToken() async throws {
+        let dir = try makeTempDir()
+        let idToken = makeJWT(claims: #"{"email":"from-id-token@openai.com"}"#)
+        _ = try writeAuthJSON(
+            #"{"tokens":{"access_token":"tok","id_token":"\#(idToken)","account_id":"acct-001"}}"#,
+            in: dir
+        )
+        let auth = try makeAuth(codexHomePath: dir)
+
+        let credentials = try await auth.load()
+
+        #expect(credentials.accountEmail == "from-id-token@openai.com")
+    }
+
+    @Test("extracts accountEmail from access_token when id_token has no email")
+    func extractsAccountEmailFromAccessTokenFallback() async throws {
+        let dir = try makeTempDir()
+        let idToken = makeJWT(claims: #"{"sub":"user-123"}"#)
+        let accessToken = makeJWT(claims: #"{"https://api.openai.com/profile.email":"from-access-token@openai.com"}"#)
+        _ = try writeAuthJSON(
+            #"{"tokens":{"access_token":"\#(accessToken)","id_token":"\#(idToken)","account_id":"acct-001"}}"#,
+            in: dir
+        )
+        let auth = try makeAuth(codexHomePath: dir)
+
+        let credentials = try await auth.load()
+
+        #expect(credentials.accountEmail == "from-access-token@openai.com")
+    }
+
+    @Test("keeps accountId when JWT email is absent or unreadable")
+    func keepsAccountIdWhenJWTEmailUnavailable() async throws {
+        let dir = try makeTempDir()
+        _ = try writeAuthJSON(
+            #"{"tokens":{"access_token":"not-a-jwt","id_token":"also-not-a-jwt","account_id":"acct-001"}}"#,
+            in: dir
+        )
+        let auth = try makeAuth(codexHomePath: dir)
+
+        let credentials = try await auth.load()
+
+        #expect(credentials.accountId == "acct-001")
+        #expect(credentials.accountEmail == nil)
     }
 
     @Test("loads credentials from keychain JSON fallback")

@@ -5,17 +5,34 @@ import Foundation
 public struct CodexCredentials: Sendable, Equatable {
     public let accessToken: String
     public let accountId: AccountId
+    public let accountEmail: AccountEmail?
     /// Parsed from `last_refresh` in auth.json; nil when the field is absent or unparseable.
     public let lastRefreshedAt: Date?
 
-    public init(accessToken: String, accountId: AccountId, lastRefreshedAt: Date? = nil) {
+    public init(
+        accessToken: String,
+        accountId: AccountId,
+        accountEmail: AccountEmail? = nil,
+        lastRefreshedAt: Date? = nil
+    ) {
         self.accessToken = accessToken
         self.accountId = accountId
+        self.accountEmail = accountEmail
         self.lastRefreshedAt = lastRefreshedAt
     }
 
-    public init(accessToken: String, accountId: String, lastRefreshedAt: Date? = nil) {
-        self.init(accessToken: accessToken, accountId: AccountId(rawValue: accountId), lastRefreshedAt: lastRefreshedAt)
+    public init(
+        accessToken: String,
+        accountId: String,
+        accountEmail: AccountEmail? = nil,
+        lastRefreshedAt: Date? = nil
+    ) {
+        self.init(
+            accessToken: accessToken,
+            accountId: AccountId(rawValue: accountId),
+            accountEmail: accountEmail,
+            lastRefreshedAt: lastRefreshedAt
+        )
     }
 }
 
@@ -154,6 +171,7 @@ public actor CodexAuth: CodexAuthProviding {
         return CodexCredentials(
             accessToken: accessToken,
             accountId: AccountId(rawValue: accountId),
+            accountEmail: extractAccountEmail(from: tokens),
             lastRefreshedAt: lastRefreshedAt
         )
     }
@@ -201,7 +219,19 @@ public actor CodexAuth: CodexAuthProviding {
             throw CodexAuthError.keychainParseFailed(rawPreview: rawString)
         }
 
-        return CodexCredentials(accessToken: accessToken, accountId: AccountId(rawValue: accountId))
+        let lastRefreshedAt: Date?
+        if let raw = json["last_refresh"] as? String {
+            lastRefreshedAt = isoFormatter.date(from: raw)
+        } else {
+            lastRefreshedAt = nil
+        }
+
+        return CodexCredentials(
+            accessToken: accessToken,
+            accountId: AccountId(rawValue: accountId),
+            accountEmail: extractAccountEmail(from: tokens),
+            lastRefreshedAt: lastRefreshedAt
+        )
     }
 
     private static func decodeHexUtf8(_ hex: String) -> String? {
@@ -216,5 +246,44 @@ public actor CodexAuth: CodexAuthProviding {
             index = nextIndex
         }
         return String(bytes: bytes, encoding: .utf8)
+    }
+
+    private func extractAccountEmail(from tokens: [String: Any]?) -> AccountEmail? {
+        guard let tokens else { return nil }
+        return extractAccountEmail(fromJWT: tokens["id_token"] as? String)
+            ?? extractAccountEmail(fromJWT: tokens["access_token"] as? String)
+    }
+
+    private func extractAccountEmail(fromJWT token: String?) -> AccountEmail? {
+        guard let claims = Self.jwtClaims(from: token) else { return nil }
+        return normalizedEmail(claims["email"] as? String)
+            ?? normalizedEmail(claims["https://api.openai.com/profile.email"] as? String)
+    }
+
+    private func normalizedEmail(_ rawValue: String?) -> AccountEmail? {
+        guard let rawValue else { return nil }
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return AccountEmail(rawValue: trimmed)
+    }
+
+    private static func jwtClaims(from token: String?) -> [String: Any]? {
+        guard let token else { return nil }
+        let segments = token.split(separator: ".", omittingEmptySubsequences: false)
+        guard segments.count >= 2,
+              let payload = base64URLDecode(String(segments[1])),
+              let object = try? JSONSerialization.jsonObject(with: payload),
+              let claims = object as? [String: Any] else {
+            return nil
+        }
+        return claims
+    }
+
+    private static func base64URLDecode(_ input: String) -> Data? {
+        let base64 = input
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let padding = (4 - (base64.count % 4)) % 4
+        return Data(base64Encoded: base64 + String(repeating: "=", count: padding))
     }
 }

@@ -8,6 +8,8 @@ public actor CodexActiveAccountMonitor {
     private let fileManager: FileManager
     private let logger: FileLogger
     private let interval: Duration
+    /// Emits only the stable `account_id` switch signal so callers can invalidate
+    /// any derived email cache and force a fresh fetch.
     private let onActiveAccountChanged: (@Sendable (AccountId) async -> Void)?
 
     private var monitorTask: Task<Void, Never>?

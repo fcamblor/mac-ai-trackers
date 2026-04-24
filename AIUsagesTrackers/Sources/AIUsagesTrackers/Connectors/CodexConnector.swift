@@ -4,6 +4,12 @@ import os
 public actor CodexConnector: UsageConnector {
     nonisolated public let vendor: Vendor = .codex
 
+    private enum IdentitySource: String {
+        case responseBody = "response_body"
+        case credentials = "credentials"
+        case cache = "cache"
+    }
+
     private let auth: CodexAuthProviding
     private let logger: FileLogger
     private let session: URLSession
@@ -56,14 +62,14 @@ public actor CodexConnector: UsageConnector {
             credentials = try await auth.load()
         } catch {
             logger.log(.error, "Codex credentials load failed: \(error)")
-            return [errorEntry(account: cachedEmailOrUnknown(), type: "token_error")]
+            return errorEntries(type: "token_error")
         }
 
         // Check token expiry before making any network call
         if let lastRefreshed = credentials.lastRefreshedAt,
            Date().timeIntervalSince(lastRefreshed) > CodexConstants.tokenLifetimeSeconds {
             logger.log(.warning, "Codex token expired (last refresh > 8 days ago) — run `codex login`")
-            return [errorEntry(account: emailOrFallback(credentials.accountId), type: "token_expired")]
+            return errorEntries(type: "token_expired", credentials: credentials)
         }
 
         logger.log(.info, "Fetching Codex usages for accountId=\(credentials.accountId)")
@@ -81,7 +87,7 @@ public actor CodexConnector: UsageConnector {
             (data, response) = try await session.data(for: request)
         } catch {
             logger.log(.error, "Codex API request failed: \(error)")
-            return [errorEntry(account: emailOrFallback(credentials.accountId), type: "api_error")]
+            return errorEntries(type: "api_error", credentials: credentials)
         }
 
         let httpResponse = response as? HTTPURLResponse
@@ -90,28 +96,44 @@ public actor CodexConnector: UsageConnector {
 
         if httpCode == 401 {
             logger.log(.warning, "Codex API returned HTTP 401 — token expired or revoked")
-            return [errorEntry(account: emailOrFallback(credentials.accountId), type: "token_expired")]
+            return errorEntries(type: "token_expired", credentials: credentials)
         }
 
         if httpCode == 429 {
             let body = String(data: data, encoding: .utf8) ?? "<non-UTF8 body, \(data.count) bytes>"
             logger.log(.warning, "Codex API rate-limited (HTTP 429): \(body)")
-            return [errorEntry(account: emailOrFallback(credentials.accountId), type: "http_429", isActive: true, preservedMetrics: lastKnownMetrics)]
+            return errorEntries(
+                type: "http_429",
+                credentials: credentials,
+                isActive: true,
+                preservedMetrics: lastKnownMetrics
+            )
         }
 
         guard let http = httpResponse, http.statusCode == 200 else {
             logger.log(.error, "Codex API returned HTTP \(httpCode)")
-            return [errorEntry(account: emailOrFallback(credentials.accountId), type: "http_\(httpCode)")]
+            return errorEntries(type: "http_\(httpCode)", credentials: credentials)
         }
 
         logger.log(.debug, "Codex API payload: \(Self.maskedPayload(data))")
 
         do {
             let (metrics, emailFromResponse) = try parseAPIResponse(data, httpResponse: http)
-            let account = emailFromResponse ?? AccountEmail(rawValue: "\(credentials.accountId)@codex")
-            _cachedEmail.withLock { $0 = account }
+            guard let (account, source) = resolvePersistedAccount(
+                responseEmail: emailFromResponse,
+                credentials: credentials
+            ) else {
+                logger.log(
+                    .warning,
+                    "Codex identity_unresolved during success response for accountId=\(credentials.accountId) — no usage entry written"
+                )
+                return []
+            }
             lastKnownMetrics = metrics
-            logger.log(.info, "Codex fetched \(metrics.count) metric(s) for account=\(account)")
+            logger.log(
+                .info,
+                "Codex fetched \(metrics.count) metric(s) for account=\(account) via \(source.rawValue)"
+            )
             return [VendorUsageEntry(
                 vendor: vendor,
                 account: account,
@@ -123,7 +145,7 @@ public actor CodexConnector: UsageConnector {
         } catch {
             logger.log(.error, "Codex response parse failed: \(error)")
             logger.log(.warning, "Codex failed payload dump: \(Self.maskedPayload(data))")
-            return [errorEntry(account: emailOrFallback(credentials.accountId), type: "parse_error")]
+            return errorEntries(type: "parse_error", credentials: credentials)
         }
     }
 
@@ -135,7 +157,7 @@ public actor CodexConnector: UsageConnector {
             throw CodexConnectorError.unexpectedAPIFormat(receivedKeys: [])
         }
 
-        let email = (json["email"] as? String).map(AccountEmail.init(rawValue:))
+        let email = normalizedEmail(json["email"] as? String)
         var metrics: [UsageMetric] = []
 
         // Primary and secondary rate-limit windows
@@ -257,12 +279,44 @@ public actor CodexConnector: UsageConnector {
 
     // MARK: - Helpers
 
-    private func emailOrFallback(_ accountId: AccountId) -> AccountEmail {
-        _cachedEmail.withLock { $0 } ?? AccountEmail(rawValue: "\(accountId)@codex")
+    private func resolvePersistedAccount(
+        responseEmail: AccountEmail? = nil,
+        credentials: CodexCredentials? = nil
+    ) -> (AccountEmail, IdentitySource)? {
+        if let responseEmail {
+            _cachedEmail.withLock { $0 = responseEmail }
+            return (responseEmail, .responseBody)
+        }
+        if let accountEmail = credentials?.accountEmail {
+            _cachedEmail.withLock { $0 = accountEmail }
+            return (accountEmail, .credentials)
+        }
+        if let cached = _cachedEmail.withLock({ $0 }) {
+            return (cached, .cache)
+        }
+        return nil
     }
 
-    private func cachedEmailOrUnknown() -> AccountEmail {
-        _cachedEmail.withLock { $0 } ?? "unknown@codex"
+    private func errorEntries(
+        type: String,
+        credentials: CodexCredentials? = nil,
+        isActive: Bool = false,
+        preservedMetrics: [UsageMetric] = []
+    ) -> [VendorUsageEntry] {
+        guard let (account, source) = resolvePersistedAccount(credentials: credentials) else {
+            let accountId = credentials?.accountId.rawValue ?? "<unavailable>"
+            logger.log(.warning, "Codex identity_unresolved during \(type) for accountId=\(accountId) — no usage entry written")
+            return []
+        }
+        logger.log(.debug, "Codex resolved account=\(account) via \(source.rawValue) for \(type)")
+        return [errorEntry(account: account, type: type, isActive: isActive, preservedMetrics: preservedMetrics)]
+    }
+
+    private func normalizedEmail(_ rawValue: String?) -> AccountEmail? {
+        guard let rawValue else { return nil }
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return AccountEmail(rawValue: trimmed)
     }
 
     private func errorEntry(account: AccountEmail, type: String, isActive: Bool = false, preservedMetrics: [UsageMetric] = []) -> VendorUsageEntry {

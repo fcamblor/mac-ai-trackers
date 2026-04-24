@@ -44,6 +44,21 @@ private struct MockCodexAuth: CodexAuthProviding {
     }
 }
 
+private actor SequenceCodexAuth: CodexAuthProviding {
+    private var results: [Result<CodexCredentials, Error>]
+
+    init(_ results: [Result<CodexCredentials, Error>]) {
+        self.results = results
+    }
+
+    func load() async throws -> CodexCredentials {
+        guard !results.isEmpty else {
+            fatalError("SequenceCodexAuth exhausted")
+        }
+        return try results.removeFirst().get()
+    }
+}
+
 // MARK: - Helpers
 
 private func makeTempDir() throws -> String {
@@ -58,8 +73,16 @@ private func mockSession() -> URLSession {
     return URLSession(configuration: config)
 }
 
-private func validCredentials(lastRefreshedAt: Date? = Date()) -> CodexCredentials {
-    CodexCredentials(accessToken: "fake-token", accountId: "acct-123", lastRefreshedAt: lastRefreshedAt)
+private func validCredentials(
+    accountEmail: AccountEmail? = nil,
+    lastRefreshedAt: Date? = Date()
+) -> CodexCredentials {
+    CodexCredentials(
+        accessToken: "fake-token",
+        accountId: "acct-123",
+        accountEmail: accountEmail,
+        lastRefreshedAt: lastRefreshedAt
+    )
 }
 
 private func makeConnector(dir: String, credentials: CodexCredentials? = nil, authError: Error? = nil) -> CodexConnector {
@@ -80,6 +103,10 @@ private func mockHTTP200(json: String, headers: [String: String] = [:]) {
         )!
         return (data, resp)
     }
+}
+
+private func readLog(at path: String) throws -> String {
+    try String(contentsOfFile: path, encoding: .utf8)
 }
 
 // MARK: - Suite
@@ -219,14 +246,28 @@ struct CodexConnectorFetchTests {
     @Test("HTTP 401 returns token_expired entry without any preserved metrics")
     func http401ReturnsTokenExpired() async throws {
         let dir = try makeTempDir()
+        let connector = makeConnector(dir: dir)
+
+        mockHTTP200(json: """
+        {
+          "email": "user@openai.com",
+          "rate_limit": {
+            "primary_window": {"used_percent": 50.0, "reset_at": 1745000000, "limit_window_seconds": 18000},
+            "secondary_window": {"used_percent": 20.0, "reset_at": 1745500000, "limit_window_seconds": 604800}
+          }
+        }
+        """)
+        let firstEntries = try await connector.fetchUsages()
+        #expect(firstEntries[0].account == "user@openai.com")
+
         CodexMockURLProtocol.handler = { _ in
             let resp = HTTPURLResponse(url: URL(string: "https://chatgpt.com")!, statusCode: 401, httpVersion: nil, headerFields: nil)!
             return (Data(), resp)
         }
-        let connector = makeConnector(dir: dir)
         let entries = try await connector.fetchUsages()
 
         #expect(entries.count == 1)
+        #expect(entries[0].account == "user@openai.com")
         #expect(entries[0].lastError?.type == "token_expired")
         #expect(entries[0].metrics.isEmpty)
     }
@@ -258,21 +299,38 @@ struct CodexConnectorFetchTests {
         let rateLimitedEntries = try await connector.fetchUsages()
 
         #expect(rateLimitedEntries.count == 1)
+        #expect(rateLimitedEntries[0].account == "user@openai.com")
         #expect(rateLimitedEntries[0].lastError?.type == "http_429")
         #expect(rateLimitedEntries[0].isActive == true)
         #expect(rateLimitedEntries[0].metrics.count == 2)
         #expect(rateLimitedEntries[0].metrics == firstEntries[0].metrics)
     }
 
-    @Test("credentials load failure returns token_error entry")
-    func credentialsLoadFailureReturnsTokenError() async throws {
+    @Test("credentials load failure reuses cached email from a previous fetch")
+    func credentialsLoadFailureReusesCachedEmail() async throws {
         let dir = try makeTempDir()
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
-        let auth = MockCodexAuth(credentials: nil, error: CodexAuthError.keychainEmpty)
+        let auth = SequenceCodexAuth([
+            .success(validCredentials()),
+            .failure(CodexAuthError.keychainEmpty),
+        ])
         let connector = CodexConnector(auth: auth, logger: logger, session: mockSession())
+
+        mockHTTP200(json: """
+        {
+          "email": "cached@openai.com",
+          "rate_limit": {
+            "primary_window": {"used_percent": 5.0, "reset_at": 1745000000, "limit_window_seconds": 18000},
+            "secondary_window": {"used_percent": 2.0, "reset_at": 1745500000, "limit_window_seconds": 604800}
+          }
+        }
+        """)
+        _ = try await connector.fetchUsages()
+
         let entries = try await connector.fetchUsages()
 
         #expect(entries.count == 1)
+        #expect(entries[0].account == "cached@openai.com")
         #expect(entries[0].lastError?.type == "token_error")
     }
 
@@ -286,11 +344,13 @@ struct CodexConnectorFetchTests {
         let connector = makeConnector(dir: dir, credentials: CodexCredentials(
             accessToken: "old-token",
             accountId: "acct-123",
+            accountEmail: "expired@openai.com",
             lastRefreshedAt: oldDate
         ))
         let entries = try await connector.fetchUsages()
 
         #expect(entries.count == 1)
+        #expect(entries[0].account == "expired@openai.com")
         #expect(entries[0].lastError?.type == "token_expired")
         // Network must not have been called
         #expect(CodexMockURLProtocol.capturedRequest == nil)
@@ -323,28 +383,54 @@ struct CodexConnectorFetchTests {
     @Test("malformed JSON payload returns parse_error entry")
     func parseErrorOnMalformedJSON() async throws {
         let dir = try makeTempDir()
+        let connector = makeConnector(dir: dir)
+
+        mockHTTP200(json: """
+        {
+          "email": "user@openai.com",
+          "rate_limit": {
+            "primary_window": {"used_percent": 5.0, "reset_at": 1745000000, "limit_window_seconds": 18000},
+            "secondary_window": {"used_percent": 2.0, "reset_at": 1745500000, "limit_window_seconds": 604800}
+          }
+        }
+        """)
+        _ = try await connector.fetchUsages()
+
         CodexMockURLProtocol.handler = { _ in
             let data = "not-json".data(using: .utf8)!
             let resp = HTTPURLResponse(url: URL(string: "https://chatgpt.com")!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (data, resp)
         }
-        let connector = makeConnector(dir: dir)
         let entries = try await connector.fetchUsages()
 
         #expect(entries.count == 1)
+        #expect(entries[0].account == "user@openai.com")
         #expect(entries[0].lastError?.type == "parse_error")
     }
 
     @Test("URLError returns api_error entry")
     func urlErrorReturnsApiError() async throws {
         let dir = try makeTempDir()
+        let connector = makeConnector(dir: dir)
+
+        mockHTTP200(json: """
+        {
+          "email": "user@openai.com",
+          "rate_limit": {
+            "primary_window": {"used_percent": 5.0, "reset_at": 1745000000, "limit_window_seconds": 18000},
+            "secondary_window": {"used_percent": 2.0, "reset_at": 1745500000, "limit_window_seconds": 604800}
+          }
+        }
+        """)
+        _ = try await connector.fetchUsages()
+
         CodexMockURLProtocol.errorToThrow = URLError(.notConnectedToInternet)
         CodexMockURLProtocol.handler = nil
-        let connector = makeConnector(dir: dir)
         let entries = try await connector.fetchUsages()
         CodexMockURLProtocol.errorToThrow = nil
 
         #expect(entries.count == 1)
+        #expect(entries[0].account == "user@openai.com")
         #expect(entries[0].lastError?.type == "api_error")
     }
 
@@ -413,8 +499,8 @@ struct CodexConnectorFetchTests {
 
     // MARK: - Account email and cache
 
-    @Test("account falls back to accountId@codex when email absent from payload")
-    func accountFallbackToAccountId() async throws {
+    @Test("credentials email is used when payload email is absent")
+    func accountUsesCredentialsEmailWhenPayloadEmailMissing() async throws {
         let dir = try makeTempDir()
         mockHTTP200(json: """
         {
@@ -424,11 +510,41 @@ struct CodexConnectorFetchTests {
           }
         }
         """)
-        let connector = makeConnector(dir: dir)
+        let connector = makeConnector(dir: dir, credentials: validCredentials(accountEmail: "from-creds@openai.com"))
         let entries = try await connector.fetchUsages()
 
         #expect(entries.count == 1)
-        #expect(entries[0].account.rawValue == "acct-123@codex")
+        #expect(entries[0].account == "from-creds@openai.com")
+        #expect(connector.resolveActiveAccount() == "from-creds@openai.com")
+    }
+
+    @Test("missing email everywhere writes no fallback entry and logs identity_unresolved")
+    func missingEmailEverywhereSkipsEntry() async throws {
+        let dir = try makeTempDir()
+        let logPath = "\(dir)/test.log"
+        mockHTTP200(json: """
+        {
+          "rate_limit": {
+            "primary_window": {"used_percent": 5.0, "reset_at": 1745000000, "limit_window_seconds": 18000},
+            "secondary_window": {"used_percent": 2.0, "reset_at": 1745500000, "limit_window_seconds": 604800}
+          }
+        }
+        """)
+        let logger = FileLogger(filePath: logPath, minLevel: .debug)
+        let connector = CodexConnector(
+            auth: MockCodexAuth(credentials: validCredentials(), error: nil),
+            logger: logger,
+            session: mockSession()
+        )
+        let entries = try await connector.fetchUsages()
+
+        #expect(entries.isEmpty)
+        #expect(connector.resolveActiveAccount() == nil)
+
+        logger.waitForPendingWrites()
+        let logContent = try readLog(at: logPath)
+        #expect(logContent.contains("identity_unresolved"))
+        #expect(!logContent.contains("acct-123@codex"))
     }
 
     @Test("resolveActiveAccount returns cached email after successful fetch")
