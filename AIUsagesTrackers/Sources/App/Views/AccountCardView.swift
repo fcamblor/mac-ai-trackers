@@ -1,10 +1,8 @@
 import SwiftUI
 import AIUsagesTrackersLib
 
-/// showActiveBadge is resolved by the parent so each card doesn't re-scan the full entry list.
 struct AccountCardView: View {
     let entry: VendorUsageEntry
-    let showActiveBadge: Bool
     let isRefreshing: Bool
 
     var body: some View {
@@ -28,7 +26,7 @@ struct AccountCardView: View {
 
                 Spacer()
 
-                if showActiveBadge && entry.isActive {
+                if entry.isActive {
                     Text("active")
                         .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(.white)
