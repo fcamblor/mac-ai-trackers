@@ -4,14 +4,18 @@ import Foundation
 
 public struct CodexCredentials: Sendable, Equatable {
     public let accessToken: String
-    public let accountId: String
+    public let accountId: AccountId
     /// Parsed from `last_refresh` in auth.json; nil when the field is absent or unparseable.
     public let lastRefreshedAt: Date?
 
-    public init(accessToken: String, accountId: String, lastRefreshedAt: Date? = nil) {
+    public init(accessToken: String, accountId: AccountId, lastRefreshedAt: Date? = nil) {
         self.accessToken = accessToken
         self.accountId = accountId
         self.lastRefreshedAt = lastRefreshedAt
+    }
+
+    public init(accessToken: String, accountId: String, lastRefreshedAt: Date? = nil) {
+        self.init(accessToken: accessToken, accountId: AccountId(rawValue: accountId), lastRefreshedAt: lastRefreshedAt)
     }
 }
 
@@ -60,12 +64,11 @@ public enum CodexAuthError: Error, CustomStringConvertible {
 public actor CodexAuth: CodexAuthProviding {
     private static let keychainService = "Codex Auth"
     private static let keychainTimeoutSeconds = 10
-    // 8-day token lifetime as defined in the Codex CLI
-    static let tokenLifetimeSeconds: TimeInterval = 8 * 24 * 3600
 
     private let codexHomePath: String?
     private let fileManager: FileManager
     private let logger: FileLogger
+    private let processRunner: ProcessRunning
 
     // Actor-isolated; safe without nonisolated(unsafe)
     private let isoFormatter: ISO8601DateFormatter = {
@@ -77,11 +80,13 @@ public actor CodexAuth: CodexAuthProviding {
     public init(
         codexHomePath: String? = nil,
         fileManager: FileManager = .default,
-        logger: FileLogger = Loggers.codex
+        logger: FileLogger = Loggers.codex,
+        processRunner: ProcessRunning = FoundationProcessRunner()
     ) {
         self.codexHomePath = codexHomePath
         self.fileManager = fileManager
         self.logger = logger
+        self.processRunner = processRunner
     }
 
     public func load() async throws -> CodexCredentials {
@@ -116,7 +121,14 @@ public actor CodexAuth: CodexAuthProviding {
             throw CodexAuthError.readFailed(path: path, underlying: error)
         }
 
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        let jsonObject: Any
+        do {
+            jsonObject = try JSONSerialization.jsonObject(with: data)
+        } catch {
+            let preview = String(data: data.prefix(80), encoding: .utf8) ?? "<binary>"
+            throw CodexAuthError.parseFailed(path: path, rawPreview: preview)
+        }
+        guard let json = jsonObject as? [String: Any] else {
             let preview = String(data: data.prefix(80), encoding: .utf8) ?? "<binary>"
             throw CodexAuthError.parseFailed(path: path, rawPreview: preview)
         }
@@ -141,7 +153,7 @@ public actor CodexAuth: CodexAuthProviding {
 
         return CodexCredentials(
             accessToken: accessToken,
-            accountId: accountId,
+            accountId: AccountId(rawValue: accountId),
             lastRefreshedAt: lastRefreshedAt
         )
     }
@@ -151,65 +163,45 @@ public actor CodexAuth: CodexAuthProviding {
     private func loadFromKeychain() async throws -> CodexCredentials {
         let serviceName = Self.keychainService
         let timeoutSecs = Self.keychainTimeoutSeconds
-        return try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global().async {
-                let process = Process()
-                let pipe = Pipe()
-                process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
-                process.arguments = ["find-generic-password", "-s", serviceName, "-w"]
-                process.standardOutput = pipe
-                process.standardError = FileHandle.nullDevice
-
-                do {
-                    try process.run()
-                } catch {
-                    continuation.resume(throwing: error)
-                    return
-                }
-
-                let timedOut = DispatchSemaphore(value: 0)
-                DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(timeoutSecs)) {
-                    guard process.isRunning else { return }
-                    process.terminate()
-                    timedOut.signal()
-                }
-
-                // Read before wait to avoid pipe-buffer deadlock
-                let raw = pipe.fileHandleForReading.readDataToEndOfFile()
-                process.waitUntilExit()
-
-                if timedOut.wait(timeout: .now()) == .success {
-                    continuation.resume(throwing: CodexAuthError.keychainTimeout(timeoutSeconds: timeoutSecs))
-                    return
-                }
-                guard process.terminationStatus == 0 else {
-                    continuation.resume(throwing: CodexAuthError.keychainAccessDenied(exitCode: process.terminationStatus))
-                    return
-                }
-
-                var rawString = String(data: raw, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                if rawString.isEmpty {
-                    continuation.resume(throwing: CodexAuthError.keychainEmpty)
-                    return
-                }
-
-                // Keychain may hex-encode the value with a leading "0x" prefix
-                if rawString.hasPrefix("0x"), let decoded = Self.decodeHexUtf8(rawString) {
-                    rawString = decoded
-                }
-
-                guard let jsonData = rawString.data(using: .utf8),
-                      let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
-                      let tokens = json["tokens"] as? [String: Any],
-                      let accessToken = tokens["access_token"] as? String, !accessToken.isEmpty,
-                      let accountId = tokens["account_id"] as? String, !accountId.isEmpty else {
-                    continuation.resume(throwing: CodexAuthError.keychainParseFailed(rawPreview: rawString))
-                    return
-                }
-
-                continuation.resume(returning: CodexCredentials(accessToken: accessToken, accountId: accountId))
-            }
+        let result = try await processRunner.run(
+            executablePath: "/usr/bin/security",
+            arguments: ["find-generic-password", "-s", serviceName, "-w"],
+            timeoutSeconds: timeoutSecs
+        )
+        if result.timedOut {
+            throw CodexAuthError.keychainTimeout(timeoutSeconds: timeoutSecs)
         }
+        guard result.terminationStatus == 0 else {
+            throw CodexAuthError.keychainAccessDenied(exitCode: result.terminationStatus)
+        }
+
+        var rawString = String(data: result.stdout, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if rawString.isEmpty {
+            throw CodexAuthError.keychainEmpty
+        }
+
+        // Keychain may hex-encode the value with a leading "0x" prefix
+        if rawString.hasPrefix("0x"), let decoded = Self.decodeHexUtf8(rawString) {
+            rawString = decoded
+        }
+
+        guard let jsonData = rawString.data(using: .utf8) else {
+            throw CodexAuthError.keychainParseFailed(rawPreview: rawString)
+        }
+        let jsonObject: Any
+        do {
+            jsonObject = try JSONSerialization.jsonObject(with: jsonData)
+        } catch {
+            throw CodexAuthError.keychainParseFailed(rawPreview: rawString)
+        }
+        guard let json = jsonObject as? [String: Any],
+              let tokens = json["tokens"] as? [String: Any],
+              let accessToken = tokens["access_token"] as? String, !accessToken.isEmpty,
+              let accountId = tokens["account_id"] as? String, !accountId.isEmpty else {
+            throw CodexAuthError.keychainParseFailed(rawPreview: rawString)
+        }
+
+        return CodexCredentials(accessToken: accessToken, accountId: AccountId(rawValue: accountId))
     }
 
     private static func decodeHexUtf8(_ hex: String) -> String? {

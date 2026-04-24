@@ -16,9 +16,6 @@ public actor CodexConnector: UsageConnector {
     // Fixed window durations (Codex policy mirrors Claude's windows)
     private static let sessionWindowMinutes = DurationMinutes(rawValue: 300)
     private static let weeklyWindowMinutes = DurationMinutes(rawValue: 10080)
-    // 8-day token lifetime as defined in the Codex CLI
-    private static let tokenLifetimeSeconds: TimeInterval = 8 * 24 * 3600
-    private static let requestTimeoutSeconds: TimeInterval = 5
 
     // Known-valid literal — force-unwrap is safe here
     private static let apiURL = URL(string: "https://chatgpt.com/backend-api/wham/usage")! // known-valid literal
@@ -64,7 +61,7 @@ public actor CodexConnector: UsageConnector {
 
         // Check token expiry before making any network call
         if let lastRefreshed = credentials.lastRefreshedAt,
-           Date().timeIntervalSince(lastRefreshed) > Self.tokenLifetimeSeconds {
+           Date().timeIntervalSince(lastRefreshed) > CodexConstants.tokenLifetimeSeconds {
             logger.log(.warning, "Codex token expired (last refresh > 8 days ago) — run `codex login`")
             return [errorEntry(account: emailOrFallback(credentials.accountId), type: "token_expired")]
         }
@@ -73,10 +70,10 @@ public actor CodexConnector: UsageConnector {
 
         var request = URLRequest(url: Self.apiURL)
         request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue(credentials.accountId, forHTTPHeaderField: "ChatGPT-Account-Id")
+        request.setValue(credentials.accountId.rawValue, forHTTPHeaderField: "ChatGPT-Account-Id")
         // Reproduces the User-Agent used in the OpenUsage analysis to avoid bot filtering
         request.setValue("OpenUsage", forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = Self.requestTimeoutSeconds
+        request.timeoutInterval = CodexConstants.requestTimeoutSeconds
 
         let data: Data
         let response: URLResponse
@@ -110,7 +107,7 @@ public actor CodexConnector: UsageConnector {
         logger.log(.debug, "Codex API payload: \(Self.maskedPayload(data))")
 
         do {
-            let (metrics, emailFromResponse) = try parseAPIResponse(data, httpResponse: http, accountId: credentials.accountId)
+            let (metrics, emailFromResponse) = try parseAPIResponse(data, httpResponse: http)
             let account = emailFromResponse ?? AccountEmail(rawValue: "\(credentials.accountId)@codex")
             _cachedEmail.withLock { $0 = account }
             lastKnownMetrics = metrics
@@ -132,8 +129,9 @@ public actor CodexConnector: UsageConnector {
 
     // MARK: - Response parsing
 
-    private func parseAPIResponse(_ data: Data, httpResponse: HTTPURLResponse, accountId: String) throws -> ([UsageMetric], AccountEmail?) {
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+    private func parseAPIResponse(_ data: Data, httpResponse: HTTPURLResponse) throws -> ([UsageMetric], AccountEmail?) {
+        let jsonObject = try JSONSerialization.jsonObject(with: data)
+        guard let json = jsonObject as? [String: Any] else {
             throw CodexConnectorError.unexpectedAPIFormat(receivedKeys: [])
         }
 
@@ -228,7 +226,7 @@ public actor CodexConnector: UsageConnector {
 
     private static let sensitiveKeyPatterns = ["token", "key", "secret", "password", "email", "credential"]
 
-    private static func maskedPayload(_ data: Data) -> String {
+    static func maskedPayload(_ data: Data) -> String {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return "<non-JSON, \(data.count) bytes>"
         }
@@ -240,7 +238,7 @@ public actor CodexConnector: UsageConnector {
         return str
     }
 
-    private static func maskSensitiveFields(_ dict: [String: Any]) -> [String: Any] {
+    static func maskSensitiveFields(_ dict: [String: Any]) -> [String: Any] {
         var result: [String: Any] = [:]
         for (key, value) in dict {
             let lower = key.lowercased()
@@ -259,7 +257,7 @@ public actor CodexConnector: UsageConnector {
 
     // MARK: - Helpers
 
-    private func emailOrFallback(_ accountId: String) -> AccountEmail {
+    private func emailOrFallback(_ accountId: AccountId) -> AccountEmail {
         _cachedEmail.withLock { $0 } ?? AccountEmail(rawValue: "\(accountId)@codex")
     }
 

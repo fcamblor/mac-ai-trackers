@@ -46,9 +46,9 @@ private struct MockCodexAuth: CodexAuthProviding {
 
 // MARK: - Helpers
 
-private func makeTempDir() -> String {
+private func makeTempDir() throws -> String {
     let dir = NSTemporaryDirectory() + "ai-tracker-codex-fetch-\(UUID().uuidString)"
-    try! FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
     return dir
 }
 
@@ -90,7 +90,7 @@ struct CodexConnectorFetchTests {
 
     @Test("Plus plan: primary + secondary window returns 2 metrics with email from payload")
     func plusPlanHappyPath() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         mockHTTP200(json: """
         {
           "email": "user@openai.com",
@@ -137,7 +137,7 @@ struct CodexConnectorFetchTests {
 
     @Test("Pro plan with code review and credits emits additional metrics")
     func proPlanWithCodeReviewAndCredits() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         mockHTTP200(json: """
         {
           "email": "pro@openai.com",
@@ -181,7 +181,7 @@ struct CodexConnectorFetchTests {
 
     @Test("Spark plan with additional_rate_limits emits per-model metrics")
     func sparkPlanAdditionalRateLimits() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         mockHTTP200(json: """
         {
           "email": "spark@openai.com",
@@ -218,7 +218,7 @@ struct CodexConnectorFetchTests {
 
     @Test("HTTP 401 returns token_expired entry without any preserved metrics")
     func http401ReturnsTokenExpired() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         CodexMockURLProtocol.handler = { _ in
             let resp = HTTPURLResponse(url: URL(string: "https://chatgpt.com")!, statusCode: 401, httpVersion: nil, headerFields: nil)!
             return (Data(), resp)
@@ -233,7 +233,7 @@ struct CodexConnectorFetchTests {
 
     @Test("HTTP 429 preserves previous metrics and sets http_429 error")
     func http429PreservesMetrics() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         let connector = makeConnector(dir: dir)
 
         // First successful fetch seeds lastKnownMetrics
@@ -266,7 +266,7 @@ struct CodexConnectorFetchTests {
 
     @Test("credentials load failure returns token_error entry")
     func credentialsLoadFailureReturnsTokenError() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let auth = MockCodexAuth(credentials: nil, error: CodexAuthError.keychainEmpty)
         let connector = CodexConnector(auth: auth, logger: logger, session: mockSession())
@@ -278,7 +278,7 @@ struct CodexConnectorFetchTests {
 
     @Test("expired token (>8 days since last_refresh) returns token_expired without network call")
     func expiredTokenReturnsTokenExpiredNoNetworkCall() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         CodexMockURLProtocol.capturedRequest = nil
         CodexMockURLProtocol.handler = nil
 
@@ -298,7 +298,7 @@ struct CodexConnectorFetchTests {
 
     @Test("fresh token (<8 days) is not treated as expired")
     func freshTokenIsNotExpired() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         mockHTTP200(json: """
         {
           "email": "user@openai.com",
@@ -322,7 +322,7 @@ struct CodexConnectorFetchTests {
 
     @Test("malformed JSON payload returns parse_error entry")
     func parseErrorOnMalformedJSON() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         CodexMockURLProtocol.handler = { _ in
             let data = "not-json".data(using: .utf8)!
             let resp = HTTPURLResponse(url: URL(string: "https://chatgpt.com")!, statusCode: 200, httpVersion: nil, headerFields: nil)!
@@ -337,7 +337,7 @@ struct CodexConnectorFetchTests {
 
     @Test("URLError returns api_error entry")
     func urlErrorReturnsApiError() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         CodexMockURLProtocol.errorToThrow = URLError(.notConnectedToInternet)
         CodexMockURLProtocol.handler = nil
         let connector = makeConnector(dir: dir)
@@ -352,7 +352,7 @@ struct CodexConnectorFetchTests {
 
     @Test("limit_window_seconds absent → fallback to 300 min for primary and 10080 for secondary")
     func fallbackDurationsWhenLimitWindowSecondsMissing() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         mockHTTP200(json: """
         {
           "email": "user@openai.com",
@@ -381,7 +381,7 @@ struct CodexConnectorFetchTests {
 
     @Test("x-codex-credits-balance header used when body credits absent")
     func creditsHeaderFallback() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         mockHTTP200(
             json: """
             {
@@ -415,7 +415,7 @@ struct CodexConnectorFetchTests {
 
     @Test("account falls back to accountId@codex when email absent from payload")
     func accountFallbackToAccountId() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         mockHTTP200(json: """
         {
           "rate_limit": {
@@ -433,7 +433,7 @@ struct CodexConnectorFetchTests {
 
     @Test("resolveActiveAccount returns cached email after successful fetch")
     func resolveActiveAccountReturnsCachedEmail() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         mockHTTP200(json: """
         {
           "email": "cached@openai.com",
@@ -453,7 +453,7 @@ struct CodexConnectorFetchTests {
 
     @Test("invalidateEmailCache clears resolved account")
     func invalidateEmailCacheClearsAccount() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         mockHTTP200(json: """
         {
           "email": "user@openai.com",
@@ -476,7 +476,7 @@ struct CodexConnectorFetchTests {
 
     @Test("request sends correct Authorization, ChatGPT-Account-Id, and User-Agent headers")
     func requestHeaders() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         CodexMockURLProtocol.capturedRequest = nil
         mockHTTP200(json: """
         {
@@ -499,7 +499,7 @@ struct CodexConnectorFetchTests {
 
     @Test("null reset_at emits metric with nil resetAt — not silently dropped")
     func nullResetAtEmitsMetricWithoutDate() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         mockHTTP200(json: """
         {
           "email": "user@openai.com",
@@ -525,7 +525,7 @@ struct CodexConnectorFetchTests {
 
     @Test("debug log is emitted on HTTP 200 with masked payload")
     func debugLogOnSuccess() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         mockHTTP200(json: """
         {
           "email": "user@openai.com",
@@ -542,6 +542,37 @@ struct CodexConnectorFetchTests {
 
         logger.waitForPendingWrites()
         let logContent = try String(contentsOfFile: "\(dir)/test.log", encoding: .utf8)
-        #expect(logContent.contains("Codex API payload:"))
+        let payloadLogLine = try #require(logContent
+            .split(separator: "\n")
+            .first { $0.contains("Codex API payload:") })
+        #expect(payloadLogLine.contains(#""email":"***""#))
+        #expect(!payloadLogLine.contains("user@openai.com"))
+    }
+
+    @Test("maskedPayload redacts nested sensitive fields")
+    func maskedPayloadRedactsNestedSensitiveFields() throws {
+        let payload = """
+        {
+          "email": "user@openai.com",
+          "nested": {
+            "access_token": "secret-token",
+            "safe": "visible"
+          },
+          "items": [
+            {"api_key": "secret-key", "name": "kept"}
+          ]
+        }
+        """
+        let data = try #require(payload.data(using: .utf8))
+
+        let masked = CodexConnector.maskedPayload(data)
+
+        #expect(masked.contains(#""email":"***""#))
+        #expect(masked.contains(#""access_token":"***""#))
+        #expect(masked.contains(#""api_key":"***""#))
+        #expect(masked.contains(#""safe":"visible""#))
+        #expect(!masked.contains("user@openai.com"))
+        #expect(!masked.contains("secret-token"))
+        #expect(!masked.contains("secret-key"))
     }
 }

@@ -8,17 +8,17 @@ public actor CodexActiveAccountMonitor {
     private let fileManager: FileManager
     private let logger: FileLogger
     private let interval: Duration
-    private let onActiveAccountChanged: (@Sendable (String) async -> Void)?
+    private let onActiveAccountChanged: (@Sendable (AccountId) async -> Void)?
 
     private var monitorTask: Task<Void, Never>?
-    private var lastObservedAccountId: String?
+    private var lastObservedAccountId: AccountId?
 
     public init(
         codexHomePath: String? = nil,
         fileManager: FileManager = .default,
         logger: FileLogger = Loggers.codex,
         interval: Duration = CodexActiveAccountMonitor.defaultInterval,
-        onActiveAccountChanged: (@Sendable (String) async -> Void)? = nil
+        onActiveAccountChanged: (@Sendable (AccountId) async -> Void)? = nil
     ) {
         self.codexHomePath = codexHomePath ?? ProcessInfo.processInfo.environment["CODEX_HOME"]
         self.fileManager = fileManager
@@ -65,7 +65,7 @@ public actor CodexActiveAccountMonitor {
         }
     }
 
-    private func readAccountId() -> String? {
+    private func readAccountId() -> AccountId? {
         let home = fileManager.homeDirectoryForCurrentUser.path
 
         var candidates: [String] = []
@@ -75,14 +75,20 @@ public actor CodexActiveAccountMonitor {
         candidates.append("\(home)/.config/codex/auth.json")
         candidates.append("\(home)/.codex/auth.json")
 
-        for path in candidates {
-            guard fileManager.fileExists(atPath: path),
-                  let data = fileManager.contents(atPath: path),
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        for path in candidates where fileManager.fileExists(atPath: path) {
+            guard let data = fileManager.contents(atPath: path) else { continue }
+            let jsonObject: Any
+            do {
+                jsonObject = try JSONSerialization.jsonObject(with: data)
+            } catch {
+                logger.log(.debug, "Failed to parse Codex auth at \(path): \(error)")
+                continue
+            }
+            guard let json = jsonObject as? [String: Any],
                   let tokens = json["tokens"] as? [String: Any],
                   let accountId = tokens["account_id"] as? String,
                   !accountId.isEmpty else { continue }
-            return accountId
+            return AccountId(rawValue: accountId)
         }
         return nil
     }

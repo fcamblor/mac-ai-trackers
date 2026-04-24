@@ -24,6 +24,30 @@ extension AccountEmail: CustomStringConvertible {
     public var description: String { rawValue }
 }
 
+// MARK: - AccountId
+
+public struct AccountId: RawRepresentable, Codable, Equatable, Hashable, Sendable {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    public init(from decoder: Decoder) throws {
+        rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+extension AccountId: ExpressibleByStringLiteral {
+    public init(stringLiteral value: String) { rawValue = value }
+}
+
+extension AccountId: CustomStringConvertible {
+    public var description: String { rawValue }
+}
+
 // MARK: - ISODate
 
 /// An ISO 8601 datetime string without sub-second precision.
