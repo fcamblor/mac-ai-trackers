@@ -6,6 +6,7 @@ import AppIconKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var poller: UsagePoller?
+    private var snapshotScheduler: SnapshotScheduler?
     private var accountMonitor: ClaudeActiveAccountMonitor?
     private var codexMonitor: CodexActiveAccountMonitor?
     private var pidGuard: AppPidGuard?
@@ -88,7 +89,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await poller?.pollOnce(force: true)
             }
         )
+        let snapshotRecorder = SnapshotRecorder()
+        let snapshotScheduler = SnapshotScheduler(
+            fileManager: fileManager,
+            recorder: snapshotRecorder
+        )
         self.poller = poller
+        self.snapshotScheduler = snapshotScheduler
         self.accountMonitor = accountMonitor
         self.codexMonitor = codexMonitor
         self.refreshState = refreshState
@@ -105,6 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task {
             store.start()
             await poller.start()
+            await snapshotScheduler.start()
             await accountMonitor.start()
             await codexMonitor.start()
         }
@@ -292,10 +300,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func quit() {
         let pollerRef = poller
+        let schedulerRef = snapshotScheduler
         let monitorRef = accountMonitor
         let codexMonitorRef = codexMonitor
         Task {
             await pollerRef?.stop()
+            await schedulerRef?.stop()
             await monitorRef?.stop()
             await codexMonitorRef?.stop()
         }
