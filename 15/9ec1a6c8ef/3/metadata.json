@@ -1,0 +1,64 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "159ec1a6c8ef",
+  "session_id": "ae7f04bf-ab40-4315-9ca2-2f519164058e",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-24T14:40:47.546704Z",
+  "branch": "vk/ad28-fournis-une-impl",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexActiveAccountMonitor.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexAuth.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexConnector.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexStatusConnector.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Logging/Logger.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/ValueObjects.swift",
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CodexActiveAccountMonitorTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CodexAuthTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CodexConnectorTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CodexStatusConnectorTests.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "b40110dfc79d",
+  "token_usage": {
+    "input_tokens": 3739,
+    "cache_creation_tokens": 116226,
+    "cache_read_tokens": 3497327,
+    "output_tokens": 44729,
+    "api_call_count": 39
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-24T14:40:46.944273Z",
+    "agent_lines": 1480,
+    "agent_removed": 2,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 1,
+    "total_committed": 1480,
+    "total_lines_changed": 1483,
+    "agent_percentage": 99.93256911665543,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 231,
+      "user_lines_removed": 1,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexAuth.swift": 228,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Logging/Logger.swift": 2,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/ValueObjects.swift": 1
+      },
+      "user_removed_per_file": {
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Logging/Logger.swift": 1
+      }
+    }
+  ]
+}
