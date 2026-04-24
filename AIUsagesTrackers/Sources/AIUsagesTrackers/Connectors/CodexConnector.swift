@@ -1,0 +1,291 @@
+import Foundation
+import os
+
+public actor CodexConnector: UsageConnector {
+    nonisolated public let vendor: Vendor = .codex
+
+    private let auth: CodexAuthProviding
+    private let logger: FileLogger
+    private let session: URLSession
+
+    // Thread-safe email cache readable from nonisolated resolveActiveAccount()
+    // without blocking the cooperative thread pool.
+    private let _cachedEmail = OSAllocatedUnfairLock<AccountEmail?>(initialState: nil)
+    private var lastKnownMetrics: [UsageMetric] = []
+
+    // Fixed window durations (Codex policy mirrors Claude's windows)
+    private static let sessionWindowMinutes = DurationMinutes(rawValue: 300)
+    private static let weeklyWindowMinutes = DurationMinutes(rawValue: 10080)
+    // 8-day token lifetime as defined in the Codex CLI
+    private static let tokenLifetimeSeconds: TimeInterval = 8 * 24 * 3600
+    private static let requestTimeoutSeconds: TimeInterval = 5
+
+    // Known-valid literal — force-unwrap is safe here
+    private static let apiURL = URL(string: "https://chatgpt.com/backend-api/wham/usage")! // known-valid literal
+
+    // Actor-isolated: safe without nonisolated(unsafe) since all access is on the actor
+    private let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    public init(
+        auth: CodexAuthProviding = CodexAuth(),
+        logger: FileLogger = Loggers.codex,
+        session: URLSession = .shared
+    ) {
+        self.auth = auth
+        self.logger = logger
+        self.session = session
+    }
+
+    // MARK: - UsageConnector
+
+    nonisolated public func resolveActiveAccount() -> AccountEmail? {
+        _cachedEmail.withLock { $0 }
+    }
+
+    /// Clears the cached email so the next `fetchUsages()` call resolves a fresh email
+    /// from the API response. Called by the account monitor on account_id changes.
+    public func invalidateEmailCache() {
+        _cachedEmail.withLock { $0 = nil }
+        logger.log(.info, "Codex email cache invalidated")
+    }
+
+    public func fetchUsages() async throws -> [VendorUsageEntry] {
+        let credentials: CodexCredentials
+        do {
+            credentials = try await auth.load()
+        } catch {
+            logger.log(.error, "Codex credentials load failed: \(error)")
+            return [errorEntry(account: cachedEmailOrUnknown(), type: "token_error")]
+        }
+
+        // Check token expiry before making any network call
+        if let lastRefreshed = credentials.lastRefreshedAt,
+           Date().timeIntervalSince(lastRefreshed) > Self.tokenLifetimeSeconds {
+            logger.log(.warning, "Codex token expired (last refresh > 8 days ago) — run `codex login`")
+            return [errorEntry(account: emailOrFallback(credentials.accountId), type: "token_expired")]
+        }
+
+        logger.log(.info, "Fetching Codex usages for accountId=\(credentials.accountId)")
+
+        var request = URLRequest(url: Self.apiURL)
+        request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(credentials.accountId, forHTTPHeaderField: "ChatGPT-Account-Id")
+        // Reproduces the User-Agent used in the OpenUsage analysis to avoid bot filtering
+        request.setValue("OpenUsage", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = Self.requestTimeoutSeconds
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            logger.log(.error, "Codex API request failed: \(error)")
+            return [errorEntry(account: emailOrFallback(credentials.accountId), type: "api_error")]
+        }
+
+        let httpResponse = response as? HTTPURLResponse
+        let httpCode = httpResponse?.statusCode ?? -1
+        logger.log(.info, "Codex API response: HTTP \(httpCode)")
+
+        if httpCode == 401 {
+            logger.log(.warning, "Codex API returned HTTP 401 — token expired or revoked")
+            return [errorEntry(account: emailOrFallback(credentials.accountId), type: "token_expired")]
+        }
+
+        if httpCode == 429 {
+            let body = String(data: data, encoding: .utf8) ?? "<non-UTF8 body, \(data.count) bytes>"
+            logger.log(.warning, "Codex API rate-limited (HTTP 429): \(body)")
+            return [errorEntry(account: emailOrFallback(credentials.accountId), type: "http_429", isActive: true, preservedMetrics: lastKnownMetrics)]
+        }
+
+        guard let http = httpResponse, http.statusCode == 200 else {
+            logger.log(.error, "Codex API returned HTTP \(httpCode)")
+            return [errorEntry(account: emailOrFallback(credentials.accountId), type: "http_\(httpCode)")]
+        }
+
+        logger.log(.debug, "Codex API payload: \(Self.maskedPayload(data))")
+
+        do {
+            let (metrics, emailFromResponse) = try parseAPIResponse(data, httpResponse: http, accountId: credentials.accountId)
+            let account = emailFromResponse ?? AccountEmail(rawValue: "\(credentials.accountId)@codex")
+            _cachedEmail.withLock { $0 = account }
+            lastKnownMetrics = metrics
+            logger.log(.info, "Codex fetched \(metrics.count) metric(s) for account=\(account)")
+            return [VendorUsageEntry(
+                vendor: vendor,
+                account: account,
+                isActive: true,
+                lastAcquiredOn: ISODate(date: Date()),
+                lastError: nil,
+                metrics: metrics
+            )]
+        } catch {
+            logger.log(.error, "Codex response parse failed: \(error)")
+            logger.log(.warning, "Codex failed payload dump: \(Self.maskedPayload(data))")
+            return [errorEntry(account: emailOrFallback(credentials.accountId), type: "parse_error")]
+        }
+    }
+
+    // MARK: - Response parsing
+
+    private func parseAPIResponse(_ data: Data, httpResponse: HTTPURLResponse, accountId: String) throws -> ([UsageMetric], AccountEmail?) {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw CodexConnectorError.unexpectedAPIFormat(receivedKeys: [])
+        }
+
+        let email = (json["email"] as? String).map(AccountEmail.init(rawValue:))
+        var metrics: [UsageMetric] = []
+
+        // Primary and secondary rate-limit windows
+        let rateLimit = json["rate_limit"] as? [String: Any]
+        if let window = rateLimit?["primary_window"] as? [String: Any],
+           let w = extractWindow(from: window, fallbackDuration: Self.sessionWindowMinutes) {
+            metrics.append(.timeWindow(name: "Session (5h)", resetAt: w.resetAt, windowDuration: w.duration, usagePercent: w.percent))
+        }
+        if let window = rateLimit?["secondary_window"] as? [String: Any],
+           let w = extractWindow(from: window, fallbackDuration: Self.weeklyWindowMinutes) {
+            metrics.append(.timeWindow(name: "Weekly (7d)", resetAt: w.resetAt, windowDuration: w.duration, usagePercent: w.percent))
+        }
+
+        // Code review rate limit (optional — absent on plans without code review)
+        let codeReviewRateLimit = json["code_review_rate_limit"] as? [String: Any]
+        if let window = codeReviewRateLimit?["primary_window"] as? [String: Any],
+           let w = extractWindow(from: window, fallbackDuration: Self.weeklyWindowMinutes) {
+            metrics.append(.timeWindow(name: "Code Review (7d)", resetAt: w.resetAt, windowDuration: w.duration, usagePercent: w.percent))
+        }
+
+        // Per-model additional rate limits (e.g. Spark plan with per-model quotas)
+        let additionalRateLimits = json["additional_rate_limits"] as? [[String: Any]] ?? []
+        for limitEntry in additionalRateLimits {
+            guard let limitName = limitEntry["limit_name"] as? String else { continue }
+            let limitRateLimit = limitEntry["rate_limit"] as? [String: Any]
+            if let window = limitRateLimit?["primary_window"] as? [String: Any],
+               let w = extractWindow(from: window, fallbackDuration: Self.sessionWindowMinutes) {
+                metrics.append(.timeWindow(name: "\(limitName) (5h)", resetAt: w.resetAt, windowDuration: w.duration, usagePercent: w.percent))
+            }
+            if let window = limitRateLimit?["secondary_window"] as? [String: Any],
+               let w = extractWindow(from: window, fallbackDuration: Self.weeklyWindowMinutes) {
+                metrics.append(.timeWindow(name: "\(limitName) Weekly (7d)", resetAt: w.resetAt, windowDuration: w.duration, usagePercent: w.percent))
+            }
+        }
+
+        // Credits: body-first, header as fallback
+        let credits = json["credits"] as? [String: Any]
+        let hasCredits = credits?["has_credits"] as? Bool ?? false
+        if hasCredits, let balance = credits?["balance"] as? Double, balance > 0 {
+            // "1000 - balance" expresses credits consumed; balance is the remaining allowance
+            metrics.append(.payAsYouGo(name: "Credits used", currentAmount: 1000.0 - balance, currency: "credits"))
+        } else if let headerValue = httpResponse.value(forHTTPHeaderField: "x-codex-credits-balance"),
+                  let balance = Double(headerValue), balance > 0 {
+            metrics.append(.payAsYouGo(name: "Credits used", currentAmount: 1000.0 - balance, currency: "credits"))
+        }
+
+        if metrics.isEmpty, json["rate_limit"] == nil, additionalRateLimits.isEmpty {
+            logger.log(.warning, "No known usage window in Codex payload — top-level keys: \(Array(json.keys))")
+            throw CodexConnectorError.unexpectedAPIFormat(receivedKeys: Array(json.keys))
+        }
+
+        return (metrics, email)
+    }
+
+    // MARK: - Window extraction
+
+    private struct WindowValues {
+        let percent: UsagePercent
+        let resetAt: ISODate?
+        let duration: DurationMinutes
+    }
+
+    private func extractWindow(from window: [String: Any], fallbackDuration: DurationMinutes) -> WindowValues? {
+        guard let usedPercent = window["used_percent"] as? Double else {
+            logger.log(.debug, "Window block missing used_percent — skipped")
+            return nil
+        }
+        let resetAt: ISODate?
+        if let epochSecs = window["reset_at"] as? Double, epochSecs > 0 {
+            resetAt = ISODate(date: Date(timeIntervalSince1970: epochSecs))
+        } else {
+            resetAt = nil
+        }
+        let duration: DurationMinutes
+        if let secs = window["limit_window_seconds"] as? Double, secs > 0 {
+            duration = DurationMinutes(rawValue: Int(secs) / 60)
+        } else {
+            duration = fallbackDuration
+        }
+        return WindowValues(
+            percent: UsagePercent(rawValue: Int(usedPercent.rounded())),
+            resetAt: resetAt,
+            duration: duration
+        )
+    }
+
+    // MARK: - Payload masking
+
+    private static let sensitiveKeyPatterns = ["token", "key", "secret", "password", "email", "credential"]
+
+    private static func maskedPayload(_ data: Data) -> String {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return "<non-JSON, \(data.count) bytes>"
+        }
+        let masked = maskSensitiveFields(json)
+        guard let out = try? JSONSerialization.data(withJSONObject: masked, options: [.sortedKeys]),
+              let str = String(data: out, encoding: .utf8) else {
+            return "<serialization failed>"
+        }
+        return str
+    }
+
+    private static func maskSensitiveFields(_ dict: [String: Any]) -> [String: Any] {
+        var result: [String: Any] = [:]
+        for (key, value) in dict {
+            let lower = key.lowercased()
+            if sensitiveKeyPatterns.contains(where: { lower.contains($0) }) {
+                result[key] = "***"
+            } else if let nested = value as? [String: Any] {
+                result[key] = maskSensitiveFields(nested)
+            } else if let array = value as? [[String: Any]] {
+                result[key] = array.map { maskSensitiveFields($0) }
+            } else {
+                result[key] = value
+            }
+        }
+        return result
+    }
+
+    // MARK: - Helpers
+
+    private func emailOrFallback(_ accountId: String) -> AccountEmail {
+        _cachedEmail.withLock { $0 } ?? AccountEmail(rawValue: "\(accountId)@codex")
+    }
+
+    private func cachedEmailOrUnknown() -> AccountEmail {
+        _cachedEmail.withLock { $0 } ?? "unknown@codex"
+    }
+
+    private func errorEntry(account: AccountEmail, type: String, isActive: Bool = false, preservedMetrics: [UsageMetric] = []) -> VendorUsageEntry {
+        VendorUsageEntry(
+            vendor: vendor,
+            account: account,
+            isActive: isActive,
+            lastAcquiredOn: nil,
+            lastError: UsageError(timestamp: ISODate(date: Date()), type: type),
+            metrics: preservedMetrics
+        )
+    }
+}
+
+public enum CodexConnectorError: Error, CustomStringConvertible {
+    case unexpectedAPIFormat(receivedKeys: [String])
+
+    public var description: String {
+        switch self {
+        case let .unexpectedAPIFormat(keys):
+            "Codex API response does not match expected format — top-level keys: \(keys)"
+        }
+    }
+}

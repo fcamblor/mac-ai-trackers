@@ -66,6 +66,7 @@ public struct Vendor: RawRepresentable, Codable, Equatable, Hashable, Sendable {
     public init(rawValue: String) { self.rawValue = rawValue }
 
     public static let claude = Vendor(rawValue: "claude")
+    public static let codex = Vendor(rawValue: "codex")
 
     public init(from decoder: Decoder) throws {
         rawValue = try decoder.singleValueContainer().decode(String.self)

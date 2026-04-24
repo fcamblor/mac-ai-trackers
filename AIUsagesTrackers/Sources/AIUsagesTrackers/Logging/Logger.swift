@@ -258,6 +258,7 @@ public enum Loggers {
 
     public static let app = FileLogger(filePath: "\(cacheDir)/app.log", dynamicLevel: resolveLevel)
     public static let claude = FileLogger(filePath: "\(cacheDir)/claude-usages-connector.log", dynamicLevel: resolveLevel)
+    public static let codex = FileLogger(filePath: "\(cacheDir)/codex-usages-connector.log", dynamicLevel: resolveLevel)
 
-    public static let managed: [FileLogger] = [app, claude]
+    public static let managed: [FileLogger] = [app, claude, codex]
 }
