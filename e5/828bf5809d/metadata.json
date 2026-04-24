@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "e5828bf5809d",
+  "strategy": "manual-commit",
+  "branch": "single-account-auto-active",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Helpers/MenuBarSegmentResolver.swift",
+    "AIUsagesTrackers/Sources/App/Views/AccountCardView.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/MenuBarSegmentResolverTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageStoreTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e5/828bf5809d/0/metadata.json",
+      "transcript": "/e5/828bf5809d/0/full.jsonl",
+      "content_hash": "/e5/828bf5809d/0/content_hash.txt",
+      "prompt": "/e5/828bf5809d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1083,
+    "cache_creation_tokens": 84876,
+    "cache_read_tokens": 920249,
+    "output_tokens": 9324,
+    "api_call_count": 27
+  }
+}
