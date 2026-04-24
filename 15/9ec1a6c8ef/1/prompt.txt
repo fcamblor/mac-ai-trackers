@@ -1,0 +1,25 @@
+Fournis une Implémenation de l'usage de Codex
+
+Décline l'implémentation de Claude Code et fais la version pour Codex à partir de l'analyse qui a été faite dans /Users/fcamblor/Documents/projects/third-party-oss/openusage/docs/codex-integration-analysis.mdAffiche le plan en mode "progressive disclosure" en 2 couches :
+
+Couche 1 — Structure générale. Produire uniquement la structure (plan, architecture très haut niveau) afin d'obtenir la validation du commanditaire avant d'aller plus loin. Ça doit être très rapide à relire (moins de 100 lignes).
+
+Couche 2 — Impacts. Une fois la structure validée, affiche les impacts plus précis que tu as identifié, section par section si nécessaire en mettant l'enphase sur les sections qui ont bougé depuis la dernière itération
+
+Couche 3 — Finitions. Ce n'est pas obligatoire d'aller jusqu'à ce niveau (le commanditaire doit pouvoir lancer l'implémentation dès la couche 2). Une fois le contenu principal validé, affiche les derniers détails dans chaque partie de la couche 2.
+
+---
+
+pars sur l'implémentation du plan situé ici : /Users/fcamblor/.claude/plans/fournis-une-impl-menation-de-replicated-patterson.md
+
+---
+
+reprends là où tu en etais
+
+---
+
+ok j'approuve les changements
+
+---
+
+c'est édité

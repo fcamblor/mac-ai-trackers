@@ -1,0 +1,45 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "159ec1a6c8ef",
+  "session_id": "3a5f01d1-1abb-4756-b351-ebef7a435f92",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-24T14:40:43.80494Z",
+  "branch": "vk/ad28-fournis-une-impl",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexAuth.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Logging/Logger.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/ValueObjects.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "1e1ff31846db",
+  "token_usage": {
+    "input_tokens": 2491,
+    "cache_creation_tokens": 415782,
+    "cache_read_tokens": 5808910,
+    "output_tokens": 31794,
+    "api_call_count": 74
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-24T14:40:43.234622Z",
+    "agent_lines": 231,
+    "agent_removed": 1,
+    "human_added": 1392,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1623,
+    "total_lines_changed": 1626,
+    "agent_percentage": 14.268142681426815,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
