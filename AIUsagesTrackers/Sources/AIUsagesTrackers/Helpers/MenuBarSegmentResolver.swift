@@ -48,6 +48,11 @@ public enum MenuBarSegmentResolver {
             if let active = vendorEntries.first(where: { $0.isActive }) {
                 entry = active
                 resolveIssue = nil
+            } else if vendorEntries.count == 1 {
+                // No account is flagged active, but there is only one — treat it as implicitly active
+                // so the user sees their data without having to wait for the monitor to sync.
+                entry = vendorEntries[0]
+                resolveIssue = nil
             } else {
                 entry = nil
                 resolveIssue = .noActiveAccount(vendor: config.vendor)

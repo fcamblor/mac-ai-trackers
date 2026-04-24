@@ -44,7 +44,7 @@ struct AccountCardView: View {
         }
         .padding(10)
         .background(
-            (showActiveBadge && entry.isActive)
+            entry.isActive
                 ? Color.green.opacity(0.20)
                 : Color(NSColor.controlBackgroundColor),
             in: RoundedRectangle(cornerRadius: 8)
