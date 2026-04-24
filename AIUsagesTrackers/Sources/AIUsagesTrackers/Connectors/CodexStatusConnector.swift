@@ -7,7 +7,6 @@ public actor CodexStatusConnector: StatusConnector {
     private let session: URLSession
     private let endpointURLString: String
 
-    private static let requestTimeoutSeconds: TimeInterval = 5
     public static let defaultEndpoint = "https://status.openai.com/api/v2/incidents/unresolved.json"
 
     public init(
@@ -25,7 +24,7 @@ public actor CodexStatusConnector: StatusConnector {
             throw StatusConnectorError.invalidURL(rawValue: endpointURLString)
         }
         var request = URLRequest(url: url)
-        request.timeoutInterval = Self.requestTimeoutSeconds
+        request.timeoutInterval = CodexConstants.requestTimeoutSeconds
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         logger.log(.debug, "Fetching Codex status from \(endpointURLString)")
@@ -67,7 +66,7 @@ public actor CodexStatusConnector: StatusConnector {
                 vendor: vendor,
                 errorMessage: incident.name,
                 severity: severity,
-                since: ISODate(rawValue: incident.created_at),
+                since: incident.createdAt,
                 href: href
             )
         }
@@ -84,7 +83,14 @@ public actor CodexStatusConnector: StatusConnector {
     private struct StatuspageIncident: Decodable {
         let name: String
         let impact: String
-        let created_at: String
+        let createdAt: ISODate
         let shortlink: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case name
+            case impact
+            case createdAt = "created_at"
+            case shortlink
+        }
     }
 }

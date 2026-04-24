@@ -29,9 +29,9 @@ final class CodexStatusMockURLProtocol: URLProtocol, @unchecked Sendable {
 
 @Suite("CodexStatusConnector", .serialized)
 struct CodexStatusConnectorTests {
-    private func makeTempDir() -> String {
+    private func makeTempDir() throws -> String {
         let dir = NSTemporaryDirectory() + "ai-tracker-codex-status-\(UUID().uuidString)"
-        try! FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         return dir
     }
 
@@ -45,8 +45,7 @@ struct CodexStatusConnectorTests {
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         return CodexStatusConnector(
             logger: logger,
-            session: mockSession(),
-            endpointURLString: CodexStatusConnector.defaultEndpoint
+            session: mockSession()
         )
     }
 
@@ -64,7 +63,7 @@ struct CodexStatusConnectorTests {
 
     @Test("one major incident maps to a single Outage with all fields")
     func singleMajorIncident() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         mockHTTP(status: 200, body: """
         {
           "incidents": [
@@ -89,7 +88,7 @@ struct CodexStatusConnectorTests {
 
     @Test("empty incidents array returns empty list")
     func emptyIncidents() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         mockHTTP(status: 200, body: #"{"incidents":[]}"#)
         let outages = try await makeConnector(dir: dir).fetchOutages()
         #expect(outages.isEmpty)
@@ -97,7 +96,7 @@ struct CodexStatusConnectorTests {
 
     @Test("incident with impact=none is filtered out")
     func noneImpactFiltered() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         mockHTTP(status: 200, body: """
         {
           "incidents": [
@@ -114,7 +113,7 @@ struct CodexStatusConnectorTests {
 
     @Test("missing shortlink results in href=nil without throwing")
     func missingShortlink() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         mockHTTP(status: 200, body: """
         {
           "incidents": [
@@ -129,7 +128,7 @@ struct CodexStatusConnectorTests {
 
     @Test("unknown impact value passes through via OutageSeverity(rawValue:)")
     func unknownImpactPassthrough() async throws {
-        let dir = makeTempDir()
+        let dir = try makeTempDir()
         mockHTTP(status: 200, body: """
         {
           "incidents": [
@@ -143,8 +142,8 @@ struct CodexStatusConnectorTests {
     }
 
     @Test("HTTP 500 throws unexpectedResponse")
-    func httpErrorThrows() async {
-        let dir = makeTempDir()
+    func httpErrorThrows() async throws {
+        let dir = try makeTempDir()
         mockHTTP(status: 500, body: "")
         await #expect(throws: StatusConnectorError.self) {
             try await self.makeConnector(dir: dir).fetchOutages()
@@ -152,8 +151,8 @@ struct CodexStatusConnectorTests {
     }
 
     @Test("network error throws networkError")
-    func networkErrorThrows() async {
-        let dir = makeTempDir()
+    func networkErrorThrows() async throws {
+        let dir = try makeTempDir()
         CodexStatusMockURLProtocol.handler = nil
         CodexStatusMockURLProtocol.errorToThrow = URLError(.notConnectedToInternet)
         defer { CodexStatusMockURLProtocol.errorToThrow = nil }
@@ -164,8 +163,8 @@ struct CodexStatusConnectorTests {
     }
 
     @Test("malformed JSON throws parseError")
-    func malformedJSONThrows() async {
-        let dir = makeTempDir()
+    func malformedJSONThrows() async throws {
+        let dir = try makeTempDir()
         mockHTTP(status: 200, body: "{not json")
         await #expect(throws: StatusConnectorError.self) {
             try await self.makeConnector(dir: dir).fetchOutages()
