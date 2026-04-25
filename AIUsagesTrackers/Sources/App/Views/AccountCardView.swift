@@ -8,7 +8,9 @@ struct AccountCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Text(entry.vendor.rawValue.capitalized)
+                VendorIconView(vendor: entry.vendor, size: 13)
+
+                Text(VendorBranding.displayName(for: entry.vendor))
                     .font(.system(size: 12, weight: .semibold))
 
                 Text(entry.account.rawValue)

@@ -75,6 +75,7 @@ struct SegmentCardView: View {
         )
         if let rendered = resolution.rendered {
             HStack(spacing: 6) {
+                VendorIconView(vendor: segment.vendor, size: 13)
                 Image(nsImage: MenuBarLabelRenderer.render(
                     segments: [rendered],
                     fallbackText: "",
@@ -86,18 +87,22 @@ struct SegmentCardView: View {
             }
         } else if let issue = resolution.issue {
             HStack(spacing: 6) {
+                VendorIconView(vendor: segment.vendor, size: 13)
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                 Text(warningText(for: issue))
                     .foregroundStyle(.orange)
             }
         } else {
-            Text(hintText(for: segment))
+            HStack(spacing: 6) {
+                VendorIconView(vendor: segment.vendor, size: 13)
+                Text(hintText(for: segment))
+            }
         }
     }
 
     private func hintText(for segment: MenuBarSegmentConfig) -> String {
-        "\(segment.vendor.rawValue) · \(accountLabel(for: segment)) · \(segment.metricName)"
+        "\(VendorBranding.displayName(for: segment.vendor)) · \(accountLabel(for: segment)) · \(segment.metricName)"
     }
 
     private func accountLabel(for segment: MenuBarSegmentConfig) -> String {
@@ -115,7 +120,7 @@ struct SegmentCardView: View {
     private func warningText(for issue: MenuBarSegmentIssue) -> String {
         switch issue {
         case .noActiveAccount(let vendor):
-            return "No active \(vendor.rawValue) account"
+            return "No active \(VendorBranding.displayName(for: vendor)) account"
         case .accountNotFound(_, let email):
             return "Account no longer available: \(email.rawValue)"
         case .metricNotFound(let name):

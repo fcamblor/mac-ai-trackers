@@ -57,10 +57,11 @@ struct SegmentEditor: View {
                 }
             )) {
                 ForEach(vendors, id: \.rawValue) { vendor in
-                    Text(vendor.rawValue).tag(vendor)
+                    VendorLabelView(vendor: vendor).tag(vendor)
                 }
             }
             .labelsHidden()
+            .pickerStyle(.menu)
         }
     }
 

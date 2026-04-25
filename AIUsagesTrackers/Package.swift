@@ -22,6 +22,7 @@ let package = Package(
             name: "AIUsagesTrackers",
             dependencies: ["AIUsagesTrackersLib", "AppIconKit"],
             path: "Sources/App",
+            resources: [.copy("Resources/VendorBranding")],
             plugins: [.plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")]
         ),
         .executableTarget(
@@ -32,7 +33,7 @@ let package = Package(
         ),
         .testTarget(
             name: "AIUsagesTrackersTests",
-            dependencies: ["AIUsagesTrackersLib"],
+            dependencies: ["AIUsagesTrackersLib", "AIUsagesTrackers"],
             path: "Tests/AIUsagesTrackersTests",
             plugins: [.plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")]
         ),
