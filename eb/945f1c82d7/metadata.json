@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "eb945f1c82d7",
+  "strategy": "manual-commit",
+  "branch": "icons",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Helpers/MenuBarSegmentResolver.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/MenuBarSegmentConfig.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Store/UsageStore.swift",
+    "AIUsagesTrackers/Sources/App/MenuBarLabelRenderer.swift",
+    "AIUsagesTrackers/Sources/App/VendorBranding.swift",
+    "AIUsagesTrackers/Sources/App/Views/AccountCardView.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/SegmentCardView.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/SegmentEditor.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/MenuBarSegmentConfigTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/MenuBarSegmentResolverTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/eb/945f1c82d7/0/metadata.json",
+      "transcript": "/eb/945f1c82d7/0/full.jsonl",
+      "content_hash": "/eb/945f1c82d7/0/content_hash.txt",
+      "prompt": "/eb/945f1c82d7/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 121,
+    "cache_creation_tokens": 281224,
+    "cache_read_tokens": 4404710,
+    "output_tokens": 33537,
+    "api_call_count": 66
+  }
+}
