@@ -1,0 +1,72 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "8498af443f02",
+  "session_id": "61e5dce9-6c12-4953-ab9c-373a74a41d59",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-25T23:54:43.634605Z",
+  "branch": "codex-integ-wip",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/App/Views/UsageDetailsView.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/SnapshotSchedulerTests.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "e07748e165eb",
+  "token_usage": {
+    "input_tokens": 1078,
+    "cache_creation_tokens": 186643,
+    "cache_read_tokens": 753181,
+    "output_tokens": 13457,
+    "api_call_count": 16
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-25T23:54:43.393138Z",
+    "agent_lines": 7,
+    "agent_removed": 3,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 7,
+    "total_lines_changed": 10,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 8427,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/Review request.md": 92,
+        ".context/attachments/pasted_text_2026-04-26_01-10-57.txt": 3954,
+        ".context/attachments/pasted_text_2026-04-26_01-11-26.txt": 3954,
+        ".context/attachments/plan.md": 94,
+        ".context/plans/plan-d-impl-mentation-usage-history-snapshots.md": 94,
+        ".context/plans/popover-usage-history-graphs-with-multi-account-co.md": 135,
+        ".context/plans/popover-usage-history-graphs.md": 104
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 8427,
+      "user_lines_removed": 0,
+      "agent_lines_added": 7,
+      "agent_lines_removed": 3,
+      "user_added_per_file": {
+        ".context/attachments/Review request.md": 92,
+        ".context/attachments/pasted_text_2026-04-26_01-10-57.txt": 3954,
+        ".context/attachments/pasted_text_2026-04-26_01-11-26.txt": 3954,
+        ".context/attachments/plan.md": 94,
+        ".context/plans/plan-d-impl-mentation-usage-history-snapshots.md": 94,
+        ".context/plans/popover-usage-history-graphs-with-multi-account-co.md": 135,
+        ".context/plans/popover-usage-history-graphs.md": 104
+      }
+    }
+  ]
+}
