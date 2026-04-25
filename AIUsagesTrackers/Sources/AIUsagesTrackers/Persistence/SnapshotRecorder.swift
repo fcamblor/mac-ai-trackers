@@ -10,9 +10,8 @@ public protocol SnapshotRecording: Sendable {
 /// Writes one line per tick into
 /// `{rootPath}/{year}/{month}/{year}-{month}-{day}.jsonl`, where each line is a
 /// `TickSnapshot` carrying every vendor/account/metric captured at that instant.
-/// The day boundary is computed from the injected calendar, which defaults to
-/// the current calendar so production uses local time; tests inject a
-/// fixed-timezone calendar for determinism across CI runners.
+/// Day boundaries are computed in UTC so the file name always matches the UTC
+/// date embedded in each line's timestamp — the calendar is injectable for tests.
 public actor SnapshotRecorder: SnapshotRecording {
     public nonisolated let rootPath: String
     private let logger: FileLogger
@@ -26,17 +25,27 @@ public actor SnapshotRecorder: SnapshotRecording {
     private var lastWrittenHash: String?
     private var didSeedHashFromDisk: Bool = false
 
+    /// Pass a custom `calendar` to override the UTC default (e.g. in tests that
+    /// need a specific fixed-timezone calendar). Pass `nil` (the default) to get
+    /// UTC, which keeps the file-name date consistent with the UTC timestamps
+    /// embedded in each JSONL line.
     public init(
         rootPath: String? = nil,
         logger: FileLogger = Loggers.app,
         fileManager: FileManager = .default,
-        calendar: Calendar = .current
+        calendar: Calendar? = nil
     ) {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         self.rootPath = rootPath ?? "\(home)/.cache/ai-usages-tracker/usage-history"
         self.logger = logger
         self.fileManager = fileManager
-        self.calendar = calendar
+        if let calendar {
+            self.calendar = calendar
+        } else {
+            var utc = Calendar(identifier: .gregorian)
+            utc.timeZone = TimeZone(identifier: "UTC")!
+            self.calendar = utc
+        }
     }
 
     public func recordSnapshot(from file: UsagesFile, now: Date = Date()) async {

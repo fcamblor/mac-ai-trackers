@@ -40,6 +40,29 @@ struct SnapshotRecorderTests {
 
     // MARK: - Shape
 
+    @Test("default recorder partitions files by UTC date, not local time")
+    func defaultCalendarIsUTC() async {
+        let root = Self.makeTempRoot()
+        let recorder = SnapshotRecorder(
+            rootPath: root,
+            logger: Self.makeLogger(in: root)
+            // no calendar arg — uses the production default
+        )
+        let file = UsagesFile(usages: [
+            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+                .timeWindow(name: "session", resetAt: nil, windowDuration: 300, usagePercent: 42),
+            ]),
+        ])
+
+        // A UTC midnight — e.g. 2026-04-25T00:30:00Z is still "2026-04-25" in UTC
+        // but could be "2026-04-24" in a timezone west of UTC (e.g. UTC-1 or later).
+        let utcMidnight = Self.isoDate("2026-04-25T00:30:00Z")
+        await recorder.recordSnapshot(from: file, now: utcMidnight)
+
+        let expectedPath = Self.expectedPath(root: root, year: "2026", month: "04", day: "25")
+        #expect(FileManager.default.fileExists(atPath: expectedPath))
+    }
+
     @Test("writes a single line per tick containing every vendor/account/metric")
     func writesOneLinePerTick() async {
         let root = Self.makeTempRoot()
