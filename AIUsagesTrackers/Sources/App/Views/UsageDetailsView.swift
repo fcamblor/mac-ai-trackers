@@ -249,10 +249,13 @@ struct UsageDetailsView: View {
     @MainActor
     private func loadHistory() async {
         let requestedWindow = selectedHistoryWindow
-        let requestedDate = historyWindowEndDate ?? Date()
+        let requestedEndDate = historyWindowEndDate
+        let requestedDate = requestedEndDate ?? Date()
         isLoadingHistory = true
         let snapshot = await historyReader.load(window: requestedWindow, now: requestedDate)
-        guard contentMode == .chart, selectedHistoryWindow == requestedWindow else {
+        guard contentMode == .chart,
+              selectedHistoryWindow == requestedWindow,
+              historyWindowEndDate == requestedEndDate else {
             isLoadingHistory = false
             return
         }
