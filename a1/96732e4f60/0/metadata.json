@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "a196732e4f60",
+  "session_id": "b8c00acd-835c-4976-8924-cf8208215202",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-25T20:11:41.924739Z",
+  "branch": "codex-integ-wip",
+  "checkpoints_count": 1,
+  "files_touched": [],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "1ca3a800a328",
+  "token_usage": {
+    "input_tokens": 142,
+    "cache_creation_tokens": 639258,
+    "cache_read_tokens": 8716422,
+    "output_tokens": 61849,
+    "api_call_count": 100
+  },
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 427,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/plan.md": 94,
+        ".context/plans/plan-d-impl-mentation-usage-history-snapshots.md": 94,
+        ".context/plans/popover-usage-history-graphs-with-multi-account-co.md": 135,
+        ".context/plans/popover-usage-history-graphs.md": 104
+      }
+    }
+  ]
+}
