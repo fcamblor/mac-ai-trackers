@@ -206,7 +206,7 @@ public actor CodexConnector: UsageConnector {
             metrics.append(.payAsYouGo(name: "Credits used", currentAmount: max(0, Self.creditPoolTotal - balance), currency: "credits"))
         }
 
-        if metrics.isEmpty, json["rate_limit"] == nil, additionalRateLimits.isEmpty {
+        if metrics.isEmpty {
             logger.log(.warning, "No known usage window in Codex payload — top-level keys: \(Array(json.keys))")
             throw CodexConnectorError.unexpectedAPIFormat(receivedKeys: Array(json.keys))
         }
