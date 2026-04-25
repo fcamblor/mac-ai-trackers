@@ -1,0 +1,77 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "2091f0085e6e",
+  "session_id": "ace6a439-2165-4e3a-82a4-40ad35e7b0fb",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-25T19:47:21.337785Z",
+  "branch": "iconized-single-account-auto-active",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexConnector.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "0e3d516dae87",
+  "token_usage": {
+    "input_tokens": 876,
+    "cache_creation_tokens": 126585,
+    "cache_read_tokens": 997766,
+    "output_tokens": 19605,
+    "api_call_count": 17
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-25T19:47:20.951067Z",
+    "agent_lines": 1,
+    "agent_removed": 1,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1,
+    "total_lines_changed": 2,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 846,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/Review request-v1.md": 92,
+        ".context/attachments/Review request-v2.md": 92,
+        ".context/attachments/Review request-v3.md": 92,
+        ".context/attachments/Review request.md": 92,
+        ".context/attachments/plan-v1.md": 108,
+        ".context/attachments/plan-v2.md": 91,
+        ".context/attachments/plan.md": 40,
+        ".context/plans/ajout-d-ic-nes-claude-code-codex-dans-les-segments.md": 40,
+        ".context/plans/plan-ajustements-ic-nes-vendor.md": 108,
+        ".context/plans/plan-am-liorer-le-contraste-des-ic-nes-de-vendor-d.md": 91
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 846,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1,
+      "agent_lines_removed": 1,
+      "user_added_per_file": {
+        ".context/attachments/Review request-v1.md": 92,
+        ".context/attachments/Review request-v2.md": 92,
+        ".context/attachments/Review request-v3.md": 92,
+        ".context/attachments/Review request.md": 92,
+        ".context/attachments/plan-v1.md": 108,
+        ".context/attachments/plan-v2.md": 91,
+        ".context/attachments/plan.md": 40,
+        ".context/plans/ajout-d-ic-nes-claude-code-codex-dans-les-segments.md": 40,
+        ".context/plans/plan-ajustements-ic-nes-vendor.md": 108,
+        ".context/plans/plan-am-liorer-le-contraste-des-ic-nes-de-vendor-d.md": 91
+      }
+    }
+  ]
+}
