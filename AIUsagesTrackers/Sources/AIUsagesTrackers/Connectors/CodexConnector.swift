@@ -22,6 +22,8 @@ public actor CodexConnector: UsageConnector {
     // Fixed window durations (Codex policy mirrors Claude's windows)
     private static let sessionWindowMinutes = DurationMinutes(rawValue: 300)
     private static let weeklyWindowMinutes = DurationMinutes(rawValue: 10080)
+    // Codex credit pool size per the current plan definition
+    private static let creditPoolTotal: Double = 1000
 
     // Known-valid literal — force-unwrap is safe here
     private static let apiURL = URL(string: "https://chatgpt.com/backend-api/wham/usage")! // known-valid literal
@@ -196,12 +198,12 @@ public actor CodexConnector: UsageConnector {
         // Credits: body-first, header as fallback
         let credits = json["credits"] as? [String: Any]
         let hasCredits = credits?["has_credits"] as? Bool ?? false
-        if hasCredits, let balance = credits?["balance"] as? Double, balance > 0 {
-            // "1000 - balance" expresses credits consumed; balance is the remaining allowance
-            metrics.append(.payAsYouGo(name: "Credits used", currentAmount: 1000.0 - balance, currency: "credits"))
+        if hasCredits, let balance = credits?["balance"] as? Double, balance >= 0 {
+            // balance is the remaining allowance; clamp to avoid negative values if total exceeds the assumed pool
+            metrics.append(.payAsYouGo(name: "Credits used", currentAmount: max(0, Self.creditPoolTotal - balance), currency: "credits"))
         } else if let headerValue = httpResponse.value(forHTTPHeaderField: "x-codex-credits-balance"),
-                  let balance = Double(headerValue), balance > 0 {
-            metrics.append(.payAsYouGo(name: "Credits used", currentAmount: 1000.0 - balance, currency: "credits"))
+                  let balance = Double(headerValue), balance >= 0 {
+            metrics.append(.payAsYouGo(name: "Credits used", currentAmount: max(0, Self.creditPoolTotal - balance), currency: "credits"))
         }
 
         if metrics.isEmpty, json["rate_limit"] == nil, additionalRateLimits.isEmpty {
