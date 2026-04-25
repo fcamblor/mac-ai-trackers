@@ -90,6 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         )
         let snapshotRecorder = SnapshotRecorder()
+        let historyReader = UsageHistoryReader(rootPath: snapshotRecorder.rootPath)
         let snapshotScheduler = SnapshotScheduler(
             fileManager: fileManager,
             recorder: snapshotRecorder
@@ -106,7 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.usageStore = store
         Self.sharedStore = store
 
-        setupStatusItem(store: store, refreshState: refreshState)
+        setupStatusItem(store: store, refreshState: refreshState, historyReader: historyReader)
         trackStoreChanges(store: store)
 
         Task {
@@ -124,7 +125,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Status item
 
-    private func setupStatusItem(store: UsageStore, refreshState: RefreshState) {
+    private func setupStatusItem(
+        store: UsageStore,
+        refreshState: RefreshState,
+        historyReader: UsageHistoryReader
+    ) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem = item
 
@@ -134,6 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             rootView: UsageDetailsView(
                 store: store,
                 refreshState: refreshState,
+                historyReader: historyReader,
                 onRefresh: { [weak self] in
                     await self?.poller?.pollOnce(now: Date(), force: true)
                 },

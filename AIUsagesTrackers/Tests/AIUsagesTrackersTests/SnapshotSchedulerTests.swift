@@ -17,8 +17,9 @@ actor MockSnapshotRecorder: SnapshotRecording {
         // "Failure" is modelled as a no-op on disk; the scheduler doesn't inspect
         // the return value, so we simply record the call. This mirrors the real
         // recorder's swallow-and-log policy for I/O errors.
-        _ = failOnCallIndices.contains(calls.count)
+        let shouldFail = failOnCallIndices.contains(calls.count)
         calls.append((file, now))
+        if shouldFail { return }
     }
 }
 
