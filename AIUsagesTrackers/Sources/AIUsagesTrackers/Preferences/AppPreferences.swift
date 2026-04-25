@@ -14,6 +14,8 @@ public protocol AppPreferences: AnyObject, Observable, Sendable {
     /// Tracks whether seeding has already run — distinguishes "fresh install"
     /// from "user deleted all segments." False on a brand-new UserDefaults suite.
     var menuBarSegmentsInitialized: Bool { get set }
+    /// String inserted between adjacent segments in the menu bar label. Defaults to " | ".
+    var menuBarSeparator: String { get set }
 }
 
 // MARK: - UserDefaults-backed implementation
@@ -98,6 +100,19 @@ public final class UserDefaultsAppPreferences: AppPreferences {
         get { defaults.bool(forKey: AppPreferenceKeys.menuBarSegmentsInitialized.rawValue) }
         set { defaults.set(newValue, forKey: AppPreferenceKeys.menuBarSegmentsInitialized.rawValue) }
     }
+
+    public var menuBarSeparator: String {
+        get {
+            access(keyPath: \.menuBarSeparator)
+            let stored = defaults.string(forKey: AppPreferenceKeys.menuBarSeparator.rawValue)
+            return stored ?? " | "
+        }
+        set {
+            withMutation(keyPath: \.menuBarSeparator) {
+                defaults.set(newValue, forKey: AppPreferenceKeys.menuBarSeparator.rawValue)
+            }
+        }
+    }
 }
 
 // MARK: - In-memory test double
@@ -111,18 +126,21 @@ public final class InMemoryAppPreferences: AppPreferences {
     public var logLevel: LogLevel
     public var menuBarSegments: [MenuBarSegmentConfig]
     public var menuBarSegmentsInitialized: Bool
+    public var menuBarSeparator: String
 
     public init(
         refreshInterval: RefreshInterval = .default,
         launchAtLogin: Bool = false,
         logLevel: LogLevel = .info,
         menuBarSegments: [MenuBarSegmentConfig] = [],
-        menuBarSegmentsInitialized: Bool = false
+        menuBarSegmentsInitialized: Bool = false,
+        menuBarSeparator: String = " | "
     ) {
         self.refreshInterval = refreshInterval
         self.launchAtLogin = launchAtLogin
         self.logLevel = logLevel
         self.menuBarSegments = menuBarSegments
         self.menuBarSegmentsInitialized = menuBarSegmentsInitialized
+        self.menuBarSeparator = menuBarSeparator
     }
 }

@@ -161,6 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let isDark = button.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
         let image = MenuBarLabelRenderer.render(
             segments: store.menuBarSegments,
+            separator: Self.sharedPreferences.menuBarSeparator,
             fallbackText: store.menuBarText,
             isDarkMenuBar: isDark
         )

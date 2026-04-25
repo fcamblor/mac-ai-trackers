@@ -70,6 +70,7 @@ private struct MenubarHintContent: View {
             HStack {
                 Image(nsImage: MenuBarLabelRenderer.render(
                     segments: store.menuBarSegments,
+                    separator: preferences.menuBarSeparator,
                     fallbackText: store.menuBarText,
                     isDarkMenuBar: isDark
                 ))
@@ -84,6 +85,18 @@ private struct MenubarHintContent: View {
                 RoundedRectangle(cornerRadius: 6)
                     .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
             )
+
+            HStack(spacing: 6) {
+                Text("Separator")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextField("", text: Binding(
+                    get: { preferences.menuBarSeparator },
+                    set: { preferences.menuBarSeparator = $0 }
+                ))
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 80)
+            }
         }
         .padding(16)
     }
