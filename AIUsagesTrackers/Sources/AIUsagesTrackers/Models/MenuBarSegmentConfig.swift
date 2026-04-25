@@ -89,19 +89,36 @@ public struct TimeWindowDisplay: Codable, Equatable, Hashable, Sendable {
     public var letter: String
     public var showPercent: Bool
     public var showReset: Bool
+    public var showVendorIcon: Bool
 
     public init(
         showDot: Bool = true,
         showLetter: Bool = true,
         letter: String = "",
         showPercent: Bool = true,
-        showReset: Bool = true
+        showReset: Bool = true,
+        showVendorIcon: Bool = false
     ) {
         self.showDot = showDot
         self.showLetter = showLetter
         self.letter = letter
         self.showPercent = showPercent
         self.showReset = showReset
+        self.showVendorIcon = showVendorIcon
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case showDot, showLetter, letter, showPercent, showReset, showVendorIcon
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        showDot = try c.decode(Bool.self, forKey: .showDot)
+        showLetter = try c.decode(Bool.self, forKey: .showLetter)
+        letter = try c.decode(String.self, forKey: .letter)
+        showPercent = try c.decode(Bool.self, forKey: .showPercent)
+        showReset = try c.decode(Bool.self, forKey: .showReset)
+        showVendorIcon = try c.decodeIfPresent(Bool.self, forKey: .showVendorIcon) ?? false
     }
 }
 

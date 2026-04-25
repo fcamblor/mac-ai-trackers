@@ -10,19 +10,20 @@ import AIUsagesTrackersLib
 @MainActor
 enum MenuBarLabelRenderer {
     private static let font: NSFont = .menuBarFont(ofSize: 0)
-    private static let separator = " | "
     private static let dot = "● "
     private static let horizontalPadding: CGFloat = 4
     private static let height: CGFloat = 18
 
     static func render(
         segments: [MenuBarSegment],
+        separator: String,
         fallbackText: String,
         isDarkMenuBar: Bool
     ) -> NSImage {
         let textColor: NSColor = isDarkMenuBar ? .white : .black
         let attributed = attributedString(
             segments: segments,
+            separator: separator,
             fallbackText: fallbackText,
             textColor: textColor
         )
@@ -40,6 +41,7 @@ enum MenuBarLabelRenderer {
 
     private static func attributedString(
         segments: [MenuBarSegment],
+        separator: String,
         fallbackText: String,
         textColor: NSColor
     ) -> NSAttributedString {
@@ -51,9 +53,20 @@ enum MenuBarLabelRenderer {
         }
         let result = NSMutableAttributedString()
         for (index, segment) in segments.enumerated() {
-            if index > 0 {
+            if index > 0, !separator.isEmpty {
                 result.append(NSAttributedString(
                     string: separator,
+                    attributes: [.font: font, .foregroundColor: textColor]
+                ))
+            }
+            if let vendor = segment.vendorIcon,
+               let icon = VendorBranding.tintedNSImage(for: vendor, height: font.capHeight) {
+                let attachment = NSTextAttachment()
+                attachment.image = icon
+                attachment.bounds = CGRect(x: 0, y: 0, width: icon.size.width, height: icon.size.height)
+                result.append(NSAttributedString(attachment: attachment))
+                result.append(NSAttributedString(
+                    string: "\u{2009}",
                     attributes: [.font: font, .foregroundColor: textColor]
                 ))
             }

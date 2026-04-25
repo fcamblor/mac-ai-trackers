@@ -42,6 +42,30 @@ enum VendorBranding {
         return loadTemplateImage(named: assetName)
     }
 
+    /// Returns a tinted, non-template copy of the vendor icon at the requested height.
+    /// Uses the brand's `tintHex` as fill color and the template PDF as an alpha mask.
+    static func tintedNSImage(for vendor: Vendor, height: CGFloat) -> NSImage? {
+        guard let template = icon(for: vendor),
+              let brand = brand(for: vendor),
+              let tintColor = NSColor(hex: brand.tintHex) else { return nil }
+        let aspectRatio = template.size.height > 0
+            ? template.size.width / template.size.height : 1
+        let size = NSSize(width: ceil(height * aspectRatio), height: ceil(height))
+        let result = NSImage(size: size)
+        result.lockFocus()
+        tintColor.setFill()
+        NSRect(origin: .zero, size: size).fill()
+        template.draw(
+            in: NSRect(origin: .zero, size: size),
+            from: .zero,
+            operation: .destinationIn,
+            fraction: 1.0
+        )
+        result.unlockFocus()
+        result.isTemplate = false
+        return result
+    }
+
     private static func loadTemplateImage(named assetName: String) -> NSImage? {
         guard let url = Bundle.module.url(
             forResource: assetName,
@@ -95,5 +119,17 @@ private extension Color {
         let blue = Double(value & 0xFF) / 255.0
 
         self.init(red: red, green: green, blue: blue)
+    }
+}
+
+private extension NSColor {
+    convenience init?(hex: String) {
+        guard hex.count == 6, let value = Int(hex, radix: 16) else { return nil }
+
+        let red = CGFloat((value >> 16) & 0xFF) / 255.0
+        let green = CGFloat((value >> 8) & 0xFF) / 255.0
+        let blue = CGFloat(value & 0xFF) / 255.0
+
+        self.init(red: red, green: green, blue: blue, alpha: 1.0)
     }
 }

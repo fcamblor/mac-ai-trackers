@@ -75,9 +75,9 @@ struct SegmentCardView: View {
         )
         if let rendered = resolution.rendered {
             HStack(spacing: 6) {
-                VendorIconView(vendor: segment.vendor, size: 13)
                 Image(nsImage: MenuBarLabelRenderer.render(
                     segments: [rendered],
+                    separator: preferences.menuBarSeparator,
                     fallbackText: "",
                     isDarkMenuBar: isDark
                 ))
@@ -87,17 +87,13 @@ struct SegmentCardView: View {
             }
         } else if let issue = resolution.issue {
             HStack(spacing: 6) {
-                VendorIconView(vendor: segment.vendor, size: 13)
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                 Text(warningText(for: issue))
                     .foregroundStyle(.orange)
             }
         } else {
-            HStack(spacing: 6) {
-                VendorIconView(vendor: segment.vendor, size: 13)
-                Text(hintText(for: segment))
-            }
+            Text(hintText(for: segment))
         }
     }
 

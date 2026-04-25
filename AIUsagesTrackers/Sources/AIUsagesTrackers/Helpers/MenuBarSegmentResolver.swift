@@ -83,6 +83,7 @@ public enum MenuBarSegmentResolver {
         case let (.timeWindow(_, resetAt, windowDuration, usagePercent), .timeWindow(display)):
             let segment = renderTimeWindow(
                 display: display,
+                vendor: config.vendor,
                 resetAt: resetAt,
                 windowDuration: windowDuration,
                 usagePercent: usagePercent,
@@ -111,6 +112,7 @@ public enum MenuBarSegmentResolver {
 
     private static func renderTimeWindow(
         display: TimeWindowDisplay,
+        vendor: Vendor,
         resetAt: ISODate?,
         windowDuration: DurationMinutes,
         usagePercent: UsagePercent,
@@ -139,11 +141,12 @@ public enum MenuBarSegmentResolver {
         }
 
         // If the user turned every visible element off, there's nothing to render
-        if text.isEmpty, !display.showDot {
+        if text.isEmpty, !display.showDot, !display.showVendorIcon {
             return nil
         }
 
-        return MenuBarSegment(text: text, tier: tier, showDot: display.showDot)
+        let vendorIcon: Vendor? = display.showVendorIcon ? vendor : nil
+        return MenuBarSegment(text: text, tier: tier, showDot: display.showDot, vendorIcon: vendorIcon)
     }
 
     private static func renderPayAsYouGo(currentAmount: Double, currency: String) -> MenuBarSegment {

@@ -57,7 +57,7 @@ struct SegmentEditor: View {
                 }
             )) {
                 ForEach(vendors, id: \.rawValue) { vendor in
-                    VendorLabelView(vendor: vendor).tag(vendor)
+                    Text(VendorBranding.displayName(for: vendor)).tag(vendor)
                 }
             }
             .labelsHidden()
@@ -160,6 +160,7 @@ struct SegmentEditor: View {
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
 
+            Toggle("Show vendor icon", isOn: displayBinding.showVendorIcon)
             Toggle("Colored status dot", isOn: displayBinding.showDot)
             HStack {
                 Toggle("Metric short label", isOn: displayBinding.showLetter)
