@@ -59,8 +59,8 @@ struct ResolverCurrentlyActiveTests {
         #expect(result.rendered?.showDot == true)
     }
 
-    @Test("returns noActiveAccount when no entry is active")
-    func noActiveAccount() {
+    @Test("renders single inactive account as implicitly active")
+    func singleInactiveAccountIsImplicitlyActive() {
         let config = MenuBarSegmentConfig(
             vendor: .claude,
             account: .currentlyActive,
@@ -70,6 +70,26 @@ struct ResolverCurrentlyActiveTests {
         let result = MenuBarSegmentResolver.resolve(
             config: config,
             entries: [timeWindowEntry(isActive: false)],
+            now: referenceDate
+        )
+        #expect(result.issue == nil)
+        #expect(result.rendered?.text == "S 48% 2h 13m")
+    }
+
+    @Test("returns noActiveAccount when multiple accounts exist and none is active")
+    func noActiveAccountWithMultipleEntries() {
+        let config = MenuBarSegmentConfig(
+            vendor: .claude,
+            account: .currentlyActive,
+            metricName: "5h sessions (all models)",
+            display: .timeWindow(TimeWindowDisplay(letter: "S"))
+        )
+        let result = MenuBarSegmentResolver.resolve(
+            config: config,
+            entries: [
+                timeWindowEntry(account: "a@example.com", isActive: false),
+                timeWindowEntry(account: "b@example.com", isActive: false),
+            ],
             now: referenceDate
         )
         #expect(result.rendered == nil)
@@ -257,5 +277,51 @@ struct ResolverPayAsYouGoTests {
         #expect(result.rendered?.text == "42.10 EUR")
         #expect(result.rendered?.showDot == false)
         #expect(result.rendered?.tier == nil)
+        #expect(result.rendered?.vendorIcon == nil)
+    }
+}
+
+@Suite("MenuBarSegmentResolver — showVendorIcon")
+struct ResolverVendorIconTests {
+    private func resolveWith(_ display: TimeWindowDisplay) -> MenuBarSegment? {
+        let config = MenuBarSegmentConfig(
+            vendor: .claude,
+            account: .currentlyActive,
+            metricName: "5h sessions (all models)",
+            display: .timeWindow(display)
+        )
+        return MenuBarSegmentResolver.resolve(
+            config: config,
+            entries: [timeWindowEntry()],
+            now: referenceDate
+        ).rendered
+    }
+
+    @Test("showVendorIcon false produces nil vendorIcon")
+    func vendorIconOff() {
+        let segment = resolveWith(TimeWindowDisplay(showVendorIcon: false))
+        #expect(segment?.vendorIcon == nil)
+    }
+
+    @Test("showVendorIcon true populates vendorIcon with the config vendor")
+    func vendorIconOn() {
+        let segment = resolveWith(TimeWindowDisplay(showVendorIcon: true))
+        #expect(segment?.vendorIcon == .claude)
+    }
+
+    @Test("payAsYouGo segment never carries a vendorIcon")
+    func payAsYouGoHasNoVendorIcon() {
+        let config = MenuBarSegmentConfig(
+            vendor: .claude,
+            account: .currentlyActive,
+            metricName: "Monthly cost",
+            display: .payAsYouGo
+        )
+        let result = MenuBarSegmentResolver.resolve(
+            config: config,
+            entries: [payAsYouGoEntry()],
+            now: referenceDate
+        )
+        #expect(result.rendered?.vendorIcon == nil)
     }
 }

@@ -67,6 +67,25 @@ struct SegmentDisplayTests {
         #expect(display.showLetter)
         #expect(display.showPercent)
         #expect(display.showReset)
+        #expect(!display.showVendorIcon)
+    }
+
+    @Test("TimeWindowDisplay JSON without showVendorIcon decodes to false")
+    func showVendorIconMissingDefaultsFalse() throws {
+        let json = """
+        {"showDot":true,"showLetter":true,"letter":"S","showPercent":true,"showReset":true}
+        """
+        let data = json.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(TimeWindowDisplay.self, from: data)
+        #expect(!decoded.showVendorIcon)
+    }
+
+    @Test("TimeWindowDisplay with showVendorIcon true round-trips")
+    func showVendorIconRoundTrip() throws {
+        let original = TimeWindowDisplay(showVendorIcon: true)
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(TimeWindowDisplay.self, from: data)
+        #expect(decoded.showVendorIcon == true)
     }
 }
 

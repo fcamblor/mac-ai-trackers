@@ -105,6 +105,32 @@ struct UserDefaultsAppPreferencesTests {
         #expect(prefs.logLevel == .info)
         #expect(prefs.menuBarSegments.isEmpty)
         #expect(prefs.menuBarSegmentsInitialized == false)
+        #expect(prefs.menuBarSeparator == " | ")
+    }
+
+    @Test("menuBarSeparator round-trips through UserDefaults")
+    @MainActor
+    func menuBarSeparatorRoundTrip() {
+        let (defaults, name) = makeSuite()
+        defer { cleanUp(suiteName: name) }
+
+        let prefs = UserDefaultsAppPreferences(defaults: defaults)
+        prefs.menuBarSeparator = " · "
+        #expect(prefs.menuBarSeparator == " · ")
+
+        let reader = UserDefaultsAppPreferences(defaults: defaults)
+        #expect(reader.menuBarSeparator == " · ")
+    }
+
+    @Test("menuBarSeparator can be set to empty string")
+    @MainActor
+    func menuBarSeparatorEmpty() {
+        let (defaults, name) = makeSuite()
+        defer { cleanUp(suiteName: name) }
+
+        let prefs = UserDefaultsAppPreferences(defaults: defaults)
+        prefs.menuBarSeparator = ""
+        #expect(prefs.menuBarSeparator == "")
     }
 
     @Test("menuBarSegments round-trips through UserDefaults")

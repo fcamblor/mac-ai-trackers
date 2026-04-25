@@ -284,15 +284,15 @@ struct UsageStoreDegradationTests {
     }
 
     @MainActor
-    @Test("no active Claude entry falls back to --")
-    func noActiveClaude() async throws {
+    @Test("multiple inactive Claude entries fall back to --")
+    func multipleInactiveClaudes() async throws {
         let watcher = MockFileWatcher()
         let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
         store.start()
 
-        let data = try makeUsagesJSON(isActive: false, metrics: [
-            timeWindowMetric(),
-        ])
+        let entry1: [String: Any] = ["vendor": "claude", "account": "a@example.com", "isActive": false, "metrics": [timeWindowMetric()]]
+        let entry2: [String: Any] = ["vendor": "claude", "account": "b@example.com", "isActive": false, "metrics": [timeWindowMetric()]]
+        let data = try JSONSerialization.data(withJSONObject: ["usages": [entry1, entry2]])
         watcher.send(data)
         try await eventually { store.dataProcessedCount == 1 }
         #expect(store.menuBarText == "--")

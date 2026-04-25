@@ -22,11 +22,13 @@ public struct MenuBarSegment: Sendable, Equatable {
     public let text: String
     public let tier: ConsumptionTier?
     public let showDot: Bool
+    public let vendorIcon: Vendor?
 
-    public init(text: String, tier: ConsumptionTier?, showDot: Bool) {
+    public init(text: String, tier: ConsumptionTier?, showDot: Bool, vendorIcon: Vendor? = nil) {
         self.text = text
         self.tier = tier
         self.showDot = showDot
+        self.vendorIcon = vendorIcon
     }
 }
 
@@ -170,6 +172,7 @@ public final class UsageStore {
     private func trackPreferencesChanges() {
         withObservationTracking {
             _ = preferences.menuBarSegments
+            _ = preferences.menuBarSeparator
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
@@ -194,7 +197,7 @@ public final class UsageStore {
             }
         }
         menuBarSegments = rendered
-        menuBarText = rendered.isEmpty ? Self.fallbackText : rendered.map(\.text).joined(separator: " | ")
+        menuBarText = rendered.isEmpty ? Self.fallbackText : rendered.map(\.text).joined(separator: preferences.menuBarSeparator)
         menuBarTier = rendered.compactMap(\.tier).max()
     }
 }

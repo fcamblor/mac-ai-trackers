@@ -8,4 +8,5 @@ public enum AppPreferenceKeys: String {
     case logLevel = "ai-tracker.logLevel"
     case menuBarSegments = "ai-tracker.menuBarSegments"
     case menuBarSegmentsInitialized = "ai-tracker.menuBarSegmentsInitialized"
+    case menuBarSeparator = "ai-tracker.menuBarSeparator"
 }

@@ -24,7 +24,6 @@ struct UsageDetailsView: View {
 
     var body: some View {
         let sorted = store.entries.sortedForDisplay()
-        let multiVendors = store.entries.vendorsWithMultipleAccounts()
 
         VStack(spacing: 0) {
             header
@@ -47,7 +46,6 @@ struct UsageDetailsView: View {
                             }
                             AccountCardView(
                                 entry: entry,
-                                showActiveBadge: multiVendors.contains(entry.vendor),
                                 isRefreshing: refreshState.isRefreshing(
                                     vendor: entry.vendor,
                                     account: entry.account

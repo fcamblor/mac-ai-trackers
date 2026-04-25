@@ -77,6 +77,7 @@ struct SegmentCardView: View {
             HStack(spacing: 6) {
                 Image(nsImage: MenuBarLabelRenderer.render(
                     segments: [rendered],
+                    separator: preferences.menuBarSeparator,
                     fallbackText: "",
                     isDarkMenuBar: isDark
                 ))
@@ -97,7 +98,7 @@ struct SegmentCardView: View {
     }
 
     private func hintText(for segment: MenuBarSegmentConfig) -> String {
-        "\(segment.vendor.rawValue) · \(accountLabel(for: segment)) · \(segment.metricName)"
+        "\(VendorBranding.displayName(for: segment.vendor)) · \(accountLabel(for: segment)) · \(segment.metricName)"
     }
 
     private func accountLabel(for segment: MenuBarSegmentConfig) -> String {
@@ -115,7 +116,7 @@ struct SegmentCardView: View {
     private func warningText(for issue: MenuBarSegmentIssue) -> String {
         switch issue {
         case .noActiveAccount(let vendor):
-            return "No active \(vendor.rawValue) account"
+            return "No active \(VendorBranding.displayName(for: vendor)) account"
         case .accountNotFound(_, let email):
             return "Account no longer available: \(email.rawValue)"
         case .metricNotFound(let name):

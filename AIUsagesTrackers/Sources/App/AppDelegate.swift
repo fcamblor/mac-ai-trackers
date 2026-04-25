@@ -7,6 +7,7 @@ import AppIconKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var poller: UsagePoller?
     private var accountMonitor: ClaudeActiveAccountMonitor?
+    private var codexMonitor: CodexActiveAccountMonitor?
     private var pidGuard: AppPidGuard?
     private var usageStore: UsageStore?
     private var refreshState: RefreshState?
@@ -67,9 +68,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let fileManager = UsagesFileManager.shared
         let refreshState = RefreshState()
+        let codexConnector = CodexConnector()
         let poller = UsagePoller(
-            connectors: [ClaudeCodeConnector()],
-            statusConnectors: [ClaudeStatusConnector()],
+            connectors: [ClaudeCodeConnector(), codexConnector],
+            statusConnectors: [ClaudeStatusConnector(), CodexStatusConnector()],
             fileManager: fileManager,
             refreshState: refreshState,
             preferences: Self.sharedPreferences
@@ -80,8 +82,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await poller?.pollOnce(force: true)
             }
         )
+        let codexMonitor = CodexActiveAccountMonitor(
+            onActiveAccountChanged: { [weak codexConnector, weak poller] _ in
+                await codexConnector?.invalidateEmailCache()
+                await poller?.pollOnce(force: true)
+            }
+        )
         self.poller = poller
         self.accountMonitor = accountMonitor
+        self.codexMonitor = codexMonitor
         self.refreshState = refreshState
 
         let usagesPath = fileManager.filePath
@@ -97,6 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             store.start()
             await poller.start()
             await accountMonitor.start()
+            await codexMonitor.start()
         }
     }
 
@@ -151,6 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let isDark = button.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
         let image = MenuBarLabelRenderer.render(
             segments: store.menuBarSegments,
+            separator: Self.sharedPreferences.menuBarSeparator,
             fallbackText: store.menuBarText,
             isDarkMenuBar: isDark
         )
@@ -282,9 +293,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func quit() {
         let pollerRef = poller
         let monitorRef = accountMonitor
+        let codexMonitorRef = codexMonitor
         Task {
             await pollerRef?.stop()
             await monitorRef?.stop()
+            await codexMonitorRef?.stop()
         }
         usageStore?.stop()
         pidGuard?.release()

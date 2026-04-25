@@ -48,6 +48,11 @@ public enum MenuBarSegmentResolver {
             if let active = vendorEntries.first(where: { $0.isActive }) {
                 entry = active
                 resolveIssue = nil
+            } else if vendorEntries.count == 1 {
+                // No account is flagged active, but there is only one — treat it as implicitly active
+                // so the user sees their data without having to wait for the monitor to sync.
+                entry = vendorEntries[0]
+                resolveIssue = nil
             } else {
                 entry = nil
                 resolveIssue = .noActiveAccount(vendor: config.vendor)
@@ -78,6 +83,7 @@ public enum MenuBarSegmentResolver {
         case let (.timeWindow(_, resetAt, windowDuration, usagePercent), .timeWindow(display)):
             let segment = renderTimeWindow(
                 display: display,
+                vendor: config.vendor,
                 resetAt: resetAt,
                 windowDuration: windowDuration,
                 usagePercent: usagePercent,
@@ -106,6 +112,7 @@ public enum MenuBarSegmentResolver {
 
     private static func renderTimeWindow(
         display: TimeWindowDisplay,
+        vendor: Vendor,
         resetAt: ISODate?,
         windowDuration: DurationMinutes,
         usagePercent: UsagePercent,
@@ -134,11 +141,12 @@ public enum MenuBarSegmentResolver {
         }
 
         // If the user turned every visible element off, there's nothing to render
-        if text.isEmpty, !display.showDot {
+        if text.isEmpty, !display.showDot, !display.showVendorIcon {
             return nil
         }
 
-        return MenuBarSegment(text: text, tier: tier, showDot: display.showDot)
+        let vendorIcon: Vendor? = display.showVendorIcon ? vendor : nil
+        return MenuBarSegment(text: text, tier: tier, showDot: display.showDot, vendorIcon: vendorIcon)
     }
 
     private static func renderPayAsYouGo(currentAmount: Double, currency: String) -> MenuBarSegment {
