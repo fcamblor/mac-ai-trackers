@@ -63,7 +63,13 @@ enum MenuBarLabelRenderer {
                let icon = VendorBranding.tintedNSImage(for: vendor, height: font.capHeight) {
                 let attachment = NSTextAttachment()
                 attachment.image = icon
-                attachment.bounds = CGRect(x: 0, y: 0, width: icon.size.width, height: icon.size.height)
+                let pad = VendorBranding.iconGlowPadding
+                attachment.bounds = CGRect(
+                    x: -pad,
+                    y: -pad,
+                    width: icon.size.width,
+                    height: icon.size.height
+                )
                 result.append(NSAttributedString(attachment: attachment))
                 result.append(NSAttributedString(
                     string: "\u{2009}",
