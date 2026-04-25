@@ -1,0 +1,115 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "884cd073e5ad",
+  "session_id": "77d7954d-b558-4c21-8f0a-54c0669e1f2b",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-25T17:13:50.820917Z",
+  "branch": "icons",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/App/MenuBarLabelRenderer.swift",
+    "AIUsagesTrackers/Sources/App/VendorBranding.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "252ee607c086",
+  "token_usage": {
+    "input_tokens": 45,
+    "cache_creation_tokens": 56487,
+    "cache_read_tokens": 771126,
+    "output_tokens": 12455,
+    "api_call_count": 23
+  },
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-25T17:13:50.609098Z",
+    "agent_lines": 47,
+    "agent_removed": 6,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 47,
+    "total_lines_changed": 53,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 478,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/plan-v1.md": 108,
+        ".context/attachments/plan-v2.md": 91,
+        ".context/attachments/plan.md": 40,
+        ".context/plans/ajout-d-ic-nes-claude-code-codex-dans-les-segments.md": 40,
+        ".context/plans/plan-ajustements-ic-nes-vendor.md": 108,
+        ".context/plans/plan-am-liorer-le-contraste-des-ic-nes-de-vendor-d.md": 91
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 478,
+      "user_lines_removed": 0,
+      "agent_lines_added": 33,
+      "agent_lines_removed": 6,
+      "user_added_per_file": {
+        ".context/attachments/plan-v1.md": 108,
+        ".context/attachments/plan-v2.md": 91,
+        ".context/attachments/plan.md": 40,
+        ".context/plans/ajout-d-ic-nes-claude-code-codex-dans-les-segments.md": 40,
+        ".context/plans/plan-ajustements-ic-nes-vendor.md": 108,
+        ".context/plans/plan-am-liorer-le-contraste-des-ic-nes-de-vendor-d.md": 91
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 478,
+      "user_lines_removed": 0,
+      "agent_lines_added": 33,
+      "agent_lines_removed": 6,
+      "user_added_per_file": {
+        ".context/attachments/plan-v1.md": 108,
+        ".context/attachments/plan-v2.md": 91,
+        ".context/attachments/plan.md": 40,
+        ".context/plans/ajout-d-ic-nes-claude-code-codex-dans-les-segments.md": 40,
+        ".context/plans/plan-ajustements-ic-nes-vendor.md": 108,
+        ".context/plans/plan-am-liorer-le-contraste-des-ic-nes-de-vendor-d.md": 91
+      }
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 478,
+      "user_lines_removed": 0,
+      "agent_lines_added": 36,
+      "agent_lines_removed": 6,
+      "user_added_per_file": {
+        ".context/attachments/plan-v1.md": 108,
+        ".context/attachments/plan-v2.md": 91,
+        ".context/attachments/plan.md": 40,
+        ".context/plans/ajout-d-ic-nes-claude-code-codex-dans-les-segments.md": 40,
+        ".context/plans/plan-ajustements-ic-nes-vendor.md": 108,
+        ".context/plans/plan-am-liorer-le-contraste-des-ic-nes-de-vendor-d.md": 91
+      }
+    },
+    {
+      "checkpoint_number": 5,
+      "user_lines_added": 478,
+      "user_lines_removed": 0,
+      "agent_lines_added": 47,
+      "agent_lines_removed": 6,
+      "user_added_per_file": {
+        ".context/attachments/plan-v1.md": 108,
+        ".context/attachments/plan-v2.md": 91,
+        ".context/attachments/plan.md": 40,
+        ".context/plans/ajout-d-ic-nes-claude-code-codex-dans-les-segments.md": 40,
+        ".context/plans/plan-ajustements-ic-nes-vendor.md": 108,
+        ".context/plans/plan-am-liorer-le-contraste-des-ic-nes-de-vendor-d.md": 91
+      }
+    }
+  ]
+}
