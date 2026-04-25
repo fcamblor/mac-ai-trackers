@@ -1,0 +1,21 @@
+la forme de la silhouette blanche est un peu bizarre et pixellisée ... on peut pas améliorer ca ?
+
+---
+
+ah non c'est dégueu ce que t'as fait à partir du coin haut droit alors que l'icone est ronde
+
+---
+
+mieux, mais je pense qu'il faut agrandir un peu la taille du halo parce que c'est trop juste là
+
+---
+
+pas encore suffisant
+
+---
+
+j'ai l'impression que ca n'a rien changé
+
+---
+
+/Users/fcamblor/conductor/workspaces/mac-ai-trackers/yokohama/.context/attachments/Item-0.png le rayon a augmenté, mais est capé en hauteur (c'est moche)
