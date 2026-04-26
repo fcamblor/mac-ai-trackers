@@ -1,0 +1,94 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "5539b2a88ce3",
+  "session_id": "cfc9d12e-2d82-4d1e-9329-60580756adb3",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-26T02:29:43.26789Z",
+  "branch": "fix-bundle-crash-onboard",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Preferences/MenuBarSegmentsSeeder.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Store/UsageStore.swift",
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift",
+    "AIUsagesTrackers/Sources/App/MenuBarLabelRenderer.swift",
+    "AIUsagesTrackers/Sources/App/VendorBranding.swift",
+    "AIUsagesTrackers/Sources/App/Views/UsageDetailsView.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/MenuBarSegmentsSeederTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/VendorBrandingTests.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "eed17b220efc",
+  "token_usage": {
+    "input_tokens": 107,
+    "cache_creation_tokens": 224621,
+    "cache_read_tokens": 4186761,
+    "output_tokens": 25349,
+    "api_call_count": 55
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-26T02:29:42.977933Z",
+    "agent_lines": 191,
+    "agent_removed": 72,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 191,
+    "total_lines_changed": 263,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 761,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/pasted_text_2026-04-26_03-45-42.txt": 619,
+        ".context/attachments/plan.md": 71,
+        ".context/plans/plan-crash-bundle-module-onboarding-sans-segments-.md": 71
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 761,
+      "user_lines_removed": 0,
+      "agent_lines_added": 191,
+      "agent_lines_removed": 72,
+      "user_added_per_file": {
+        ".context/attachments/pasted_text_2026-04-26_03-45-42.txt": 619,
+        ".context/attachments/plan.md": 71,
+        ".context/plans/plan-crash-bundle-module-onboarding-sans-segments-.md": 71
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 761,
+      "user_lines_removed": 0,
+      "agent_lines_added": 191,
+      "agent_lines_removed": 72,
+      "user_added_per_file": {
+        ".context/attachments/pasted_text_2026-04-26_03-45-42.txt": 619,
+        ".context/attachments/plan.md": 71,
+        ".context/plans/plan-crash-bundle-module-onboarding-sans-segments-.md": 71
+      }
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 761,
+      "user_lines_removed": 0,
+      "agent_lines_added": 191,
+      "agent_lines_removed": 72,
+      "user_added_per_file": {
+        ".context/attachments/pasted_text_2026-04-26_03-45-42.txt": 619,
+        ".context/attachments/plan.md": 71,
+        ".context/plans/plan-crash-bundle-module-onboarding-sans-segments-.md": 71
+      }
+    }
+  ]
+}
