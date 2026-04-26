@@ -59,6 +59,32 @@ Switch to the chart view to see consumption trends over the past 6 hours, 24 hou
 
 <img src="docs/assets/screenshots/graphics.png" alt="Usage history charts" height="400">
 
+## How It Works
+
+### Non-intrusive by design
+
+AI Usages Tracker never writes to, modifies, or migrates any AI assistant configuration. It reads credentials from the same local files and Keychain entries that each assistant already maintains; the assistant itself is unaware the tracker is running. Uninstalling the app leaves every assistant configuration exactly as it was.
+
+### Account auto-discovery
+
+No manual account setup is required. While the app runs, it periodically scans the credential sources defined for each supported vendor. Any account it finds is automatically surfaced in the popover and becomes available for menu bar segment configuration. Removing a credential from the source makes the account disappear on the next refresh.
+
+### Multiple accounts per vendor
+
+The tracker can display multiple accounts for the same vendor simultaneously. For vendors where only one account can be active at a time — such as Claude Code — the app highlights the active account so the currently billed usage is always clear at a glance.
+
+### Snapshot-based history
+
+Usage data is never streamed live. The app takes periodic snapshots of the current usage figures and appends each one to a daily log. Charts are rendered from that append-only history, so they reflect the shape of consumption over time rather than a single instant.
+
+### Configurable refresh interval
+
+The polling frequency is adjustable in the app preferences. A shorter interval gives more granular snapshots at the cost of more API calls; a longer interval reduces traffic at the cost of coarser history. The value applies immediately without restarting the app.
+
+### Menu bar segments from discovered accounts
+
+Each entry that appears in the menu bar label is a configurable segment drawn from the auto-discovered accounts. The segment list is initialized on first launch and can be reordered or trimmed in the preferences panel at any time.
+
 ## Supported Assistants
 
 ### Claude Code
