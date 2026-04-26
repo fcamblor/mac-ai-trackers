@@ -3,9 +3,10 @@
   "checkpoint_id": "ebc0a04a52c0",
   "strategy": "manual-commit",
   "branch": "fix-bundle-crash-onboard",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
-    "README.md"
+    "README.md",
+    "docs/assets/screenshots/Configure_AI_Metrics.png"
   ],
   "sessions": [
     {
@@ -13,13 +14,19 @@
       "transcript": "/eb/c0a04a52c0/0/full.jsonl",
       "content_hash": "/eb/c0a04a52c0/0/content_hash.txt",
       "prompt": "/eb/c0a04a52c0/0/prompt.txt"
+    },
+    {
+      "metadata": "/eb/c0a04a52c0/1/metadata.json",
+      "transcript": "/eb/c0a04a52c0/1/full.jsonl",
+      "content_hash": "/eb/c0a04a52c0/1/content_hash.txt",
+      "prompt": "/eb/c0a04a52c0/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 4,
-    "cache_creation_tokens": 12120,
-    "cache_read_tokens": 30648,
-    "output_tokens": 1070,
-    "api_call_count": 2
+    "input_tokens": 122,
+    "cache_creation_tokens": 242037,
+    "cache_read_tokens": 4912501,
+    "output_tokens": 27915,
+    "api_call_count": 63
   }
 }
