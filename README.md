@@ -6,7 +6,7 @@ The project aims to provide:
 
 - Menu bar usage tracking for supported assistants.
 - Active-account monitoring from each assistant's local configuration.
-- Usage history charts for recent consumption trends.
+- Configurable usage history charts for recent consumption trends.
 - Vendor status and outage visibility in the app popover.
 - Configurable refresh behavior for automatic polling.
 
@@ -53,11 +53,19 @@ When an assistant vendor reports an incident, a status banner appears at the top
 
 <img src="docs/assets/screenshots/Claude_status_error.png" alt="Claude status error banner" height="400">
 
+### Configurable chart panels
+
+Configure charts from **Settings > Charts**: keep the default all-metrics panel, add multiple panels, or build custom series that target a vendor, the currently active account or a specific account, a metric, a color, and a line style.
+
+<img src="docs/assets/screenshots/Charts_configuration.png" alt="Chart configuration settings" height="400">
+
 ### Usage history charts
 
 Switch to the chart view to see consumption trends over the past 6 hours, 24 hours, 7 days, 30 days, or the full recorded history.
 
-<img src="docs/assets/screenshots/graphics.png" alt="Usage history charts" height="400">
+Hovering a chart shows the nearest values for each visible series. When a time-window metric expires before the next upstream reading, the history records that value as null so the chart breaks the line instead of drawing a misleading bridge across the reset.
+
+<img src="docs/assets/screenshots/charts.png" alt="Usage history charts" height="400">
 
 ## How It Works
 
@@ -75,7 +83,7 @@ The tracker can display multiple accounts for the same vendor simultaneously. Fo
 
 ### Snapshot-based history
 
-Usage data is never streamed live. The app takes periodic snapshots of the current usage figures and appends each one to a daily log. Charts are rendered from that append-only history, so they reflect the shape of consumption over time rather than a single instant.
+Usage data is never streamed live. The app takes periodic snapshots of the current usage figures and appends each changed snapshot to a daily log. Charts are rendered from that append-only history, so they reflect the shape of consumption over time rather than a single instant. Expired time-window metrics are preserved as null points, which lets charts show gaps when a metric is temporarily unavailable or has crossed a reset boundary.
 
 ### Configurable refresh interval
 
@@ -84,6 +92,10 @@ The polling frequency is adjustable in the app preferences. A shorter interval g
 ### Menu bar segments from discovered accounts
 
 Each entry that appears in the menu bar label is a configurable segment drawn from the auto-discovered accounts. The segment list is initialized on first launch and can be reordered or trimmed in the preferences panel at any time.
+
+### Configurable chart panels
+
+The history tab is driven by the chart list in **Settings > Charts**. A fresh install or existing profile without chart preferences is seeded with one "All available metrics" chart. Users can rename, reorder, delete, or add chart panels; custom panels can pin individual series to the currently active account or to a specific account.
 
 ## Supported Assistants
 
@@ -140,6 +152,8 @@ The app stores these preference keys:
 - `ai-tracker.menuBarSegments`: configured menu bar label segments.
 - `ai-tracker.menuBarSegmentsInitialized`: internal flag that prevents reseeding segments after the user edits them.
 - `ai-tracker.menuBarSeparator`: separator inserted between menu bar label segments.
+- `ai-tracker.chartConfigurations`: configured history chart panels and custom series.
+- `ai-tracker.chartConfigurationsInitialized`: internal flag that prevents reseeding charts after the user edits them.
 
 Assistant OAuth credentials are not stored in this preferences file. They are read from the assistant-specific files and Keychain services listed above.
 
