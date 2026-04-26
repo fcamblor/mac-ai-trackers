@@ -10,14 +10,6 @@ The project aims to provide:
 - Vendor status and outage visibility in the app popover.
 - Configurable refresh behavior for automatic polling.
 
-## Screenshots
-
-Screenshots are not committed yet. The following stable asset paths are reserved for future documentation images:
-
-- Menu bar popover: `docs/assets/menubar-popover.png`
-- History chart: `docs/assets/history-chart.png`
-- Settings: `docs/assets/settings.png`
-
 ## Installation
 
 Install with Homebrew:
@@ -26,6 +18,38 @@ Install with Homebrew:
 brew tap fcamblor/tap
 brew install --cask ai-usages-tracker
 ```
+
+## Screenshots & Features
+
+### Multi-account support
+
+Monitor multiple AI assistant accounts side by side. The active account is highlighted so the currently billed usage is always visible at a glance.
+
+<img src="docs/assets/screenshots/Multi-claude_accounts.png" alt="Multi-account popover" height="400">
+
+### Color-coded usage gauges
+
+Each usage bar changes color as consumption approaches the limit, making it easy to spot which metric needs attention without reading numbers.
+
+<img src="docs/assets/screenshots/Multi-colors_display.png" alt="Color-coded usage bars" height="400">
+
+### Customizable menu bar display
+
+Configure which segments appear in the menu bar label — vendor icon, colored status dot, metric short label, usage percentage, and time until reset — and choose the separator between them.
+
+<img src="docs/assets/screenshots/menubar_customization.png" alt="Menu bar customization settings" height="400">
+
+### Vendor status alerts
+
+When an assistant vendor reports an incident, a status banner appears at the top of the popover so usage anomalies can be attributed to known outages.
+
+<img src="docs/assets/screenshots/Claude_status_error.png" alt="Claude status error banner" height="400">
+
+### Usage history charts
+
+Switch to the chart view to see consumption trends over the past 6 hours, 24 hours, 7 days, 30 days, or the full recorded history.
+
+<img src="docs/assets/screenshots/graphics.png" alt="Usage history charts" height="400">
 
 ## Supported Assistants
 
