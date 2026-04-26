@@ -72,8 +72,24 @@ public struct MetricSnapshot: Codable, Equatable, Sendable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(name, forKey: .name)
         try container.encode(kind, forKey: .kind)
-        try container.encodeIfPresent(usagePercent, forKey: .usagePercent)
-        try container.encodeIfPresent(currentAmount, forKey: .currentAmount)
-        try container.encodeIfPresent(currency, forKey: .currency)
+        switch kind {
+        case .timeWindow:
+            if let usagePercent {
+                try container.encode(usagePercent, forKey: .usagePercent)
+            } else {
+                try container.encodeNil(forKey: .usagePercent)
+            }
+        case .payAsYouGo:
+            if let currentAmount {
+                try container.encode(currentAmount, forKey: .currentAmount)
+            } else {
+                try container.encodeNil(forKey: .currentAmount)
+            }
+            try container.encodeIfPresent(currency, forKey: .currency)
+        case .unknown:
+            try container.encodeIfPresent(usagePercent, forKey: .usagePercent)
+            try container.encodeIfPresent(currentAmount, forKey: .currentAmount)
+            try container.encodeIfPresent(currency, forKey: .currency)
+        }
     }
 }

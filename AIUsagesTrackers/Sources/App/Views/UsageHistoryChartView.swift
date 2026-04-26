@@ -157,28 +157,47 @@ private struct UsageHistoryChartPanel: View {
 
     private var visiblePoints: [ChartPoint] {
         series.flatMap { series in
-            series.points.map { point in
-                ChartPoint(seriesID: series.id, seriesLabel: series.label, point: point)
+            var segmentIndex = 0
+            return series.points.map { point in
+                let item = ChartPoint(
+                    seriesID: series.id,
+                    segmentID: "\(series.id)|segment|\(segmentIndex)",
+                    point: point
+                )
+                if point.value == nil {
+                    segmentIndex += 1
+                }
+                return item
             }
+        }
+    }
+
+    private var plottedPoints: [PlottedChartPoint] {
+        visiblePoints.compactMap { item in
+            guard let value = item.point.value else { return nil }
+            return PlottedChartPoint(chartPoint: item, value: value)
         }
     }
 
     private var summaries: [UsageHistorySeriesSummary] {
         series.compactMap { series in
-            guard let latest = series.points.max(by: { $0.timestamp < $1.timestamp }) else { return nil }
+            guard let latest = series.points
+                .filter({ $0.value != nil })
+                .max(by: { $0.timestamp < $1.timestamp }),
+                let latestValue = latest.value else { return nil }
             return UsageHistorySeriesSummary(
                 id: series.id,
                 label: series.label,
                 metricName: latest.metricName,
-                latestValue: latest.value,
+                latestValue: latestValue,
                 unit: latest.unit,
-                pointCount: series.points.count
+                pointCount: series.points.filter { $0.value != nil }.count
             )
         }
     }
 
     private var yAxisLabel: String {
-        let units = Set(visiblePoints.map(\.point.unit).filter { !$0.isEmpty })
+        let units = Set(plottedPoints.map(\.point.unit).filter { !$0.isEmpty })
         if units.count == 1, let unit = units.first {
             return unit == "%" ? "Usage (%)" : "Usage (\(unit))"
         }
@@ -190,7 +209,7 @@ private struct UsageHistoryChartPanel: View {
             return startDate...referenceDate
         }
 
-        let sorted = visiblePoints.map(\.point.timestamp).sorted()
+        let sorted = plottedPoints.map(\.point.timestamp).sorted()
         guard let first = sorted.first,
               let last = sorted.last else {
             return referenceDate.addingTimeInterval(-60 * 60)...referenceDate
@@ -217,7 +236,7 @@ private struct UsageHistoryChartPanel: View {
                 .font(.system(size: 12, weight: .semibold))
                 .lineLimit(1)
 
-            if visiblePoints.isEmpty {
+            if plottedPoints.isEmpty {
                 noMatchingSeriesState
             } else {
                 chart
@@ -227,11 +246,11 @@ private struct UsageHistoryChartPanel: View {
 
     private var chart: some View {
         Chart {
-            ForEach(visiblePoints) { item in
+            ForEach(plottedPoints) { item in
                 LineMark(
                     x: .value("Time", item.point.timestamp),
-                    y: .value(yAxisLabel, item.point.value),
-                    series: .value("Metric", item.seriesLabel)
+                    y: .value(yAxisLabel, item.value),
+                    series: .value("Metric segment", item.segmentID)
                 )
                 .interpolationMethod(.catmullRom)
                 .foregroundStyle(seriesColor(for: item.seriesID))
@@ -326,7 +345,7 @@ private struct UsageHistoryChartPanel: View {
     private struct HoverItem {
         let label: String
         let seriesID: String
-        let value: Double
+        let value: Double?
         let unit: String
     }
 
@@ -351,7 +370,10 @@ private struct UsageHistoryChartPanel: View {
         Self.hoverFormatters[selectedWindow]?.string(from: date) ?? ""
     }
 
-    private func format(value: Double, unit: String) -> String {
+    private func format(value: Double?, unit: String) -> String {
+        guard let value else {
+            return "-"
+        }
         if unit == "%" {
             return "\(Int(value.rounded()))%"
         }
@@ -397,10 +419,20 @@ private struct UsageHistoryChartPanel: View {
 
 private struct ChartPoint: Identifiable {
     let seriesID: String
-    let seriesLabel: String
+    let segmentID: String
     let point: UsageHistoryPoint
 
     var id: String {
         "\(seriesID)|\(point.timestamp.timeIntervalSince1970)|\(point.metricName)"
     }
+}
+
+private struct PlottedChartPoint: Identifiable {
+    let chartPoint: ChartPoint
+    let value: Double
+
+    var id: String { chartPoint.id }
+    var seriesID: String { chartPoint.seriesID }
+    var segmentID: String { chartPoint.segmentID }
+    var point: UsageHistoryPoint { chartPoint.point }
 }

@@ -74,7 +74,7 @@ struct UsageHistoryReaderTests {
         let reader = UsageHistoryReader(rootPath: root, logger: Self.makeLogger(in: root))
         let snapshot = await reader.load(window: .twentyFourHours, now: Self.date("2026-04-20T12:00:00Z"))
 
-        #expect(snapshot.points.map(\.value) == [55])
+        #expect(snapshot.points.map(\.value) == [55.0])
     }
 
     @Test("reports whether data exists before and after the selected window")
@@ -95,7 +95,7 @@ struct UsageHistoryReaderTests {
         let reader = UsageHistoryReader(rootPath: root, logger: Self.makeLogger(in: root))
         let snapshot = await reader.load(window: .twentyFourHours, now: Self.date("2026-04-20T12:00:00Z"))
 
-        #expect(snapshot.points.map(\.value) == [55])
+        #expect(snapshot.points.map(\.value) == [55.0])
         #expect(snapshot.hasDataBeforeWindow)
         #expect(snapshot.hasDataAfterWindow)
     }
@@ -134,7 +134,7 @@ struct UsageHistoryReaderTests {
         let reader = UsageHistoryReader(rootPath: root, logger: Self.makeLogger(in: root))
         let snapshot = await reader.load(window: .all, now: Self.date("2026-04-20T12:00:00Z"))
 
-        #expect(snapshot.points.map(\.value) == [10, 55])
+        #expect(snapshot.points.map(\.value) == [10.0, 55.0])
     }
 
     @Test("skips malformed JSONL lines without failing the whole load")
@@ -152,5 +152,28 @@ struct UsageHistoryReaderTests {
 
         #expect(snapshot.points.count == 1)
         #expect(snapshot.skippedLineCount == 1)
+    }
+
+    @Test("keeps null metric values so charts can break the line")
+    func keepsNullMetricValues() async throws {
+        let root = Self.makeTempRoot()
+        try Self.writeLines([
+            try Self.tick(timestamp: "2026-04-20T09:00:00Z", metrics: [
+                MetricSnapshot(name: "session", kind: .timeWindow, usagePercent: 40),
+            ]),
+            try Self.tick(timestamp: "2026-04-20T10:00:00Z", metrics: [
+                MetricSnapshot(name: "session", kind: .timeWindow, usagePercent: nil),
+            ]),
+            try Self.tick(timestamp: "2026-04-20T11:00:00Z", metrics: [
+                MetricSnapshot(name: "session", kind: .timeWindow, usagePercent: 55),
+            ]),
+        ], to: "\(root)/2026/04/2026-04-20.jsonl")
+
+        let reader = UsageHistoryReader(rootPath: root, logger: Self.makeLogger(in: root))
+        let snapshot = await reader.load(window: .twentyFourHours, now: Self.date("2026-04-20T12:00:00Z"))
+
+        #expect(snapshot.points.map(\.value) == [40.0, nil, 55.0])
+        #expect(snapshot.seriesSummaries.first?.latestValue == 55)
+        #expect(snapshot.seriesSummaries.first?.pointCount == 2)
     }
 }

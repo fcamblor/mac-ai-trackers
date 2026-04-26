@@ -67,7 +67,7 @@ struct ChartSeriesResolverTests {
         )
 
         #expect(resolved.count == 1)
-        #expect(resolved[0].points.map(\.value) == [10])
+        #expect(resolved[0].points.map(\.value) == [10.0])
     }
 
     @Test("custom label overrides generated series label")

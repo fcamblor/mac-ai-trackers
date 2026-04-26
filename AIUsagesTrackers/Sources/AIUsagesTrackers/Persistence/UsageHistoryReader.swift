@@ -48,7 +48,7 @@ public struct UsageHistoryPoint: Equatable, Identifiable, Sendable {
     public let account: AccountEmail
     public let metricName: String
     public let metricKind: MetricKind
-    public let value: Double
+    public let value: Double?
     public let unit: String
 
     public init(
@@ -57,7 +57,7 @@ public struct UsageHistoryPoint: Equatable, Identifiable, Sendable {
         account: AccountEmail,
         metricName: String,
         metricKind: MetricKind,
-        value: Double,
+        value: Double?,
         unit: String
     ) {
         self.timestamp = timestamp
@@ -128,14 +128,17 @@ public struct UsageHistorySnapshot: Equatable, Sendable {
     public var seriesSummaries: [UsageHistorySeriesSummary] {
         let grouped = Dictionary(grouping: points, by: \.seriesID)
         return grouped.compactMap { seriesID, points in
-            guard let latest = points.max(by: { $0.timestamp < $1.timestamp }) else { return nil }
+            guard let latest = points
+                .filter({ $0.value != nil })
+                .max(by: { $0.timestamp < $1.timestamp }),
+                let latestValue = latest.value else { return nil }
             return UsageHistorySeriesSummary(
                 id: seriesID,
                 label: latest.seriesLabel,
                 metricName: latest.metricName,
-                latestValue: latest.value,
+                latestValue: latestValue,
                 unit: latest.unit,
-                pointCount: points.count
+                pointCount: points.filter { $0.value != nil }.count
             )
         }
         .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
@@ -245,25 +248,23 @@ public actor UsageHistoryReader {
     ) -> UsageHistoryPoint? {
         switch metric.kind {
         case .timeWindow:
-            guard let usagePercent = metric.usagePercent else { return nil }
             return UsageHistoryPoint(
                 timestamp: timestamp,
                 vendor: account.vendor,
                 account: account.account,
                 metricName: metric.name,
                 metricKind: metric.kind,
-                value: Double(usagePercent.rawValue),
+                value: metric.usagePercent.map { Double($0.rawValue) },
                 unit: "%"
             )
         case .payAsYouGo:
-            guard let currentAmount = metric.currentAmount else { return nil }
             return UsageHistoryPoint(
                 timestamp: timestamp,
                 vendor: account.vendor,
                 account: account.account,
                 metricName: metric.name,
                 metricKind: metric.kind,
-                value: currentAmount,
+                value: metric.currentAmount,
                 unit: metric.currency ?? ""
             )
         case .unknown:
