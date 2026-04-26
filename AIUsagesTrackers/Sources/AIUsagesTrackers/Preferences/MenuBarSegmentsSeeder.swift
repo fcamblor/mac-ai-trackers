@@ -1,26 +1,15 @@
 import Foundation
 
-/// Seeds default menu bar segments on the first launch after install (or upgrade
-/// from a pre-segments version). Idempotent: guarded by
+/// Marks the menu bar segments preference as initialized on first launch without
+/// presupposing the user's vendor or workflow. The label invites configuration
+/// (see the unconfigured rendering in `MenuBarLabelRenderer`) until the user
+/// adds their first segment via Settings. Idempotent: guarded by
 /// `AppPreferences.menuBarSegmentsInitialized` so a user who intentionally
 /// removed every segment isn't re-seeded on the next launch.
 @MainActor
 public enum MenuBarSegmentsSeeder {
     public static func defaultSegments() -> [MenuBarSegmentConfig] {
-        [
-            MenuBarSegmentConfig(
-                vendor: .claude,
-                account: .currentlyActive,
-                metricName: "5h sessions (all models)",
-                display: .timeWindow(TimeWindowDisplay(letter: "S"))
-            ),
-            MenuBarSegmentConfig(
-                vendor: .claude,
-                account: .currentlyActive,
-                metricName: "Weekly (all models)",
-                display: .timeWindow(TimeWindowDisplay(letter: "W"))
-            ),
-        ]
+        []
     }
 
     public static func seedIfNeeded(preferences: any AppPreferences) {

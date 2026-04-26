@@ -93,8 +93,27 @@ public final class UsageStore {
     }
 
     private static func makeDefaultPreferences() -> any AppPreferences {
-        InMemoryAppPreferences(
-            menuBarSegments: MenuBarSegmentsSeeder.defaultSegments(),
+        // Pre-settings-window defaults (S + W for currently-active Claude account).
+        // Kept inline so onboarding can ship an empty seed via
+        // `MenuBarSegmentsSeeder.defaultSegments()` without breaking tests and
+        // callers that rely on `UsageStore` rendering meaningful output without
+        // an explicit preferences store.
+        let segments: [MenuBarSegmentConfig] = [
+            MenuBarSegmentConfig(
+                vendor: .claude,
+                account: .currentlyActive,
+                metricName: "5h sessions (all models)",
+                display: .timeWindow(TimeWindowDisplay(letter: "S"))
+            ),
+            MenuBarSegmentConfig(
+                vendor: .claude,
+                account: .currentlyActive,
+                metricName: "Weekly (all models)",
+                display: .timeWindow(TimeWindowDisplay(letter: "W"))
+            ),
+        ]
+        return InMemoryAppPreferences(
+            menuBarSegments: segments,
             menuBarSegmentsInitialized: true
         )
     }

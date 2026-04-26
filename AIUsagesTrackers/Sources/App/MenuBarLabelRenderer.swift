@@ -13,20 +13,27 @@ enum MenuBarLabelRenderer {
     private static let dot = "● "
     private static let horizontalPadding: CGFloat = 4
     private static let height: CGFloat = 18
+    static let unconfiguredCallToAction = "Configure AI Metrics"
 
     static func render(
         segments: [MenuBarSegment],
         separator: String,
         fallbackText: String,
-        isDarkMenuBar: Bool
+        isDarkMenuBar: Bool,
+        isUnconfigured: Bool = false
     ) -> NSImage {
         let textColor: NSColor = isDarkMenuBar ? .white : .black
-        let attributed = attributedString(
-            segments: segments,
-            separator: separator,
-            fallbackText: fallbackText,
-            textColor: textColor
-        )
+        let attributed: NSAttributedString
+        if isUnconfigured && segments.isEmpty {
+            attributed = unconfiguredAttributedString(textColor: textColor)
+        } else {
+            attributed = attributedString(
+                segments: segments,
+                separator: separator,
+                fallbackText: fallbackText,
+                textColor: textColor
+            )
+        }
         let textSize = attributed.size()
         let width = ceil(textSize.width) + horizontalPadding * 2
         let size = NSSize(width: max(width, 1), height: height)
@@ -37,6 +44,42 @@ enum MenuBarLabelRenderer {
         image.unlockFocus()
         image.isTemplate = false
         return image
+    }
+
+    private static func unconfiguredAttributedString(textColor: NSColor) -> NSAttributedString {
+        let result = NSMutableAttributedString()
+        let gear = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
+        if let gear {
+            let configured = gear.withSymbolConfiguration(
+                NSImage.SymbolConfiguration(pointSize: font.pointSize, weight: .regular)
+            ) ?? gear
+            configured.isTemplate = true
+            let tinted = NSImage(size: configured.size, flipped: false) { rect in
+                configured.draw(in: rect)
+                textColor.set()
+                rect.fill(using: .sourceAtop)
+                return true
+            }
+            tinted.isTemplate = false
+            let attachment = NSTextAttachment()
+            attachment.image = tinted
+            attachment.bounds = CGRect(
+                x: 0,
+                y: -1,
+                width: tinted.size.width,
+                height: tinted.size.height
+            )
+            result.append(NSAttributedString(attachment: attachment))
+            result.append(NSAttributedString(
+                string: " ",
+                attributes: [.font: font, .foregroundColor: textColor]
+            ))
+        }
+        result.append(NSAttributedString(
+            string: unconfiguredCallToAction,
+            attributes: [.font: font, .foregroundColor: textColor]
+        ))
+        return result
     }
 
     private static func attributedString(
