@@ -16,6 +16,10 @@ public protocol AppPreferences: AnyObject, Observable, Sendable {
     var menuBarSegmentsInitialized: Bool { get set }
     /// String inserted between adjacent segments in the menu bar label. Defaults to " | ".
     var menuBarSeparator: String { get set }
+    var chartConfigurations: [ChartConfiguration] { get set }
+    /// Tracks whether chart seeding has already run so an intentionally empty
+    /// configuration list is preserved after first initialization.
+    var chartConfigurationsInitialized: Bool { get set }
 }
 
 // MARK: - UserDefaults-backed implementation
@@ -113,6 +117,36 @@ public final class UserDefaultsAppPreferences: AppPreferences {
             }
         }
     }
+
+    public var chartConfigurations: [ChartConfiguration] {
+        get {
+            access(keyPath: \.chartConfigurations)
+            guard let data = defaults.data(forKey: AppPreferenceKeys.chartConfigurations.rawValue) else {
+                return []
+            }
+            do {
+                return try JSONDecoder().decode([ChartConfiguration].self, from: data)
+            } catch {
+                Loggers.app.log(.error, "Failed to decode chartConfigurations from UserDefaults: \(error)")
+                return []
+            }
+        }
+        set {
+            withMutation(keyPath: \.chartConfigurations) {
+                do {
+                    let data = try JSONEncoder().encode(newValue)
+                    defaults.set(data, forKey: AppPreferenceKeys.chartConfigurations.rawValue)
+                } catch {
+                    Loggers.app.log(.error, "Failed to encode chartConfigurations to UserDefaults: \(error)")
+                }
+            }
+        }
+    }
+
+    public var chartConfigurationsInitialized: Bool {
+        get { defaults.bool(forKey: AppPreferenceKeys.chartConfigurationsInitialized.rawValue) }
+        set { defaults.set(newValue, forKey: AppPreferenceKeys.chartConfigurationsInitialized.rawValue) }
+    }
 }
 
 // MARK: - In-memory test double
@@ -127,6 +161,8 @@ public final class InMemoryAppPreferences: AppPreferences {
     public var menuBarSegments: [MenuBarSegmentConfig]
     public var menuBarSegmentsInitialized: Bool
     public var menuBarSeparator: String
+    public var chartConfigurations: [ChartConfiguration]
+    public var chartConfigurationsInitialized: Bool
 
     public init(
         refreshInterval: RefreshInterval = .default,
@@ -134,7 +170,9 @@ public final class InMemoryAppPreferences: AppPreferences {
         logLevel: LogLevel = .info,
         menuBarSegments: [MenuBarSegmentConfig] = [],
         menuBarSegmentsInitialized: Bool = false,
-        menuBarSeparator: String = " | "
+        menuBarSeparator: String = " | ",
+        chartConfigurations: [ChartConfiguration] = [],
+        chartConfigurationsInitialized: Bool = false
     ) {
         self.refreshInterval = refreshInterval
         self.launchAtLogin = launchAtLogin
@@ -142,5 +180,7 @@ public final class InMemoryAppPreferences: AppPreferences {
         self.menuBarSegments = menuBarSegments
         self.menuBarSegmentsInitialized = menuBarSegmentsInitialized
         self.menuBarSeparator = menuBarSeparator
+        self.chartConfigurations = chartConfigurations
+        self.chartConfigurationsInitialized = chartConfigurationsInitialized
     }
 }

@@ -19,6 +19,9 @@ struct SettingsView: View {
             MenubarHintSettingsView(preferences: preferences)
                 .tabItem { Label("Menubar hint", systemImage: "menubar.rectangle") }
 
+            ChartSettingsView(preferences: preferences)
+                .tabItem { Label("Charts", systemImage: "chart.xyaxis.line") }
+
             AssistantsSettingsView(preferences: preferences)
                 .tabItem { Label("Assistants", systemImage: "sparkles") }
         }

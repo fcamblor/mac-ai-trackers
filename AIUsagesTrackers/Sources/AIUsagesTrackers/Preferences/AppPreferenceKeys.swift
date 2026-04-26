@@ -9,4 +9,6 @@ public enum AppPreferenceKeys: String {
     case menuBarSegments = "ai-tracker.menuBarSegments"
     case menuBarSegmentsInitialized = "ai-tracker.menuBarSegmentsInitialized"
     case menuBarSeparator = "ai-tracker.menuBarSeparator"
+    case chartConfigurations = "ai-tracker.chartConfigurations"
+    case chartConfigurationsInitialized = "ai-tracker.chartConfigurationsInitialized"
 }
