@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "0221af0ac8c2",
+  "strategy": "manual-commit",
+  "branch": "fix-bundle-crash-onboard",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/VendorBrandingTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/02/21af0ac8c2/0/metadata.json",
+      "transcript": "/02/21af0ac8c2/0/full.jsonl",
+      "content_hash": "/02/21af0ac8c2/0/content_hash.txt",
+      "prompt": "/02/21af0ac8c2/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 75,
+    "cache_creation_tokens": 225000,
+    "cache_read_tokens": 1682649,
+    "output_tokens": 26700,
+    "api_call_count": 38
+  }
+}
