@@ -35,11 +35,13 @@ struct UsageHistoryChartView: View {
             } else {
                 ForEach(configurations) { configuration in
                     UsageHistoryChartPanel(
-                        configuration: configuration,
-                        points: points,
-                        currentEntries: currentEntries,
-                        referenceDate: referenceDate,
-                        selectedWindow: selectedWindow
+                        model: UsageHistoryChartPanelModel(
+                            configuration: configuration,
+                            points: points,
+                            currentEntries: currentEntries,
+                            referenceDate: referenceDate,
+                            selectedWindow: selectedWindow
+                        )
                     )
                 }
                 if snapshot.skippedLineCount > 0 {
@@ -138,105 +140,18 @@ struct UsageHistoryChartView: View {
 }
 
 private struct UsageHistoryChartPanel: View {
-    let configuration: ChartConfiguration
-    let points: [UsageHistoryPoint]
-    let currentEntries: [VendorUsageEntry]
-    let referenceDate: Date
-    let selectedWindow: UsageHistoryTimeWindow
+    let model: UsageHistoryChartPanelModel
 
     @State private var hoveredDate: Date?
     @State private var hoverIsLeftHalf = true
 
-    private var series: [ResolvedChartSeries] {
-        ChartSeriesResolver.resolve(
-            configuration: configuration,
-            points: points,
-            currentEntries: currentEntries
-        )
-    }
-
-    private var visiblePoints: [ChartPoint] {
-        series.flatMap { series in
-            var segmentIndex = 0
-            return series.points.map { point in
-                let item = ChartPoint(
-                    seriesID: series.id,
-                    segmentID: "\(series.id)|segment|\(segmentIndex)",
-                    point: point
-                )
-                if point.value == nil {
-                    segmentIndex += 1
-                }
-                return item
-            }
-        }
-    }
-
-    private var plottedPoints: [PlottedChartPoint] {
-        visiblePoints.compactMap { item in
-            guard let value = item.point.value else { return nil }
-            return PlottedChartPoint(chartPoint: item, value: value)
-        }
-    }
-
-    private var summaries: [UsageHistorySeriesSummary] {
-        series.compactMap { series in
-            guard let latest = series.points
-                .filter({ $0.value != nil })
-                .max(by: { $0.timestamp < $1.timestamp }),
-                let latestValue = latest.value else { return nil }
-            return UsageHistorySeriesSummary(
-                id: series.id,
-                label: series.label,
-                metricName: latest.metricName,
-                latestValue: latestValue,
-                unit: latest.unit,
-                pointCount: series.points.filter { $0.value != nil }.count
-            )
-        }
-    }
-
-    private var yAxisLabel: String {
-        let units = Set(plottedPoints.map(\.point.unit).filter { !$0.isEmpty })
-        if units.count == 1, let unit = units.first {
-            return unit == "%" ? "Usage (%)" : "Usage (\(unit))"
-        }
-        return "Usage"
-    }
-
-    private var xDomain: ClosedRange<Date> {
-        if let startDate = selectedWindow.startDate(relativeTo: referenceDate) {
-            return startDate...referenceDate
-        }
-
-        let sorted = plottedPoints.map(\.point.timestamp).sorted()
-        guard let first = sorted.first,
-              let last = sorted.last else {
-            return referenceDate.addingTimeInterval(-60 * 60)...referenceDate
-        }
-        if first == last {
-            return first.addingTimeInterval(-30 * 60)...last.addingTimeInterval(30 * 60)
-        }
-        return first...last
-    }
-
-    private var seriesStyles: [String: ChartSeriesStyle] {
-        Dictionary(uniqueKeysWithValues: series.enumerated().map { index, series in
-            let style = series.style ?? ChartSeriesStyle(
-                color: ChartSeriesColor.allCases[index % ChartSeriesColor.allCases.count],
-                lineStyle: .solid
-            )
-            return (series.id, style)
-        })
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(configuration.title)
+            Text(model.title)
                 .font(.system(size: 12, weight: .semibold))
                 .lineLimit(1)
 
-            if plottedPoints.isEmpty {
+            if model.plottedPoints.isEmpty {
                 noMatchingSeriesState
             } else {
                 chart
@@ -246,10 +161,10 @@ private struct UsageHistoryChartPanel: View {
 
     private var chart: some View {
         Chart {
-            ForEach(plottedPoints) { item in
+            ForEach(model.plottedPoints) { item in
                 LineMark(
                     x: .value("Time", item.point.timestamp),
-                    y: .value(yAxisLabel, item.value),
+                    y: .value(model.yAxisLabel, item.value),
                     series: .value("Metric segment", item.segmentID)
                 )
                 .interpolationMethod(.catmullRom)
@@ -271,8 +186,8 @@ private struct UsageHistoryChartPanel: View {
             }
         }
         .chartLegend(.hidden)
-        .chartYAxisLabel(yAxisLabel)
-        .chartXScale(domain: xDomain)
+        .chartYAxisLabel(model.yAxisLabel)
+        .chartXScale(domain: model.xDomain)
         .chartOverlay { proxy in
             GeometryReader { geometry in
                 Rectangle().fill(.clear).contentShape(Rectangle())
@@ -298,7 +213,7 @@ private struct UsageHistoryChartPanel: View {
 
     @ViewBuilder
     private func hoverTooltipView(for date: Date) -> some View {
-        let items = nearestHoverPoints(at: date)
+        let items = model.nearestHoverPoints(at: date)
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 3) {
                 Text(formatHoverDate(date))
@@ -342,32 +257,8 @@ private struct UsageHistoryChartPanel: View {
         .background(Color(NSColor.controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
     }
 
-    private struct HoverItem {
-        let label: String
-        let seriesID: String
-        let value: Double?
-        let unit: String
-    }
-
-    private func nearestHoverPoints(at date: Date) -> [HoverItem] {
-        let grouped = Dictionary(grouping: visiblePoints, by: \.seriesID)
-        return summaries.compactMap { summary in
-            guard let seriesPoints = grouped[summary.id],
-                  let nearest = seriesPoints.min(by: {
-                      abs($0.point.timestamp.timeIntervalSince(date)) < abs($1.point.timestamp.timeIntervalSince(date))
-                  }) else { return nil }
-            return HoverItem(
-                label: summary.label,
-                seriesID: summary.id,
-                value: nearest.point.value,
-                unit: nearest.point.unit
-            )
-        }
-        .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
-    }
-
     private func formatHoverDate(_ date: Date) -> String {
-        Self.hoverFormatters[selectedWindow]?.string(from: date) ?? ""
+        Self.hoverFormatters[model.selectedWindow]?.string(from: date) ?? ""
     }
 
     private func format(value: Double?, unit: String) -> String {
@@ -394,11 +285,11 @@ private struct UsageHistoryChartPanel: View {
     }
 
     private func seriesColor(for seriesID: String) -> Color {
-        seriesStyles[seriesID]?.color.swiftUIColor ?? ChartSeriesColor.blue.swiftUIColor
+        model.seriesStyles[seriesID]?.color.swiftUIColor ?? ChartSeriesColor.blue.swiftUIColor
     }
 
     private func lineStyle(for seriesID: String) -> StrokeStyle {
-        seriesStyles[seriesID]?.lineStyle.strokeStyle ?? ChartLineStyle.solid.strokeStyle
+        model.seriesStyles[seriesID]?.lineStyle.strokeStyle ?? ChartLineStyle.solid.strokeStyle
     }
 
     private static let hoverFormatters: [UsageHistoryTimeWindow: DateFormatter] = {
@@ -415,6 +306,168 @@ private struct UsageHistoryChartPanel: View {
             dict[window] = f
         }
     }()
+}
+
+private struct UsageHistoryChartPanelModel {
+    let title: String
+    let selectedWindow: UsageHistoryTimeWindow
+    let plottedPoints: [PlottedChartPoint]
+    let summaries: [UsageHistorySeriesSummary]
+    let yAxisLabel: String
+    let xDomain: ClosedRange<Date>
+    let seriesStyles: [String: ChartSeriesStyle]
+
+    private let pointsBySeries: [String: [ChartPoint]]
+
+    init(
+        configuration: ChartConfiguration,
+        points: [UsageHistoryPoint],
+        currentEntries: [VendorUsageEntry],
+        referenceDate: Date,
+        selectedWindow: UsageHistoryTimeWindow
+    ) {
+        let series = ChartSeriesResolver.resolve(
+            configuration: configuration,
+            points: points,
+            currentEntries: currentEntries
+        )
+        let visiblePoints = Self.makeVisiblePoints(from: series)
+        let plottedPoints: [PlottedChartPoint] = visiblePoints.compactMap { item in
+            guard let value = item.point.value else { return nil }
+            return PlottedChartPoint(chartPoint: item, value: value)
+        }
+
+        self.title = configuration.title
+        self.selectedWindow = selectedWindow
+        self.plottedPoints = plottedPoints
+        self.summaries = Self.makeSummaries(from: series)
+        self.yAxisLabel = Self.makeYAxisLabel(from: plottedPoints)
+        self.xDomain = Self.makeXDomain(
+            from: plottedPoints,
+            selectedWindow: selectedWindow,
+            referenceDate: referenceDate
+        )
+        self.seriesStyles = Dictionary(uniqueKeysWithValues: series.enumerated().map { index, series in
+            let style = series.style ?? ChartSeriesStyle(
+                color: ChartSeriesColor.allCases[index % ChartSeriesColor.allCases.count],
+                lineStyle: .solid
+            )
+            return (series.id, style)
+        })
+        self.pointsBySeries = Dictionary(grouping: visiblePoints, by: \.seriesID)
+    }
+
+    func nearestHoverPoints(at date: Date) -> [HoverItem] {
+        summaries.compactMap { summary in
+            guard let seriesPoints = pointsBySeries[summary.id],
+                  let nearest = Self.nearestPoint(in: seriesPoints, to: date) else {
+                return nil
+            }
+            return HoverItem(
+                label: summary.label,
+                seriesID: summary.id,
+                value: nearest.point.value,
+                unit: nearest.point.unit
+            )
+        }
+        .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
+    }
+
+    private static func makeVisiblePoints(from series: [ResolvedChartSeries]) -> [ChartPoint] {
+        series.flatMap { series in
+            var segmentIndex = 0
+            return series.points.map { point in
+                let item = ChartPoint(
+                    seriesID: series.id,
+                    segmentID: "\(series.id)|segment|\(segmentIndex)",
+                    point: point
+                )
+                if point.value == nil {
+                    segmentIndex += 1
+                }
+                return item
+            }
+        }
+    }
+
+    private static func makeSummaries(from series: [ResolvedChartSeries]) -> [UsageHistorySeriesSummary] {
+        series.compactMap { series in
+            let valuedPoints = series.points.filter { $0.value != nil }
+            guard let latest = valuedPoints.max(by: { $0.timestamp < $1.timestamp }),
+                  let latestValue = latest.value else { return nil }
+            return UsageHistorySeriesSummary(
+                id: series.id,
+                label: series.label,
+                metricName: latest.metricName,
+                latestValue: latestValue,
+                unit: latest.unit,
+                pointCount: valuedPoints.count
+            )
+        }
+    }
+
+    private static func makeYAxisLabel(from plottedPoints: [PlottedChartPoint]) -> String {
+        let units = Set(plottedPoints.map(\.point.unit).filter { !$0.isEmpty })
+        if units.count == 1, let unit = units.first {
+            return unit == "%" ? "Usage (%)" : "Usage (\(unit))"
+        }
+        return "Usage"
+    }
+
+    private static func makeXDomain(
+        from plottedPoints: [PlottedChartPoint],
+        selectedWindow: UsageHistoryTimeWindow,
+        referenceDate: Date
+    ) -> ClosedRange<Date> {
+        if let startDate = selectedWindow.startDate(relativeTo: referenceDate) {
+            return startDate...referenceDate
+        }
+
+        let timestamps = plottedPoints.map(\.point.timestamp)
+        guard let first = timestamps.min(),
+              let last = timestamps.max() else {
+            return referenceDate.addingTimeInterval(-60 * 60)...referenceDate
+        }
+        if first == last {
+            return first.addingTimeInterval(-30 * 60)...last.addingTimeInterval(30 * 60)
+        }
+        return first...last
+    }
+
+    private static func nearestPoint(in points: [ChartPoint], to date: Date) -> ChartPoint? {
+        guard !points.isEmpty else { return nil }
+
+        var lowerBound = 0
+        var upperBound = points.count
+        while lowerBound < upperBound {
+            let midpoint = (lowerBound + upperBound) / 2
+            if points[midpoint].point.timestamp < date {
+                lowerBound = midpoint + 1
+            } else {
+                upperBound = midpoint
+            }
+        }
+
+        if lowerBound == 0 {
+            return points[0]
+        }
+        if lowerBound == points.count {
+            return points[points.count - 1]
+        }
+
+        let previous = points[lowerBound - 1]
+        let next = points[lowerBound]
+        let previousDistance = abs(previous.point.timestamp.timeIntervalSince(date))
+        let nextDistance = abs(next.point.timestamp.timeIntervalSince(date))
+        return previousDistance <= nextDistance ? previous : next
+    }
+}
+
+private struct HoverItem {
+    let label: String
+    let seriesID: String
+    let value: Double?
+    let unit: String
 }
 
 private struct ChartPoint: Identifiable {

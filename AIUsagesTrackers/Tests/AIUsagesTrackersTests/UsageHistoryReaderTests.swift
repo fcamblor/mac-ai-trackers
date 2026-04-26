@@ -59,6 +59,33 @@ struct UsageHistoryReaderTests {
         #expect(snapshot.skippedLineCount == 0)
     }
 
+    @Test("reloads cached JSONL files when they change")
+    func reloadsCachedFileWhenChanged() async throws {
+        let root = Self.makeTempRoot()
+        let path = "\(root)/2026/04/2026-04-20.jsonl"
+        try Self.writeLines([
+            try Self.tick(timestamp: "2026-04-20T09:00:00Z", metrics: [
+                MetricSnapshot(name: "session", kind: .timeWindow, usagePercent: 40),
+            ]),
+        ], to: path)
+
+        let reader = UsageHistoryReader(rootPath: root, logger: Self.makeLogger(in: root))
+        let first = await reader.load(window: .twentyFourHours, now: Self.date("2026-04-20T12:00:00Z"))
+
+        try Self.writeLines([
+            try Self.tick(timestamp: "2026-04-20T09:00:00Z", metrics: [
+                MetricSnapshot(name: "session", kind: .timeWindow, usagePercent: 40),
+            ]),
+            try Self.tick(timestamp: "2026-04-20T10:00:00Z", metrics: [
+                MetricSnapshot(name: "session", kind: .timeWindow, usagePercent: 55),
+            ]),
+        ], to: path)
+        let second = await reader.load(window: .twentyFourHours, now: Self.date("2026-04-20T12:00:00Z"))
+
+        #expect(first.points.map(\.value) == [40.0])
+        #expect(second.points.map(\.value) == [40.0, 55.0])
+    }
+
     @Test("filters points outside the selected time window")
     func filtersBySelectedWindow() async throws {
         let root = Self.makeTempRoot()
