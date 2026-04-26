@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "ef0691ee2a11",
+  "strategy": "manual-commit",
+  "branch": "fix-sendable-closure-warning",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "README.md",
+    "docs/assets/screenshots/menubar_customization.png"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ef/0691ee2a11/0/metadata.json",
+      "transcript": "/ef/0691ee2a11/0/full.jsonl",
+      "content_hash": "/ef/0691ee2a11/0/content_hash.txt",
+      "prompt": "/ef/0691ee2a11/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 46,
+    "cache_creation_tokens": 77210,
+    "cache_read_tokens": 958800,
+    "output_tokens": 16324,
+    "api_call_count": 27
+  }
+}
