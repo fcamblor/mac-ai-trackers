@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "9de07c6ffa33",
+  "strategy": "manual-commit",
+  "branch": "vendor-refresh-settings",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Helpers/MenuBarSegmentResolver.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Helpers/UsageComputations.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/MenuBarSegmentConfig.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/AssistantsSettingsView.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/GeneralSettingsView.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/SegmentEditor.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/UsageDataRefreshIntervalView.swift",
+    "AIUsagesTrackers/Sources/App/Views/SettingsView.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/MenuBarSegmentConfigTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/MenuBarSegmentResolverTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageComputationsTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/9d/e07c6ffa33/0/metadata.json",
+      "transcript": "/9d/e07c6ffa33/0/full.jsonl",
+      "content_hash": "/9d/e07c6ffa33/0/content_hash.txt",
+      "prompt": "/9d/e07c6ffa33/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 72,
+    "cache_creation_tokens": 122167,
+    "cache_read_tokens": 1382321,
+    "output_tokens": 15586,
+    "api_call_count": 26
+  }
+}

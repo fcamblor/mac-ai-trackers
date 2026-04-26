@@ -1,0 +1,57 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "9de07c6ffa33",
+  "session_id": "aa0e360a-9cb7-4f8b-a21f-8d712aef6389",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-26T23:37:57.130056Z",
+  "branch": "vendor-refresh-settings",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Helpers/MenuBarSegmentResolver.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Helpers/UsageComputations.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/MenuBarSegmentConfig.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/AssistantsSettingsView.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/GeneralSettingsView.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/SegmentEditor.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/UsageDataRefreshIntervalView.swift",
+    "AIUsagesTrackers/Sources/App/Views/SettingsView.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/MenuBarSegmentConfigTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/MenuBarSegmentResolverTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageComputationsTests.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "0bcdd9eef78c",
+  "token_usage": {
+    "input_tokens": 72,
+    "cache_creation_tokens": 122167,
+    "cache_read_tokens": 1382321,
+    "output_tokens": 15586,
+    "api_call_count": 26
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-26T23:37:56.835636Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 0,
+    "total_lines_changed": 0,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 108,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/PR instructions.md": 16,
+        ".context/attachments/Review request.md": 92
+      }
+    }
+  ]
+}
