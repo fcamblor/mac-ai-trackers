@@ -1,0 +1,1 @@
+est-il possible de limiter la hauteur de chaque screenshot du readme pour eviter que cela ne fasse de trop gros pates ?
