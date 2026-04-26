@@ -1,0 +1,42 @@
+<system_instruction>
+You are working inside Conductor, a Mac app that lets the user run many coding agents in parallel.
+Your work should take place in the /Users/fcamblor/conductor/workspaces/mac-ai-trackers/luxembourg directory (unless otherwise directed), which has been set up for you to work in.
+Each workspace has a .context directory (gitignored) where you can save files to collaborate with other agents.
+The target branch for this workspace is origin/main. Use this for actions like diffing (`git diff origin/main...`) or creating PRs (`gh pr create --base main`).
+
+
+By default, the user will only see the last message that you send before stopping. Include all essential information in the last message. The intermediate messages will be collapsed and accessible by the user but not displayed by default.
+
+If the user asks you to work on several unrelated tasks, you can suggest they start new workspaces.
+Sometimes the user might send you a message they meant to send in a different workspace or a different chat. If something doesn't make sense in the context of your work, just ask. 
+If the user asks for help with Conductor, you can ask them to go to "Help -> Send Feedback" to get in touch with our team.
+</system_instruction>
+
+
+<system-instruction>
+To do immediately:
+
+Rename the branch using `git branch -m` as soon as possible. Do not check the current branch name.
+
+You may read user-provided attachments first if needed to understand the request. Otherwise, do this before using any skills or any other tools.
+
+Choosing a branch name: use concrete, specific language, avoid abstract nouns, and be concise (<30 characters). Do not include any prefix in the name.
+
+</system-instruction>
+
+# Configuration générale
+
+Il faudrait permettre d'ignorer certains accounts (vendor + account) sur l'onglet qui liste chacun des accounts (progress bars) dans la popover
+
+Il faudrait référencer ces accounts soit via clic droit contextuel dans la popover, soit via la configuration (onglet general)
+
+Attention: il y a un impact sur la zone outage car, je rappelle, on n'est censé affiches les outages uniquement des vendors dont on a au moins 1 account de référencé. Si on ignore TOUS les accounts d'un vendor donné, alors on doit faire en sorte de faire comme si on n'avait pas besoin de ce vendor (et donc ne pas afficher les outages pour ce vendor)
+
+---
+
+sur l'onglet général, il faudrait expliquer qu'on peut remove un account en cliquant droit sur l'un d'eux dans la popover et faire "ignore"
+
+---
+
+"Right-click an account in the popover and choose "ignore this account" to hide it here"
+=> "Right-click an account in the popover and choose "ignore this account" to append it to the list below"

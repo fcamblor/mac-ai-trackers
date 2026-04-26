@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "61a0d7557942",
+  "strategy": "manual-commit",
+  "branch": "ignore-accounts",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Helpers/UsageComputations.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/IgnoredAccount.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Preferences/AppPreferenceKeys.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Preferences/AppPreferences.swift",
+    "AIUsagesTrackers/Sources/App/Views/AccountCardView.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/GeneralSettingsView.swift",
+    "AIUsagesTrackers/Sources/App/Views/UsageDetailsView.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageComputationsTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/61/a0d7557942/0/metadata.json",
+      "transcript": "/61/a0d7557942/0/full.jsonl",
+      "content_hash": "/61/a0d7557942/0/content_hash.txt",
+      "prompt": "/61/a0d7557942/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 59,
+    "cache_creation_tokens": 195627,
+    "cache_read_tokens": 2259793,
+    "output_tokens": 16222,
+    "api_call_count": 42
+  }
+}
