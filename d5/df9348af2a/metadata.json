@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "d5df9348af2a",
+  "strategy": "manual-commit",
+  "branch": "consumption-graphs",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "roadmap/claude-status-connector.md",
+    "roadmap/claude-status-connector.plan.md",
+    "roadmap/codex-connector.md",
+    "roadmap/index.md",
+    "roadmap/usage-history-snapshots.md",
+    "roadmap/vendor-status-monitor.md",
+    "roadmap/vendor-status-monitor.plan.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/d5/df9348af2a/0/metadata.json",
+      "transcript": "/d5/df9348af2a/0/full.jsonl",
+      "content_hash": "/d5/df9348af2a/0/content_hash.txt",
+      "prompt": "/d5/df9348af2a/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 37,
+    "cache_creation_tokens": 104873,
+    "cache_read_tokens": 328442,
+    "output_tokens": 2367,
+    "api_call_count": 9
+  }
+}

@@ -1,0 +1,1 @@
+pourrais-tu clean les elements suivants de la roadmap: claude-status-connector, codex-connector, usage-history-snapshots, vendor-status-monitor (en incluant les plans associes)
