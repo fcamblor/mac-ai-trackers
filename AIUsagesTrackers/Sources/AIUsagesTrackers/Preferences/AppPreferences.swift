@@ -20,6 +20,7 @@ public protocol AppPreferences: AnyObject, Observable, Sendable {
     /// Tracks whether chart seeding has already run so an intentionally empty
     /// configuration list is preserved after first initialization.
     var chartConfigurationsInitialized: Bool { get set }
+    var ignoredAccounts: [IgnoredAccount] { get set }
 }
 
 // MARK: - UserDefaults-backed implementation
@@ -147,6 +148,31 @@ public final class UserDefaultsAppPreferences: AppPreferences {
         get { defaults.bool(forKey: AppPreferenceKeys.chartConfigurationsInitialized.rawValue) }
         set { defaults.set(newValue, forKey: AppPreferenceKeys.chartConfigurationsInitialized.rawValue) }
     }
+
+    public var ignoredAccounts: [IgnoredAccount] {
+        get {
+            access(keyPath: \.ignoredAccounts)
+            guard let data = defaults.data(forKey: AppPreferenceKeys.ignoredAccounts.rawValue) else {
+                return []
+            }
+            do {
+                return try JSONDecoder().decode([IgnoredAccount].self, from: data)
+            } catch {
+                Loggers.app.log(.error, "Failed to decode ignoredAccounts from UserDefaults: \(error)")
+                return []
+            }
+        }
+        set {
+            withMutation(keyPath: \.ignoredAccounts) {
+                do {
+                    let data = try JSONEncoder().encode(newValue)
+                    defaults.set(data, forKey: AppPreferenceKeys.ignoredAccounts.rawValue)
+                } catch {
+                    Loggers.app.log(.error, "Failed to encode ignoredAccounts to UserDefaults: \(error)")
+                }
+            }
+        }
+    }
 }
 
 // MARK: - In-memory test double
@@ -163,6 +189,7 @@ public final class InMemoryAppPreferences: AppPreferences {
     public var menuBarSeparator: String
     public var chartConfigurations: [ChartConfiguration]
     public var chartConfigurationsInitialized: Bool
+    public var ignoredAccounts: [IgnoredAccount]
 
     public init(
         refreshInterval: RefreshInterval = .default,
@@ -172,7 +199,8 @@ public final class InMemoryAppPreferences: AppPreferences {
         menuBarSegmentsInitialized: Bool = false,
         menuBarSeparator: String = " | ",
         chartConfigurations: [ChartConfiguration] = [],
-        chartConfigurationsInitialized: Bool = false
+        chartConfigurationsInitialized: Bool = false,
+        ignoredAccounts: [IgnoredAccount] = []
     ) {
         self.refreshInterval = refreshInterval
         self.launchAtLogin = launchAtLogin
@@ -182,5 +210,6 @@ public final class InMemoryAppPreferences: AppPreferences {
         self.menuBarSeparator = menuBarSeparator
         self.chartConfigurations = chartConfigurations
         self.chartConfigurationsInitialized = chartConfigurationsInitialized
+        self.ignoredAccounts = ignoredAccounts
     }
 }

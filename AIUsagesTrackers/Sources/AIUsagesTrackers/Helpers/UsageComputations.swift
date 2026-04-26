@@ -133,6 +133,12 @@ extension Array where Element == VendorUsageEntry {
         }
     }
 
+    /// Returns entries that are not in the ignored set.
+    public func excluding(ignoredAccounts: [IgnoredAccount]) -> [VendorUsageEntry] {
+        let ignoredSet = Set(ignoredAccounts)
+        return filter { !ignoredSet.contains(IgnoredAccount(vendor: $0.vendor, account: $0.account)) }
+    }
+
     /// Set of vendors that appear more than once in the array.
     public func vendorsWithMultipleAccounts() -> Set<Vendor> {
         var counts: [Vendor: Int] = [:]

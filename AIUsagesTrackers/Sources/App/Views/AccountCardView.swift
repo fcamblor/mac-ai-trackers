@@ -4,6 +4,7 @@ import AIUsagesTrackersLib
 struct AccountCardView: View {
     let entry: VendorUsageEntry
     let isRefreshing: Bool
+    var onIgnore: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -50,6 +51,11 @@ struct AccountCardView: View {
             RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(Color.primary.opacity(0.20), lineWidth: 1)
         )
+        .contextMenu {
+            if let onIgnore {
+                Button("Ignore this account") { onIgnore() }
+            }
+        }
     }
 
     @ViewBuilder

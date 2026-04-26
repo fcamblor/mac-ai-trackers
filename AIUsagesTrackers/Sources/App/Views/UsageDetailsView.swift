@@ -77,8 +77,13 @@ struct UsageDetailsView: View {
 
     @ViewBuilder
     private var listingContent: some View {
-        let sorted = store.entries.sortedForDisplay()
-        if sorted.isEmpty {
+        let prefs = AppDelegate.sharedPreferences
+        let sorted = store.entries
+            .excluding(ignoredAccounts: prefs.ignoredAccounts)
+            .sortedForDisplay()
+        if sorted.isEmpty && !store.entries.isEmpty {
+            allAccountsIgnoredState
+        } else if sorted.isEmpty {
             emptyState
         } else {
             ScrollView {
@@ -97,7 +102,13 @@ struct UsageDetailsView: View {
                             isRefreshing: refreshState.isRefreshing(
                                 vendor: entry.vendor,
                                 account: entry.account
-                            )
+                            ),
+                            onIgnore: {
+                                let ignored = IgnoredAccount(vendor: entry.vendor, account: entry.account)
+                                if !prefs.ignoredAccounts.contains(ignored) {
+                                    prefs.ignoredAccounts.append(ignored)
+                                }
+                            }
                         )
                     }
                 }
@@ -188,6 +199,21 @@ struct UsageDetailsView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    private var allAccountsIgnoredState: some View {
+        VStack(spacing: 8) {
+            Text("All accounts are hidden")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+            Text("Remove ignored accounts in Settings to restore visibility.")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 32)
+        .padding(.horizontal, 24)
     }
 
     @ViewBuilder
