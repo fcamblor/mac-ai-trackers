@@ -280,6 +280,74 @@ struct VendorsWithMultipleAccountsTests {
     }
 }
 
+// MARK: - excluding(ignoredAccounts:)
+
+@Suite("excluding(ignoredAccounts:)")
+struct ExcludingIgnoredAccountsTests {
+
+    private func entry(vendor: String, account: String, isActive: Bool = false) -> VendorUsageEntry {
+        VendorUsageEntry(
+            vendor: Vendor(rawValue: vendor),
+            account: AccountEmail(rawValue: account),
+            isActive: isActive
+        )
+    }
+
+    @Test("empty ignored list returns all entries")
+    func emptyIgnoredList() {
+        let entries = [
+            entry(vendor: "claude", account: "a@b.com"),
+            entry(vendor: "codex", account: "c@d.com"),
+        ]
+        let result = entries.excluding(ignoredAccounts: [])
+        #expect(result.count == 2)
+    }
+
+    @Test("matching entry is removed")
+    func matchingEntryRemoved() {
+        let entries = [
+            entry(vendor: "claude", account: "a@b.com"),
+            entry(vendor: "claude", account: "z@b.com"),
+        ]
+        let ignored = [IgnoredAccount(vendor: .claude, account: "a@b.com")]
+        let result = entries.excluding(ignoredAccounts: ignored)
+        #expect(result.count == 1)
+        #expect(result[0].account.rawValue == "z@b.com")
+    }
+
+    @Test("unknown ignored account has no effect")
+    func unknownIgnoredAccountNoEffect() {
+        let entries = [entry(vendor: "claude", account: "a@b.com")]
+        let ignored = [IgnoredAccount(vendor: .claude, account: "other@b.com")]
+        let result = entries.excluding(ignoredAccounts: ignored)
+        #expect(result.count == 1)
+    }
+
+    @Test("all accounts of a vendor ignored returns empty for that vendor")
+    func allVendorAccountsIgnored() {
+        let entries = [
+            entry(vendor: "claude", account: "a@b.com"),
+            entry(vendor: "claude", account: "z@b.com"),
+            entry(vendor: "codex", account: "c@d.com"),
+        ]
+        let ignored = [
+            IgnoredAccount(vendor: .claude, account: "a@b.com"),
+            IgnoredAccount(vendor: .claude, account: "z@b.com"),
+        ]
+        let result = entries.excluding(ignoredAccounts: ignored)
+        #expect(result.count == 1)
+        #expect(result[0].vendor == .codex)
+    }
+
+    @Test("vendor mismatch does not filter account")
+    func vendorMismatchNoFilter() {
+        let entries = [entry(vendor: "claude", account: "a@b.com")]
+        let ignored = [IgnoredAccount(vendor: .codex, account: "a@b.com")]
+        let result = entries.excluding(ignoredAccounts: ignored)
+        #expect(result.count == 1)
+    }
+}
+
 // MARK: - GaugeBar clamping (testing the logic extracted as free function pattern)
 
 @Suite("GaugeBar clamping logic")

@@ -54,6 +54,34 @@ struct GeneralSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+
+            Section("Ignored accounts") {
+                Text("Right-click an account in the popover and choose \"Ignore this account\" to append it to the list below.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if concretePrefs.ignoredAccounts.isEmpty {
+                    Text("No ignored accounts.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(concretePrefs.ignoredAccounts, id: \.self) { ignored in
+                        HStack(spacing: 8) {
+                            VendorIconView(vendor: ignored.vendor, size: 13)
+                            Text(ignored.account.rawValue)
+                                .font(.system(size: 12))
+                            Spacer()
+                            Button(role: .destructive) {
+                                concretePrefs.ignoredAccounts.removeAll { $0 == ignored }
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                    Button("Remove all", role: .destructive) {
+                        concretePrefs.ignoredAccounts = []
+                    }
+                }
+            }
         }
         .formStyle(.grouped)
     }

@@ -77,7 +77,10 @@ struct UsageDetailsView: View {
 
     @ViewBuilder
     private var listingContent: some View {
-        let sorted = store.entries.sortedForDisplay()
+        let prefs = AppDelegate.sharedPreferences
+        let sorted = store.entries
+            .excluding(ignoredAccounts: prefs.ignoredAccounts)
+            .sortedForDisplay()
         if sorted.isEmpty {
             emptyState
         } else {
@@ -97,7 +100,13 @@ struct UsageDetailsView: View {
                             isRefreshing: refreshState.isRefreshing(
                                 vendor: entry.vendor,
                                 account: entry.account
-                            )
+                            ),
+                            onIgnore: {
+                                let ignored = IgnoredAccount(vendor: entry.vendor, account: entry.account)
+                                if !prefs.ignoredAccounts.contains(ignored) {
+                                    prefs.ignoredAccounts.append(ignored)
+                                }
+                            }
                         )
                     }
                 }
