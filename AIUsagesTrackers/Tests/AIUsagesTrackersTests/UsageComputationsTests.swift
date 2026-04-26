@@ -54,6 +54,28 @@ struct FormatRemainingTimeTests {
         #expect(result == "3d 5h 30m")
     }
 
+    @Test("can hide minutes when duration is over one day")
+    func hidesMinutesOverOneDay() {
+        let now = date("2026-04-17T00:00:00Z")
+        let result = formatRemainingTime(
+            resetAt: ISODate(rawValue: "2026-04-20T05:30:00Z"),
+            now: now,
+            hideMinutesWhenOverOneDay: true
+        )
+        #expect(result == "3d 6h")
+    }
+
+    @Test("hiding minutes rounds to the nearest hour when duration is over one day")
+    func hidingMinutesRoundsOverOneDay() {
+        let now = date("2026-04-17T00:00:00Z")
+        let result = formatRemainingTime(
+            resetAt: ISODate(rawValue: "2026-04-18T22:53:00Z"),
+            now: now,
+            hideMinutesWhenOverOneDay: true
+        )
+        #expect(result == "1d 23h")
+    }
+
     @Test("formats exactly 1 day")
     func exactlyOneDay() {
         let now = date("2026-04-17T00:00:00Z")

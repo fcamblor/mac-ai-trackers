@@ -8,7 +8,7 @@ private let secondsPerDay = 86400
 
 /// Formats the remaining time until `resetAt` as a compact string (e.g. "2d 5h 13m").
 /// Returns `"--"` when `resetAt` cannot be parsed, `"0m"` when the reset date has passed.
-public func formatRemainingTime(resetAt: ISODate, now: Date) -> String {
+public func formatRemainingTime(resetAt: ISODate, now: Date, hideMinutesWhenOverOneDay: Bool = false) -> String {
     guard let resetDate = resetAt.date else { return "--" }
     let totalSeconds = Int(resetDate.timeIntervalSince(now))
     guard totalSeconds > 0 else { return "0m" }
@@ -16,6 +16,17 @@ public func formatRemainingTime(resetAt: ISODate, now: Date) -> String {
     let days = totalSeconds / secondsPerDay
     let hours = (totalSeconds % secondsPerDay) / secondsPerHour
     let minutes = (totalSeconds % secondsPerHour) / secondsPerMinute
+
+    if hideMinutesWhenOverOneDay, totalSeconds > secondsPerDay {
+        let roundedHours = (totalSeconds + secondsPerHour / 2) / secondsPerHour
+        let roundedDays = roundedHours / 24
+        let remainingHours = roundedHours % 24
+
+        var roundedParts: [String] = []
+        if roundedDays > 0 { roundedParts.append("\(roundedDays)d") }
+        if remainingHours > 0 { roundedParts.append("\(remainingHours)h") }
+        return roundedParts.joined(separator: " ")
+    }
 
     var parts: [String] = []
     if days > 0 { parts.append("\(days)d") }

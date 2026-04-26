@@ -83,12 +83,19 @@ public enum SegmentDisplay: Codable, Equatable, Hashable, Sendable {
     }
 }
 
+public enum UsagePercentDisplayMode: String, Codable, Equatable, Hashable, CaseIterable, Sendable {
+    case consumed
+    case remaining
+}
+
 public struct TimeWindowDisplay: Codable, Equatable, Hashable, Sendable {
     public var showDot: Bool
     public var showLetter: Bool
     public var letter: String
     public var showPercent: Bool
+    public var percentDisplayMode: UsagePercentDisplayMode
     public var showReset: Bool
+    public var hideResetMinutesWhenOverOneDay: Bool
     public var showVendorIcon: Bool
 
     public init(
@@ -96,19 +103,24 @@ public struct TimeWindowDisplay: Codable, Equatable, Hashable, Sendable {
         showLetter: Bool = true,
         letter: String = "",
         showPercent: Bool = true,
+        percentDisplayMode: UsagePercentDisplayMode = .consumed,
         showReset: Bool = true,
+        hideResetMinutesWhenOverOneDay: Bool = false,
         showVendorIcon: Bool = false
     ) {
         self.showDot = showDot
         self.showLetter = showLetter
         self.letter = letter
         self.showPercent = showPercent
+        self.percentDisplayMode = percentDisplayMode
         self.showReset = showReset
+        self.hideResetMinutesWhenOverOneDay = hideResetMinutesWhenOverOneDay
         self.showVendorIcon = showVendorIcon
     }
 
     private enum CodingKeys: String, CodingKey {
-        case showDot, showLetter, letter, showPercent, showReset, showVendorIcon
+        case showDot, showLetter, letter, showPercent, percentDisplayMode, showReset
+        case hideResetMinutesWhenOverOneDay, showVendorIcon
     }
 
     public init(from decoder: Decoder) throws {
@@ -117,7 +129,15 @@ public struct TimeWindowDisplay: Codable, Equatable, Hashable, Sendable {
         showLetter = try c.decode(Bool.self, forKey: .showLetter)
         letter = try c.decode(String.self, forKey: .letter)
         showPercent = try c.decode(Bool.self, forKey: .showPercent)
+        percentDisplayMode = try c.decodeIfPresent(
+            UsagePercentDisplayMode.self,
+            forKey: .percentDisplayMode
+        ) ?? .consumed
         showReset = try c.decode(Bool.self, forKey: .showReset)
+        hideResetMinutesWhenOverOneDay = try c.decodeIfPresent(
+            Bool.self,
+            forKey: .hideResetMinutesWhenOverOneDay
+        ) ?? false
         showVendorIcon = try c.decodeIfPresent(Bool.self, forKey: .showVendorIcon) ?? false
     }
 }

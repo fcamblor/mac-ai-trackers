@@ -74,7 +74,16 @@ struct SegmentEditor: View {
                     .frame(width: 48)
             }
             Toggle("Usage percentage", isOn: displayBinding.showPercent)
+            Picker("Percentage value", selection: displayBinding.percentDisplayMode) {
+                Text("Consumed").tag(UsagePercentDisplayMode.consumed)
+                Text("Remaining").tag(UsagePercentDisplayMode.remaining)
+            }
+            .disabled(!displayBinding.wrappedValue.showPercent)
+            .padding(.leading, 20)
             Toggle("Time until reset", isOn: displayBinding.showReset)
+            Toggle("Hide minutes when over 1 day", isOn: displayBinding.hideResetMinutesWhenOverOneDay)
+                .disabled(!displayBinding.wrappedValue.showReset)
+                .padding(.leading, 20)
         }
     }
 

@@ -36,6 +36,10 @@ struct GeneralSettingsView: View {
                 }
             }
 
+            Section("Vendor API") {
+                UsageDataRefreshIntervalView()
+            }
+
             Section("Logging") {
                 Picker("Log level", selection: Binding(
                     get: { concretePrefs.logLevel },

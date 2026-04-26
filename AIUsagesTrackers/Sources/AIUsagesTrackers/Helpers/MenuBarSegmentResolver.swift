@@ -123,10 +123,16 @@ public enum MenuBarSegmentResolver {
             parts.append(display.letter)
         }
         if display.showPercent {
-            parts.append("\(usagePercent.rawValue)%")
+            parts.append(formatUsagePercent(usagePercent, mode: display.percentDisplayMode))
         }
         if display.showReset {
-            let remaining = resetAt.map { formatRemainingTime(resetAt: $0, now: now) } ?? "???"
+            let remaining = resetAt.map {
+                formatRemainingTime(
+                    resetAt: $0,
+                    now: now,
+                    hideMinutesWhenOverOneDay: display.hideResetMinutesWhenOverOneDay
+                )
+            } ?? "???"
             parts.append(remaining)
         }
         let text = parts.joined(separator: " ")
@@ -147,6 +153,15 @@ public enum MenuBarSegmentResolver {
 
         let vendorIcon: Vendor? = display.showVendorIcon ? vendor : nil
         return MenuBarSegment(text: text, tier: tier, showDot: display.showDot, vendorIcon: vendorIcon)
+    }
+
+    private static func formatUsagePercent(_ usagePercent: UsagePercent, mode: UsagePercentDisplayMode) -> String {
+        switch mode {
+        case .consumed:
+            return "\(usagePercent.rawValue)%"
+        case .remaining:
+            return "\(max(0, 100 - usagePercent.rawValue))%"
+        }
     }
 
     private static func renderPayAsYouGo(currentAmount: Double, currency: String) -> MenuBarSegment {
