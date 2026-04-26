@@ -6,6 +6,7 @@ import AppIconKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var poller: UsagePoller?
+    private var snapshotScheduler: SnapshotScheduler?
     private var accountMonitor: ClaudeActiveAccountMonitor?
     private var codexMonitor: CodexActiveAccountMonitor?
     private var pidGuard: AppPidGuard?
@@ -88,7 +89,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await poller?.pollOnce(force: true)
             }
         )
+        let snapshotRecorder = SnapshotRecorder()
+        let historyReader = UsageHistoryReader(rootPath: snapshotRecorder.rootPath)
+        let snapshotScheduler = SnapshotScheduler(
+            fileManager: fileManager,
+            recorder: snapshotRecorder
+        )
         self.poller = poller
+        self.snapshotScheduler = snapshotScheduler
         self.accountMonitor = accountMonitor
         self.codexMonitor = codexMonitor
         self.refreshState = refreshState
@@ -99,12 +107,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.usageStore = store
         Self.sharedStore = store
 
-        setupStatusItem(store: store, refreshState: refreshState)
+        setupStatusItem(store: store, refreshState: refreshState, historyReader: historyReader)
         trackStoreChanges(store: store)
 
         Task {
             store.start()
             await poller.start()
+            await snapshotScheduler.start()
             await accountMonitor.start()
             await codexMonitor.start()
         }
@@ -116,7 +125,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Status item
 
-    private func setupStatusItem(store: UsageStore, refreshState: RefreshState) {
+    private func setupStatusItem(
+        store: UsageStore,
+        refreshState: RefreshState,
+        historyReader: UsageHistoryReader
+    ) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem = item
 
@@ -126,6 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             rootView: UsageDetailsView(
                 store: store,
                 refreshState: refreshState,
+                historyReader: historyReader,
                 onRefresh: { [weak self] in
                     await self?.poller?.pollOnce(now: Date(), force: true)
                 },
@@ -292,10 +306,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func quit() {
         let pollerRef = poller
+        let schedulerRef = snapshotScheduler
         let monitorRef = accountMonitor
         let codexMonitorRef = codexMonitor
         Task {
             await pollerRef?.stop()
+            await schedulerRef?.stop()
             await monitorRef?.stop()
             await codexMonitorRef?.stop()
         }
