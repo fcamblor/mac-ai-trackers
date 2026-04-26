@@ -81,7 +81,9 @@ struct UsageDetailsView: View {
         let sorted = store.entries
             .excluding(ignoredAccounts: prefs.ignoredAccounts)
             .sortedForDisplay()
-        if sorted.isEmpty {
+        if sorted.isEmpty && !store.entries.isEmpty {
+            allAccountsIgnoredState
+        } else if sorted.isEmpty {
             emptyState
         } else {
             ScrollView {
@@ -197,6 +199,21 @@ struct UsageDetailsView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    private var allAccountsIgnoredState: some View {
+        VStack(spacing: 8) {
+            Text("All accounts are hidden")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+            Text("Remove ignored accounts in Settings to restore visibility.")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 32)
+        .padding(.horizontal, 24)
     }
 
     @ViewBuilder
