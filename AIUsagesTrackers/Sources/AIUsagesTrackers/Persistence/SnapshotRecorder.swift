@@ -110,20 +110,10 @@ public actor SnapshotRecorder: SnapshotRecording {
             for metric in entry.metrics {
                 switch metric {
                 case let .timeWindow(name, resetAt, _, usagePercent):
-                    // A reset date in the past means the window has rolled over and the
-                    // currently-persisted percentage no longer reflects reality. Record
-                    // the metric with a null value so the chart shows a gap instead of
-                    // carrying the stale value forward at a misleading timestamp.
-                    let isOutdated: Bool
-                    if let resetDate = resetAt?.date, resetDate < now {
-                        isOutdated = true
-                    } else {
-                        isOutdated = false
-                    }
                     metrics.append(MetricSnapshot(
                         name: name,
                         kind: .timeWindow,
-                        usagePercent: isOutdated ? nil : usagePercent
+                        usagePercent: isOutdated(resetAt: resetAt, now: now) ? nil : usagePercent
                     ))
                 case let .payAsYouGo(name, amount, currency):
                     metrics.append(MetricSnapshot(
@@ -142,6 +132,13 @@ public actor SnapshotRecorder: SnapshotRecording {
             }
         }
         return out
+    }
+
+    private static func isOutdated(resetAt: ISODate?, now: Date) -> Bool {
+        guard let resetDate = resetAt?.date else {
+            return false
+        }
+        return resetDate <= now
     }
 
     /// Computes the canonical SHA256 hash of the accounts payload. Canonicalization

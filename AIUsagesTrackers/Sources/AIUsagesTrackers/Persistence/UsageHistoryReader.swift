@@ -48,7 +48,7 @@ public struct UsageHistoryPoint: Equatable, Identifiable, Sendable {
     public let account: AccountEmail
     public let metricName: String
     public let metricKind: MetricKind
-    public let value: Double
+    public let value: Double?
     public let unit: String
 
     public init(
@@ -57,7 +57,7 @@ public struct UsageHistoryPoint: Equatable, Identifiable, Sendable {
         account: AccountEmail,
         metricName: String,
         metricKind: MetricKind,
-        value: Double,
+        value: Double?,
         unit: String
     ) {
         self.timestamp = timestamp
@@ -128,14 +128,17 @@ public struct UsageHistorySnapshot: Equatable, Sendable {
     public var seriesSummaries: [UsageHistorySeriesSummary] {
         let grouped = Dictionary(grouping: points, by: \.seriesID)
         return grouped.compactMap { seriesID, points in
-            guard let latest = points.max(by: { $0.timestamp < $1.timestamp }) else { return nil }
+            guard let latest = points
+                .filter({ $0.value != nil })
+                .max(by: { $0.timestamp < $1.timestamp }),
+                let latestValue = latest.value else { return nil }
             return UsageHistorySeriesSummary(
                 id: seriesID,
                 label: latest.seriesLabel,
                 metricName: latest.metricName,
-                latestValue: latest.value,
+                latestValue: latestValue,
                 unit: latest.unit,
-                pointCount: points.count
+                pointCount: points.filter { $0.value != nil }.count
             )
         }
         .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
@@ -146,6 +149,7 @@ public actor UsageHistoryReader {
     public nonisolated let rootPath: String
     private let fileManager: FileManager
     private let logger: FileLogger
+    private var fileCache: [String: CachedHistoryFile] = [:]
 
     public init(
         rootPath: String? = nil,
@@ -165,34 +169,29 @@ public actor UsageHistoryReader {
         var hasDataBeforeWindow = false
         var hasDataAfterWindow = false
 
-        for url in jsonlFileURLs() {
-            let data: Data
-            do {
-                data = try Data(contentsOf: url)
-            } catch {
-                logger.log(.warning, "UsageHistoryReader: cannot read \(url.path): \(error)")
-                continue
+        let urls = jsonlFileURLs()
+        pruneCache(keeping: urls)
+
+        for url in urls {
+            guard let decoded = decodedFile(at: url) else { continue }
+            skippedLineCount += decoded.skippedLineCount
+
+            for timestamp in decoded.timestamps {
+                if let startDate, timestamp < startDate {
+                    hasDataBeforeWindow = true
+                } else if timestamp > now {
+                    hasDataAfterWindow = true
+                }
             }
 
-            let lines = data.split(separator: Self.newlineByte, omittingEmptySubsequences: true)
-            for line in lines {
-                do {
-                    let tick = try JSONDecoder().decode(TickSnapshot.self, from: Data(line))
-                    guard let timestamp = tick.timestamp.date else {
-                        continue
-                    }
-                    if let startDate, timestamp < startDate {
-                        hasDataBeforeWindow = true
-                        continue
-                    }
-                    if timestamp > now {
-                        hasDataAfterWindow = true
-                        continue
-                    }
-                    points.append(contentsOf: Self.points(from: tick, timestamp: timestamp))
-                } catch {
-                    skippedLineCount += 1
+            for point in decoded.points {
+                if let startDate, point.timestamp < startDate {
+                    continue
                 }
+                if point.timestamp > now {
+                    continue
+                }
+                points.append(point)
             }
         }
 
@@ -208,6 +207,67 @@ public actor UsageHistoryReader {
             hasDataBeforeWindow: window == .all ? false : hasDataBeforeWindow,
             hasDataAfterWindow: window == .all ? false : hasDataAfterWindow
         )
+    }
+
+    private func decodedFile(at url: URL) -> DecodedHistoryFile? {
+        let signature = fileSignature(for: url)
+        if let signature,
+           let cached = fileCache[url.path],
+           cached.signature == signature {
+            return cached.decoded
+        }
+
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            logger.log(.warning, "UsageHistoryReader: cannot read \(url.path): \(error)")
+            return nil
+        }
+
+        let decoder = JSONDecoder()
+        var decodedPoints: [UsageHistoryPoint] = []
+        var timestamps: [Date] = []
+        var skippedLineCount = 0
+        let lines = data.split(separator: Self.newlineByte, omittingEmptySubsequences: true)
+
+        for line in lines {
+            do {
+                let tick = try decoder.decode(TickSnapshot.self, from: Data(line))
+                guard let timestamp = tick.timestamp.date else {
+                    continue
+                }
+                timestamps.append(timestamp)
+                decodedPoints.append(contentsOf: Self.points(from: tick, timestamp: timestamp))
+            } catch {
+                skippedLineCount += 1
+            }
+        }
+
+        let decoded = DecodedHistoryFile(
+            points: decodedPoints,
+            timestamps: timestamps,
+            skippedLineCount: skippedLineCount
+        )
+        if let signature {
+            fileCache[url.path] = CachedHistoryFile(signature: signature, decoded: decoded)
+        }
+        return decoded
+    }
+
+    private func fileSignature(for url: URL) -> HistoryFileSignature? {
+        guard let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey]) else {
+            return nil
+        }
+        return HistoryFileSignature(
+            contentModificationDate: values.contentModificationDate,
+            fileSize: values.fileSize
+        )
+    }
+
+    private func pruneCache(keeping urls: [URL]) {
+        let livePaths = Set(urls.map(\.path))
+        fileCache = fileCache.filter { livePaths.contains($0.key) }
     }
 
     private func jsonlFileURLs() -> [URL] {
@@ -245,25 +305,23 @@ public actor UsageHistoryReader {
     ) -> UsageHistoryPoint? {
         switch metric.kind {
         case .timeWindow:
-            guard let usagePercent = metric.usagePercent else { return nil }
             return UsageHistoryPoint(
                 timestamp: timestamp,
                 vendor: account.vendor,
                 account: account.account,
                 metricName: metric.name,
                 metricKind: metric.kind,
-                value: Double(usagePercent.rawValue),
+                value: metric.usagePercent.map { Double($0.rawValue) },
                 unit: "%"
             )
         case .payAsYouGo:
-            guard let currentAmount = metric.currentAmount else { return nil }
             return UsageHistoryPoint(
                 timestamp: timestamp,
                 vendor: account.vendor,
                 account: account.account,
                 metricName: metric.name,
                 metricKind: metric.kind,
-                value: currentAmount,
+                value: metric.currentAmount,
                 unit: metric.currency ?? ""
             )
         case .unknown:
@@ -272,6 +330,22 @@ public actor UsageHistoryReader {
     }
 
     private static let newlineByte: UInt8 = 0x0A
+}
+
+private struct HistoryFileSignature: Equatable {
+    let contentModificationDate: Date?
+    let fileSize: Int?
+}
+
+private struct DecodedHistoryFile {
+    let points: [UsageHistoryPoint]
+    let timestamps: [Date]
+    let skippedLineCount: Int
+}
+
+private struct CachedHistoryFile {
+    let signature: HistoryFileSignature
+    let decoded: DecodedHistoryFile
 }
 
 private extension MetricKind {

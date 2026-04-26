@@ -59,6 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Loggers.setPreferences(Self.sharedPreferences)
 
         MenuBarSegmentsSeeder.seedIfNeeded(preferences: Self.sharedPreferences)
+        ChartConfigurationsSeeder.seedIfNeeded(preferences: Self.sharedPreferences)
 
         // Reconcile launch-at-login preference with system state — the user may
         // have disabled the entry in System Settings > Login Items directly.

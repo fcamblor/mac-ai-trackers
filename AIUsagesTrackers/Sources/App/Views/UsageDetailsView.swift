@@ -115,6 +115,8 @@ struct UsageDetailsView: View {
                 referenceDate: historyReferenceDate,
                 selectedWindow: historyWindowBinding,
                 isLoading: isLoadingHistory,
+                configurations: AppDelegate.sharedPreferences.chartConfigurations,
+                currentEntries: store.entries,
                 onPreviousWindow: {
                     Task { await moveHistoryWindow(direction: .previous) }
                 },

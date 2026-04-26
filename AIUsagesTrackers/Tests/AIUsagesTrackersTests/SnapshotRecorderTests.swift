@@ -185,7 +185,7 @@ struct SnapshotRecorderTests {
         #expect(lines.count == 2)
     }
 
-    @Test("nulls out time-window usagePercent when resetAt is in the past")
+    @Test("nulls out time-window usagePercent when resetAt has passed")
     func nullsOutOutdatedTimeWindow() async {
         let root = Self.makeTempRoot()
         let recorder = SnapshotRecorder(
@@ -195,10 +195,12 @@ struct SnapshotRecorderTests {
         )
         let now = Self.isoDate("2026-04-19T12:00:00Z")
         let pastReset = ISODate(date: now.addingTimeInterval(-60))
+        let exactReset = ISODate(date: now)
         let futureReset = ISODate(date: now.addingTimeInterval(3600))
         let file = UsagesFile(usages: [
             VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
                 .timeWindow(name: "outdated", resetAt: pastReset, windowDuration: 300, usagePercent: 42),
+                .timeWindow(name: "at-reset", resetAt: exactReset, windowDuration: 300, usagePercent: 88),
                 .timeWindow(name: "fresh", resetAt: futureReset, windowDuration: 300, usagePercent: 17),
                 .timeWindow(name: "no-reset", resetAt: nil, windowDuration: 300, usagePercent: 9),
             ]),
@@ -207,11 +209,19 @@ struct SnapshotRecorderTests {
         await recorder.recordSnapshot(from: file, now: now)
 
         let path = Self.expectedPath(root: root, year: "2026", month: "04", day: "19")
-        let tick = Self.decode(Self.readLines(path)[0])
+        let line = Self.readLines(path)[0]
+        let tick = Self.decode(line)
         let metrics = tick?.accounts.first?.metrics ?? []
         #expect(metrics.first(where: { $0.name == "outdated" })?.usagePercent == nil)
+        #expect(metrics.first(where: { $0.name == "at-reset" })?.usagePercent == nil)
         #expect(metrics.first(where: { $0.name == "fresh" })?.usagePercent?.rawValue == 17)
         #expect(metrics.first(where: { $0.name == "no-reset" })?.usagePercent?.rawValue == 9)
+
+        let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any]
+        let accounts = object?["accounts"] as? [[String: Any]]
+        let metricObjects = accounts?.first?["metrics"] as? [[String: Any]]
+        #expect(metricObjects?.first(where: { $0["name"] as? String == "outdated" })?["usagePercent"] is NSNull)
+        #expect(metricObjects?.first(where: { $0["name"] as? String == "at-reset" })?["usagePercent"] is NSNull)
     }
 
     @Test("hash differs when a window transitions to outdated, producing a new line")

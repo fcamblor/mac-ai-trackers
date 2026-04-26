@@ -106,6 +106,8 @@ struct UserDefaultsAppPreferencesTests {
         #expect(prefs.menuBarSegments.isEmpty)
         #expect(prefs.menuBarSegmentsInitialized == false)
         #expect(prefs.menuBarSeparator == " | ")
+        #expect(prefs.chartConfigurations.isEmpty)
+        #expect(prefs.chartConfigurationsInitialized == false)
     }
 
     @Test("menuBarSeparator round-trips through UserDefaults")
@@ -191,6 +193,67 @@ struct UserDefaultsAppPreferencesTests {
         defaults.set(Data("not json".utf8), forKey: AppPreferenceKeys.menuBarSegments.rawValue)
         let prefs = UserDefaultsAppPreferences(defaults: defaults)
         #expect(prefs.menuBarSegments.isEmpty)
+    }
+
+    @Test("chartConfigurations round-trips through UserDefaults")
+    @MainActor
+    func chartConfigurationsRoundTrip() {
+        let (defaults, name) = makeSuite()
+        defer { cleanUp(suiteName: name) }
+
+        let prefs = UserDefaultsAppPreferences(defaults: defaults)
+        let configurations = [
+            ChartConfiguration(
+                title: "Custom",
+                selection: .custom([
+                    ChartSeriesConfig(
+                        vendor: .claude,
+                        account: .specific("a@b.com"),
+                        metricName: "Cost",
+                        style: ChartSeriesStyle(color: .orange, lineStyle: .dashed)
+                    ),
+                ])
+            ),
+        ]
+
+        prefs.chartConfigurations = configurations
+        #expect(prefs.chartConfigurations == configurations)
+    }
+
+    @Test("chartConfigurations persists across instances")
+    @MainActor
+    func chartConfigurationsPersist() {
+        let (defaults, name) = makeSuite()
+        defer { cleanUp(suiteName: name) }
+
+        let writer = UserDefaultsAppPreferences(defaults: defaults)
+        let configuration = ChartConfiguration(title: "All", selection: .allAvailable)
+        writer.chartConfigurations = [configuration]
+
+        let reader = UserDefaultsAppPreferences(defaults: defaults)
+        #expect(reader.chartConfigurations == [configuration])
+    }
+
+    @Test("chartConfigurationsInitialized round-trips")
+    @MainActor
+    func chartConfigurationsInitializedRoundTrip() {
+        let (defaults, name) = makeSuite()
+        defer { cleanUp(suiteName: name) }
+
+        let prefs = UserDefaultsAppPreferences(defaults: defaults)
+        prefs.chartConfigurationsInitialized = true
+        #expect(prefs.chartConfigurationsInitialized == true)
+    }
+
+    @Test("corrupt chartConfigurations JSON returns empty array")
+    @MainActor
+    func corruptChartConfigurations() {
+        let (defaults, name) = makeSuite()
+        defer { cleanUp(suiteName: name) }
+
+        defaults.set(Data("not json".utf8), forKey: AppPreferenceKeys.chartConfigurations.rawValue)
+        let prefs = UserDefaultsAppPreferences(defaults: defaults)
+        #expect(prefs.chartConfigurations.isEmpty)
     }
 
     @Test("refreshInterval round-trips through UserDefaults")
