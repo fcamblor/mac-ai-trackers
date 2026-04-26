@@ -22,8 +22,8 @@ struct SettingsView: View {
             ChartSettingsView(preferences: preferences)
                 .tabItem { Label("Charts", systemImage: "chart.xyaxis.line") }
 
-            AssistantsSettingsView(preferences: preferences)
-                .tabItem { Label("Assistants", systemImage: "sparkles") }
+            // AssistantsSettingsView(preferences: preferences)
+            //     .tabItem { Label("Assistants", systemImage: "sparkles") }
         }
         .frame(minWidth: 680, idealWidth: 720, minHeight: 750, idealHeight: 800)
     }

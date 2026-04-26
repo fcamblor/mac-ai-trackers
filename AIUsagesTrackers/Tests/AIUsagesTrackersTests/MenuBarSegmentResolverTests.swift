@@ -221,6 +221,15 @@ struct ResolverTimeWindowTogglesTests {
         #expect(segment?.text == "S 2h 13m")
     }
 
+    @Test("remaining percent mode shows allowance left")
+    func remainingPercent() {
+        let segment = resolveWith(TimeWindowDisplay(
+            showDot: true, showLetter: true, letter: "S",
+            showPercent: true, percentDisplayMode: .remaining, showReset: false
+        ))
+        #expect(segment?.text == "S 52%")
+    }
+
     @Test("reset off hides remaining time")
     func resetOff() {
         let segment = resolveWith(TimeWindowDisplay(
@@ -247,6 +256,30 @@ struct ResolverTimeWindowTogglesTests {
         ))
         #expect(segment?.showDot == false)
         #expect(segment?.tier == nil)
+    }
+
+    @Test("reset can hide minutes when duration is over one day")
+    func resetHidesMinutesOverOneDay() {
+        let config = MenuBarSegmentConfig(
+            vendor: .claude,
+            account: .currentlyActive,
+            metricName: "Weekly (all models)",
+            display: .timeWindow(TimeWindowDisplay(
+                showDot: false,
+                showLetter: true,
+                letter: "W",
+                showPercent: false,
+                showReset: true,
+                hideResetMinutesWhenOverOneDay: true
+            ))
+        )
+        let entry = timeWindowEntry(
+            metricName: "Weekly (all models)",
+            resetAt: "2026-04-20T05:30:00Z"
+        )
+        let now = ISO8601DateFormatter().date(from: "2026-04-17T00:00:00Z")!
+        let result = MenuBarSegmentResolver.resolve(config: config, entries: [entry], now: now)
+        #expect(result.rendered?.text == "W 3d 6h")
     }
 
     @Test("all toggles off yields nil segment")

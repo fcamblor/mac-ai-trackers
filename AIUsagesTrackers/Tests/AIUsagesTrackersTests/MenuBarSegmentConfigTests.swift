@@ -45,7 +45,9 @@ struct SegmentDisplayTests {
             showLetter: true,
             letter: "X",
             showPercent: false,
-            showReset: true
+            percentDisplayMode: .remaining,
+            showReset: true,
+            hideResetMinutesWhenOverOneDay: true
         ))
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(SegmentDisplay.self, from: data)
@@ -66,17 +68,21 @@ struct SegmentDisplayTests {
         #expect(display.showDot)
         #expect(display.showLetter)
         #expect(display.showPercent)
+        #expect(display.percentDisplayMode == .consumed)
         #expect(display.showReset)
+        #expect(!display.hideResetMinutesWhenOverOneDay)
         #expect(!display.showVendorIcon)
     }
 
-    @Test("TimeWindowDisplay JSON without showVendorIcon decodes to false")
-    func showVendorIconMissingDefaultsFalse() throws {
+    @Test("TimeWindowDisplay JSON without newer fields decodes to defaults")
+    func newerFieldsMissingDefault() throws {
         let json = """
         {"showDot":true,"showLetter":true,"letter":"S","showPercent":true,"showReset":true}
         """
         let data = json.data(using: .utf8)!
         let decoded = try JSONDecoder().decode(TimeWindowDisplay.self, from: data)
+        #expect(decoded.percentDisplayMode == .consumed)
+        #expect(!decoded.hideResetMinutesWhenOverOneDay)
         #expect(!decoded.showVendorIcon)
     }
 
@@ -86,6 +92,18 @@ struct SegmentDisplayTests {
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(TimeWindowDisplay.self, from: data)
         #expect(decoded.showVendorIcon == true)
+    }
+
+    @Test("TimeWindowDisplay with remaining percent and compact reset round-trips")
+    func newFieldsRoundTrip() throws {
+        let original = TimeWindowDisplay(
+            percentDisplayMode: .remaining,
+            hideResetMinutesWhenOverOneDay: true
+        )
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(TimeWindowDisplay.self, from: data)
+        #expect(decoded.percentDisplayMode == .remaining)
+        #expect(decoded.hideResetMinutesWhenOverOneDay)
     }
 }
 
