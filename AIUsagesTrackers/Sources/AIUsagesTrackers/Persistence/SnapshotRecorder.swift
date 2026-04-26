@@ -49,7 +49,7 @@ public actor SnapshotRecorder: SnapshotRecording {
     }
 
     public func recordSnapshot(from file: UsagesFile, now: Date = Date()) async {
-        let accounts = Self.flatten(usages: file.usages)
+        let accounts = Self.flatten(usages: file.usages, now: now)
         guard !accounts.isEmpty else {
             logger.log(.debug, "SnapshotRecorder: no metrics to snapshot — skipping tick")
             return
@@ -103,17 +103,27 @@ public actor SnapshotRecorder: SnapshotRecording {
 
     // MARK: - Helpers
 
-    static func flatten(usages: [VendorUsageEntry]) -> [AccountSnapshot] {
+    static func flatten(usages: [VendorUsageEntry], now: Date) -> [AccountSnapshot] {
         var out: [AccountSnapshot] = []
         for entry in usages {
             var metrics: [MetricSnapshot] = []
             for metric in entry.metrics {
                 switch metric {
-                case let .timeWindow(name, _, _, usagePercent):
+                case let .timeWindow(name, resetAt, _, usagePercent):
+                    // A reset date in the past means the window has rolled over and the
+                    // currently-persisted percentage no longer reflects reality. Record
+                    // the metric with a null value so the chart shows a gap instead of
+                    // carrying the stale value forward at a misleading timestamp.
+                    let isOutdated: Bool
+                    if let resetDate = resetAt?.date, resetDate < now {
+                        isOutdated = true
+                    } else {
+                        isOutdated = false
+                    }
                     metrics.append(MetricSnapshot(
                         name: name,
                         kind: .timeWindow,
-                        usagePercent: usagePercent
+                        usagePercent: isOutdated ? nil : usagePercent
                     ))
                 case let .payAsYouGo(name, amount, currency):
                     metrics.append(MetricSnapshot(

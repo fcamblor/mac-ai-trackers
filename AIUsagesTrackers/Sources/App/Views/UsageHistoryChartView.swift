@@ -34,6 +34,7 @@ struct UsageHistoryChartView: View {
             return UsageHistorySeriesSummary(
                 id: seriesID,
                 label: latest.seriesLabel,
+                metricName: latest.metricName,
                 latestValue: latest.value,
                 unit: latest.unit,
                 pointCount: points.count
@@ -276,7 +277,7 @@ struct UsageHistoryChartView: View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(Array(summaries.prefix(6))) { summary in
                 HStack(spacing: 8) {
-                    seriesSwatch(for: summary.id, label: summary.label)
+                    seriesSwatch(for: summary.id, metricName: summary.metricName)
 
                     Text(summary.label)
                         .font(.system(size: 10))
@@ -373,9 +374,9 @@ struct UsageHistoryChartView: View {
     }
 
     @ViewBuilder
-    private func seriesSwatch(for seriesID: String, label: String) -> some View {
+    private func seriesSwatch(for seriesID: String, metricName: String) -> some View {
         let color = seriesColor(for: seriesID)
-        if isWeekly(label) {
+        if isWeekly(metricName) {
             Canvas { ctx, size in
                 var path = Path()
                 path.move(to: CGPoint(x: 0, y: size.height / 2))
