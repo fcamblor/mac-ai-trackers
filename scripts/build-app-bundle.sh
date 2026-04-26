@@ -46,6 +46,42 @@ echo "→ Copying executable"
 cp "$APP_BIN" "$MACOS_DIR/$APP_BINARY_NAME"
 chmod +x "$MACOS_DIR/$APP_BINARY_NAME"
 
+# SwiftPM emits a resource bundle next to the binary for any target declaring
+# `resources:`. The generated `Bundle.module` accessor looks for it relative to
+# the executable URL, so it must sit alongside the binary in Contents/MacOS —
+# not in Contents/Resources. Without this, the app fatal-errors on first access.
+echo "→ Copying SwiftPM resource bundles"
+BIN_PATH="$(swift build -c "$BUILD_CONFIG" --show-bin-path)"
+shopt -s nullglob
+for bundle in "$BIN_PATH"/*.bundle; do
+  bundle_name="$(basename "$bundle")"
+  echo "  • $bundle_name"
+  cp -R "$bundle" "$MACOS_DIR/"
+  # SwiftPM emits a flat bundle (resources at the root, no Info.plist).
+  # codesign rejects that as "bundle format unrecognized" — give it a minimal
+  # Info.plist so the embedded bundle can be signed with the parent .app.
+  bundle_basename="${bundle_name%.bundle}"
+  cat > "$MACOS_DIR/$bundle_name/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>$BUNDLE_ID.resources.$bundle_basename</string>
+  <key>CFBundleName</key>
+  <string>$bundle_basename</string>
+  <key>CFBundlePackageType</key>
+  <string>BNDL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>$BUNDLE_VERSION</string>
+  <key>CFBundleVersion</key>
+  <string>$BUNDLE_VERSION</string>
+</dict>
+</plist>
+PLIST
+done
+shopt -u nullglob
+
 echo "→ Writing Info.plist"
 cat > "$CONTENTS/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
