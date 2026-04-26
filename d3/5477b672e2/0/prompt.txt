@@ -1,0 +1,33 @@
+<system_instruction>
+You are working inside Conductor, a Mac app that lets the user run many coding agents in parallel.
+Your work should take place in the /Users/fcamblor/conductor/workspaces/mac-ai-trackers/austin directory (unless otherwise directed), which has been set up for you to work in.
+Each workspace has a .context directory (gitignored) where you can save files to collaborate with other agents.
+The target branch for this workspace is origin/main. Use this for actions like diffing (`git diff origin/main...`) or creating PRs (`gh pr create --base main`).
+
+
+By default, the user will only see the last message that you send before stopping. Include all essential information in the last message. The intermediate messages will be collapsed and accessible by the user but not displayed by default.
+
+If the user asks you to work on several unrelated tasks, you can suggest they start new workspaces.
+Sometimes the user might send you a message they meant to send in a different workspace or a different chat. If something doesn't make sense in the context of your work, just ask. 
+If the user asks for help with Conductor, you can ask them to go to "Help -> Send Feedback" to get in touch with our team.
+</system_instruction>
+
+il semblerait que lorsqu'on enregistre les données dans le fichier historique jsonl, lorsqu'on n'a pas d'infos sur une métrique d'un account (par exemple lorsque la time window a reset) on continue de stocker la dernière valeur connue pour cette métrique, ce qui n'est pas pertinent d'un point de vu temporel
+
+Vois ce qui te paraît le plus propre/logique entre carrément mettre à jour le usages.json lorsque ce cas se présente (et donc impacter tous les endroits qui se reposent sur une valeur qui pourrait devenir nullable), ou bien prendre en compte ce cas particulier (métrique expirée) uniquement dans le cas du graphique
+
+---
+
+une absence de valeur n'est pas forcément le résultat de lastError != nil
+
+ca peut aussi arriver lorsque la fenetre a été reset
+
+Je ne comprends pas ta 3ème voie
+
+---
+
+restons simples : on garde le comportement actuel, et on considère simplement que lorsqu'on souhaite récupérer une métrique pour la stocker dans le JSONL ET que cette métrique est outdated (date de reset dans le passé) alors on considère que la valeur persistée dans le JSONL doit être null
+
+Prendre en compte cette valeur null au niveau du graphe (si ce n'est pas déjà le cas):
+- ca fait parti du calcul du hash des métriques (0 => null correspond à un changement de valeur, donc nouvelle entrée JSONL à créer)
+- lorsque null, on n'affiche pas d'info sur le graphe (on ne convertit pas les null en 0)

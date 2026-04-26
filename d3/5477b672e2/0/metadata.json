@@ -1,0 +1,88 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "d35477b672e2",
+  "session_id": "5a970c1c-6916-4cb5-b08f-789f33c6bf17",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-26T12:43:54.903933Z",
+  "branch": "chart-hover-tooltip",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/SnapshotRecorder.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/UsageHistoryReader.swift",
+    "AIUsagesTrackers/Sources/App/Views/UsageHistoryChartView.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/SnapshotRecorderTests.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "fa28696807da",
+  "token_usage": {
+    "input_tokens": 70,
+    "cache_creation_tokens": 269007,
+    "cache_read_tokens": 2109240,
+    "output_tokens": 19772,
+    "api_call_count": 36
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-26T12:43:54.607548Z",
+    "agent_lines": 65,
+    "agent_removed": 4,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 4,
+    "total_committed": 65,
+    "total_lines_changed": 73,
+    "agent_percentage": 94.52054794520548,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 100,
+      "user_lines_removed": 4,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/Review request.md": 92,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/UsageHistoryReader.swift": 4,
+        "AIUsagesTrackers/Sources/App/Views/UsageHistoryChartView.swift": 4
+      },
+      "user_removed_per_file": {
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/UsageHistoryReader.swift": 1,
+        "AIUsagesTrackers/Sources/App/Views/UsageHistoryChartView.swift": 3
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 92,
+      "user_lines_removed": 0,
+      "agent_lines_added": 8,
+      "agent_lines_removed": 4,
+      "user_added_per_file": {
+        ".context/attachments/Review request.md": 92
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 92,
+      "user_lines_removed": 0,
+      "agent_lines_added": 8,
+      "agent_lines_removed": 4,
+      "user_added_per_file": {
+        ".context/attachments/Review request.md": 92
+      }
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 92,
+      "user_lines_removed": 0,
+      "agent_lines_added": 77,
+      "agent_lines_removed": 8,
+      "user_added_per_file": {
+        ".context/attachments/Review request.md": 92
+      }
+    }
+  ]
+}
