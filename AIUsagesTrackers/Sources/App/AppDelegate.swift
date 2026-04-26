@@ -242,37 +242,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Restore .accessory policy once the settings window is closed.
         if settingsWindowObserver == nil {
-            settingsWindowObserver = NotificationCenter.default.addObserver(
-                forName: NSWindow.willCloseNotification,
-                object: nil,
-                queue: .main
-            ) { [weak self] notification in
-                guard let self else { return }
-                // Only react to the Settings window closing — popovers and other
-                // transient windows also emit willClose.
-                guard let closingWindow = notification.object as? NSWindow else { return }
-                let windowIdentifier = closingWindow.identifier?.rawValue ?? ""
-                guard windowIdentifier.contains("Settings") || windowIdentifier.contains("Preferences") else { return }
-                // willClose fires while the window is still visible and before
-                // AppKit tears it down; defer to the next runloop tick so the
-                // activation-policy change isn't overridden by pending AppKit work.
-                DispatchQueue.main.async {
-                    NSApp.setActivationPolicy(.accessory)
-                    // Accessory transition doesn't always remove the app from the
-                    // Cmd+Tab / app-switcher list until another app is activated.
-                    if let frontmost = NSWorkspace.shared.runningApplications.first(where: {
-                        $0.isActive && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier
-                    }) {
-                        frontmost.activate()
-                    } else {
-                        NSApp.hide(nil)
-                    }
-                    if let token = self.settingsWindowObserver {
-                        NotificationCenter.default.removeObserver(token)
-                        self.settingsWindowObserver = nil
-                    }
-                }
+            // Use selector-based observer so the callback runs on @MainActor naturally,
+            // avoiding Sendable-crossing issues with block-based addObserver(queue:).
+            settingsWindowObserver = self
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(handleSettingsWindowWillClose(_:)),
+                name: NSWindow.willCloseNotification,
+                object: nil
+            )
+        }
+    }
+
+    @objc private func handleSettingsWindowWillClose(_ notification: Notification) {
+        // Only react to the Settings window closing — popovers and other
+        // transient windows also emit willClose.
+        guard let closingWindow = notification.object as? NSWindow else { return }
+        let windowIdentifier = closingWindow.identifier?.rawValue ?? ""
+        guard windowIdentifier.contains("Settings") || windowIdentifier.contains("Preferences") else { return }
+        // willClose fires while the window is still visible and before
+        // AppKit tears it down; defer to the next runloop tick so the
+        // activation-policy change isn't overridden by pending AppKit work.
+        DispatchQueue.main.async { [weak self] in
+            NSApp.setActivationPolicy(.accessory)
+            // Accessory transition doesn't always remove the app from the
+            // Cmd+Tab / app-switcher list until another app is activated.
+            if let frontmost = NSWorkspace.shared.runningApplications.first(where: {
+                $0.isActive && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier
+            }) {
+                frontmost.activate()
+            } else {
+                NSApp.hide(nil)
             }
+            guard let self else { return }
+            NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: nil)
+            self.settingsWindowObserver = nil
         }
     }
 
