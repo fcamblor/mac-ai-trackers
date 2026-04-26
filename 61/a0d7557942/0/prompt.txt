@@ -40,3 +40,7 @@ sur l'onglet général, il faudrait expliquer qu'on peut remove un account en cl
 
 "Right-click an account in the popover and choose "ignore this account" to hide it here"
 => "Right-click an account in the popover and choose "ignore this account" to append it to the list below"
+
+---
+
+/commit
