@@ -1,0 +1,1 @@
+faudrait faire en sorte que la checkbox "hide minutes over 1 day" soit cochée par défaut quand on crée une nouvelle métrique (ainsi que sur la reprise des données existantes)
