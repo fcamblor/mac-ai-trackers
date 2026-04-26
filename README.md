@@ -43,7 +43,7 @@ Each usage bar changes color as consumption approaches the limit, making it easy
 
 ### Customizable menu bar display
 
-Configure which segments appear in the menu bar label — vendor icon, colored status dot, metric short label, usage percentage, and time until reset — and choose the separator between them.
+Configure which segments appear in the menu bar label — vendor icon, colored status dot, metric short label, usage percentage, and time until reset — and choose the separator between them. Each segment has its own display options: the usage percentage can show either consumed or remaining value, and the time-until-reset label can hide the minutes component when the remaining time exceeds one day.
 
 <img src="docs/assets/screenshots/menubar_customization.png" alt="Menu bar customization settings" height="400">
 
