@@ -1,0 +1,63 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "222a6ed1e3c2",
+  "session_id": "7e17d310-7747-46af-ab79-7e55c4cf90d3",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-26T01:15:10.929192Z",
+  "branch": "readme-install-build",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "scripts/build-app-bundle.sh"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "066f8eeef155",
+  "token_usage": {
+    "input_tokens": 71,
+    "cache_creation_tokens": 211804,
+    "cache_read_tokens": 1698466,
+    "output_tokens": 16338,
+    "api_call_count": 38
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-26T01:15:10.734253Z",
+    "agent_lines": 36,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 36,
+    "total_lines_changed": 36,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 779,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/pasted_text_2026-04-26_03-03-18.txt": 693,
+        ".context/attachments/plan.md": 43,
+        ".context/plans/readme-for-ai-usages-tracker.md": 43
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 779,
+      "user_lines_removed": 0,
+      "agent_lines_added": 36,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/pasted_text_2026-04-26_03-03-18.txt": 693,
+        ".context/attachments/plan.md": 43,
+        ".context/plans/readme-for-ai-usages-tracker.md": 43
+      }
+    }
+  ]
+}

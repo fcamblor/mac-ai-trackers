@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "222a6ed1e3c2",
+  "strategy": "manual-commit",
+  "branch": "readme-install-build",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "scripts/build-app-bundle.sh"
+  ],
+  "sessions": [
+    {
+      "metadata": "/22/2a6ed1e3c2/0/metadata.json",
+      "transcript": "/22/2a6ed1e3c2/0/full.jsonl",
+      "content_hash": "/22/2a6ed1e3c2/0/content_hash.txt",
+      "prompt": "/22/2a6ed1e3c2/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 71,
+    "cache_creation_tokens": 211804,
+    "cache_read_tokens": 1698466,
+    "output_tokens": 16338,
+    "api_call_count": 38
+  }
+}
