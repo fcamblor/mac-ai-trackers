@@ -105,7 +105,7 @@ public struct TimeWindowDisplay: Codable, Equatable, Hashable, Sendable {
         showPercent: Bool = true,
         percentDisplayMode: UsagePercentDisplayMode = .consumed,
         showReset: Bool = true,
-        hideResetMinutesWhenOverOneDay: Bool = false,
+        hideResetMinutesWhenOverOneDay: Bool = true,
         showVendorIcon: Bool = false
     ) {
         self.showDot = showDot
@@ -137,7 +137,7 @@ public struct TimeWindowDisplay: Codable, Equatable, Hashable, Sendable {
         hideResetMinutesWhenOverOneDay = try c.decodeIfPresent(
             Bool.self,
             forKey: .hideResetMinutesWhenOverOneDay
-        ) ?? false
+        ) ?? true
         showVendorIcon = try c.decodeIfPresent(Bool.self, forKey: .showVendorIcon) ?? false
     }
 }

@@ -191,8 +191,8 @@ struct UsageStoreFormattingTests {
             timeWindowMetric(name: "Weekly (all models)", resetAt: "2026-04-23T21:00:00Z", usagePercent: 7),
         ])
         watcher.send(data)
-        try await eventually { store.menuBarText == "S 48% 2h 13m | W 7% 6d 8h 13m" }
-        #expect(store.menuBarText == "S 48% 2h 13m | W 7% 6d 8h 13m")
+        try await eventually { store.menuBarText == "S 48% 2h 13m | W 7% 6d 8h" }
+        #expect(store.menuBarText == "S 48% 2h 13m | W 7% 6d 8h")
         store.stop()
     }
 
@@ -459,7 +459,7 @@ struct UsageStoreRemainingTimeTests {
         ])
         watcher.send(data)
         try await eventually { store.menuBarText != "--" }
-        #expect(store.menuBarText == "W 15% 3d 5h 30m")
+        #expect(store.menuBarText == "W 15% 3d 6h")
         store.stop()
     }
 

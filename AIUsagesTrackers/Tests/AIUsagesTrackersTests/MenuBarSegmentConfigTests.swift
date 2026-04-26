@@ -70,7 +70,7 @@ struct SegmentDisplayTests {
         #expect(display.showPercent)
         #expect(display.percentDisplayMode == .consumed)
         #expect(display.showReset)
-        #expect(!display.hideResetMinutesWhenOverOneDay)
+        #expect(display.hideResetMinutesWhenOverOneDay)
         #expect(!display.showVendorIcon)
     }
 
@@ -82,7 +82,7 @@ struct SegmentDisplayTests {
         let data = json.data(using: .utf8)!
         let decoded = try JSONDecoder().decode(TimeWindowDisplay.self, from: data)
         #expect(decoded.percentDisplayMode == .consumed)
-        #expect(!decoded.hideResetMinutesWhenOverOneDay)
+        #expect(decoded.hideResetMinutesWhenOverOneDay)
         #expect(!decoded.showVendorIcon)
     }
 
