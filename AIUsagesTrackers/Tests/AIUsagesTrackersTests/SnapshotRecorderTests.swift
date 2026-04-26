@@ -185,6 +185,61 @@ struct SnapshotRecorderTests {
         #expect(lines.count == 2)
     }
 
+    @Test("nulls out time-window usagePercent when resetAt is in the past")
+    func nullsOutOutdatedTimeWindow() async {
+        let root = Self.makeTempRoot()
+        let recorder = SnapshotRecorder(
+            rootPath: root,
+            logger: Self.makeLogger(in: root),
+            calendar: Self.utcCalendar()
+        )
+        let now = Self.isoDate("2026-04-19T12:00:00Z")
+        let pastReset = ISODate(date: now.addingTimeInterval(-60))
+        let futureReset = ISODate(date: now.addingTimeInterval(3600))
+        let file = UsagesFile(usages: [
+            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+                .timeWindow(name: "outdated", resetAt: pastReset, windowDuration: 300, usagePercent: 42),
+                .timeWindow(name: "fresh", resetAt: futureReset, windowDuration: 300, usagePercent: 17),
+                .timeWindow(name: "no-reset", resetAt: nil, windowDuration: 300, usagePercent: 9),
+            ]),
+        ])
+
+        await recorder.recordSnapshot(from: file, now: now)
+
+        let path = Self.expectedPath(root: root, year: "2026", month: "04", day: "19")
+        let tick = Self.decode(Self.readLines(path)[0])
+        let metrics = tick?.accounts.first?.metrics ?? []
+        #expect(metrics.first(where: { $0.name == "outdated" })?.usagePercent == nil)
+        #expect(metrics.first(where: { $0.name == "fresh" })?.usagePercent?.rawValue == 17)
+        #expect(metrics.first(where: { $0.name == "no-reset" })?.usagePercent?.rawValue == 9)
+    }
+
+    @Test("hash differs when a window transitions to outdated, producing a new line")
+    func hashChangesWhenWindowExpires() async {
+        let root = Self.makeTempRoot()
+        let recorder = SnapshotRecorder(
+            rootPath: root,
+            logger: Self.makeLogger(in: root),
+            calendar: Self.utcCalendar()
+        )
+        // Same persisted value, but resetAt has been crossed between the two ticks.
+        let resetAt = ISODate(date: Self.isoDate("2026-04-19T12:00:30Z"))
+        let file = UsagesFile(usages: [
+            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+                .timeWindow(name: "session", resetAt: resetAt, windowDuration: 300, usagePercent: 42),
+            ]),
+        ])
+
+        await recorder.recordSnapshot(from: file, now: Self.isoDate("2026-04-19T12:00:00Z"))
+        await recorder.recordSnapshot(from: file, now: Self.isoDate("2026-04-19T12:01:00Z"))
+
+        let path = Self.expectedPath(root: root, year: "2026", month: "04", day: "19")
+        let lines = Self.readLines(path)
+        #expect(lines.count == 2)
+        #expect(Self.decode(lines[0])?.accounts.first?.metrics.first?.usagePercent?.rawValue == 42)
+        #expect(Self.decode(lines[1])?.accounts.first?.metrics.first?.usagePercent == nil)
+    }
+
     @Test("writes again when an account appears or disappears")
     func writesWhenAccountSetChanges() async {
         let root = Self.makeTempRoot()

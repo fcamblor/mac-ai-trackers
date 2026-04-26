@@ -85,13 +85,15 @@ public struct UsageHistoryPoint: Equatable, Identifiable, Sendable {
 public struct UsageHistorySeriesSummary: Equatable, Identifiable, Sendable {
     public let id: String
     public let label: String
+    public let metricName: String
     public let latestValue: Double
     public let unit: String
     public let pointCount: Int
 
-    public init(id: String, label: String, latestValue: Double, unit: String, pointCount: Int) {
+    public init(id: String, label: String, metricName: String, latestValue: Double, unit: String, pointCount: Int) {
         self.id = id
         self.label = label
+        self.metricName = metricName
         self.latestValue = latestValue
         self.unit = unit
         self.pointCount = pointCount
@@ -130,6 +132,7 @@ public struct UsageHistorySnapshot: Equatable, Sendable {
             return UsageHistorySeriesSummary(
                 id: seriesID,
                 label: latest.seriesLabel,
+                metricName: latest.metricName,
                 latestValue: latest.value,
                 unit: latest.unit,
                 pointCount: points.count
