@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "976c75bb3c5c",
+  "strategy": "manual-commit",
+  "branch": "fix-sendable-closure-warning",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/97/6c75bb3c5c/0/metadata.json",
+      "transcript": "/97/6c75bb3c5c/0/full.jsonl",
+      "content_hash": "/97/6c75bb3c5c/0/content_hash.txt",
+      "prompt": "/97/6c75bb3c5c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 45,
+    "cache_creation_tokens": 76847,
+    "cache_read_tokens": 907990,
+    "output_tokens": 16118,
+    "api_call_count": 26
+  }
+}

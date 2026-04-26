@@ -1,0 +1,67 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "976c75bb3c5c",
+  "session_id": "27b33c77-d03e-45ed-85e4-fbeb28a3b6ad",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-26T23:48:37.605904Z",
+  "branch": "fix-sendable-closure-warning",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "e86e2242009a",
+  "token_usage": {
+    "input_tokens": 45,
+    "cache_creation_tokens": 76847,
+    "cache_read_tokens": 907990,
+    "output_tokens": 16118,
+    "api_call_count": 26
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-26T23:48:37.351856Z",
+    "agent_lines": 34,
+    "agent_removed": 30,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 34,
+    "total_lines_changed": 64,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 34,
+      "agent_lines_removed": 30
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 35,
+      "agent_lines_removed": 31
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 35,
+      "agent_lines_removed": 31
+    }
+  ]
+}
