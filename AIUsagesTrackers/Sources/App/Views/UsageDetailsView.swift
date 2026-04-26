@@ -188,17 +188,47 @@ struct UsageDetailsView: View {
         .padding(.vertical, 8)
     }
 
+    @ViewBuilder
     private var emptyState: some View {
-        VStack(spacing: 8) {
-            Text("No usage data")
-                .font(.system(size: 12, weight: .medium))
+        if AppDelegate.sharedPreferences.menuBarSegments.isEmpty {
+            unconfiguredEmptyState
+        } else {
+            VStack(spacing: 8) {
+                Text("No usage data")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Text("Waiting for data...")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 32)
+        }
+    }
+
+    private var unconfiguredEmptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "gearshape.2")
+                .font(.system(size: 28, weight: .light))
                 .foregroundStyle(.secondary)
-            Text("Waiting for data...")
+            Text("No menu bar segment yet")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.primary)
+            Text("Add your first segment to start tracking your AI usages directly from the menu bar.")
                 .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                onOpenSettings()
+            } label: {
+                Text("Open Settings")
+            }
+            .controlSize(.small)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 32)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 24)
     }
 
     private var footer: some View {

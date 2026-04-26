@@ -19,6 +19,14 @@ brew tap fcamblor/tap
 brew install --cask ai-usages-tracker
 ```
 
+## First Launch
+
+On a fresh install, the menu bar shows a **Configure AI Metrics** call to action — no segments are pre-seeded so the app does not assume which assistant or metrics matter to you.
+
+<img src="docs/assets/screenshots/Configure_AI_Metrics.png" alt="Configure AI Metrics call to action in the menu bar" height="60">
+
+Click the menu bar item to open the popover, then **Open Settings** to add your first segment (vendor, account, metric, display options). Once at least one segment is configured, the menu bar label switches to live usage data.
+
 ## Screenshots & Features
 
 ### Multi-account support

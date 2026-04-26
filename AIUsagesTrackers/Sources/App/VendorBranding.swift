@@ -102,19 +102,66 @@ enum VendorBranding {
         return result
     }
 
-    private static func loadTemplateImage(named assetName: String) -> NSImage? {
-        guard let url = Bundle.module.url(
-            forResource: assetName,
-            withExtension: "pdf",
-            subdirectory: "VendorBranding"
-        ), let image = NSImage(contentsOf: url) else {
-            return nil
-        }
+    /// Resolves the SwiftPM resource bundle without ever touching `Bundle.module`,
+    /// whose synthesized accessor traps with a precondition failure when the
+    /// expected `.bundle` is missing next to the executable. We probe every
+    /// location the bundle may legitimately land in across `swift run`,
+    /// `swift build`, the assembled `.app`, and merged-into-main-bundle layouts —
+    /// returning `nil` instead of crashing the app when none match.
+    private static let resourceBundleName = "AIUsagesTrackers_AIUsagesTrackers"
 
+    private static let resourceBundle: Bundle? = {
+        let bundleFile = "\(resourceBundleName).bundle"
+        let mainURL = Bundle.main.bundleURL
+        let tokenBundle = Bundle(for: BundleToken.self)
+        let candidates: [URL?] = [
+            Bundle.main.resourceURL,
+            mainURL,
+            mainURL.appendingPathComponent("Contents/MacOS"),
+            mainURL.appendingPathComponent("Contents/Resources"),
+            tokenBundle.resourceURL,
+            tokenBundle.bundleURL,
+        ]
+        for candidate in candidates.compactMap({ $0 }) {
+            let bundleURL = candidate.appendingPathComponent(bundleFile)
+            if let bundle = Bundle(url: bundleURL) {
+                return bundle
+            }
+        }
+        return nil
+    }()
+
+    private static func loadTemplateImage(named assetName: String) -> NSImage? {
+        let url = locateAsset(named: assetName, fileExtension: "pdf", subdirectory: "VendorBranding")
+        guard let url, let image = NSImage(contentsOf: url) else { return nil }
         image.isTemplate = true
         return image
     }
+
+    private static func locateAsset(
+        named assetName: String,
+        fileExtension: String,
+        subdirectory: String
+    ) -> URL? {
+        if let url = Bundle.main.url(
+            forResource: assetName,
+            withExtension: fileExtension,
+            subdirectory: subdirectory
+        ) {
+            return url
+        }
+        if let url = resourceBundle?.url(
+            forResource: assetName,
+            withExtension: fileExtension,
+            subdirectory: subdirectory
+        ) {
+            return url
+        }
+        return nil
+    }
 }
+
+private final class BundleToken {}
 
 struct VendorIconView: View {
     let vendor: Vendor
@@ -129,6 +176,14 @@ struct VendorIconView: View {
                 .scaledToFit()
                 .frame(width: size, height: size)
                 .foregroundStyle(tint)
+                .accessibilityHidden(true)
+        } else {
+            // Asset bundle missing (defensive fallback): show the vendor's first
+            // letter so the rest of the UI stays informative instead of blank.
+            Text(VendorBranding.displayName(for: vendor).prefix(1).uppercased())
+                .font(.system(size: size * 0.8, weight: .semibold))
+                .foregroundStyle(VendorBranding.tint(for: vendor) ?? .primary)
+                .frame(width: size, height: size)
                 .accessibilityHidden(true)
         }
     }

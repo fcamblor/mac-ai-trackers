@@ -173,11 +173,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func refreshStatusItemImage() {
         guard let store = usageStore, let button = statusItem?.button else { return }
         let isDark = button.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let isUnconfigured = Self.sharedPreferences.menuBarSegments.isEmpty
         let image = MenuBarLabelRenderer.render(
             segments: store.menuBarSegments,
             separator: Self.sharedPreferences.menuBarSeparator,
             fallbackText: store.menuBarText,
-            isDarkMenuBar: isDark
+            isDarkMenuBar: isDark,
+            isUnconfigured: isUnconfigured
         )
         button.image = image
     }
