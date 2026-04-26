@@ -1,0 +1,7 @@
+il faudrait modifier le README pour décrire comment le plugin fonctionne et quelle est sa philosophie:
+- non intrusif: aucune configuration AI Assistant n'est altérée pendant l'utilisation de l'app
+- il suffit juste d'avoir des comptes de connectés pendant que le l'app tourne pour que les comptes soient auto-discovered
+- pour un vendor donné, il est possible d'avoir plusieurs comptes (sur certains vendors comme claude code, seul un seul compte peut être actif à un instant T)
+- les graphiques sont construits à partir de "snapshots" pris regulièrement
+- les usages sont mis à jour automatiquement à une fréquence qui est paramétrable dans les préférences
+- il est possible de configurer des segments dans la menubar, à partir des comptes auto-discovered

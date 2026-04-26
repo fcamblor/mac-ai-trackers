@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "5539b2a88ce3",
+  "strategy": "manual-commit",
+  "branch": "fix-bundle-crash-onboard",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Preferences/MenuBarSegmentsSeeder.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Store/UsageStore.swift",
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift",
+    "AIUsagesTrackers/Sources/App/MenuBarLabelRenderer.swift",
+    "AIUsagesTrackers/Sources/App/VendorBranding.swift",
+    "AIUsagesTrackers/Sources/App/Views/UsageDetailsView.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/MenuBarSegmentsSeederTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/VendorBrandingTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/55/39b2a88ce3/0/metadata.json",
+      "transcript": "/55/39b2a88ce3/0/full.jsonl",
+      "content_hash": "/55/39b2a88ce3/0/content_hash.txt",
+      "prompt": "/55/39b2a88ce3/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 4,
+    "cache_creation_tokens": 12120,
+    "cache_read_tokens": 30648,
+    "output_tokens": 1070,
+    "api_call_count": 2
+  }
+}

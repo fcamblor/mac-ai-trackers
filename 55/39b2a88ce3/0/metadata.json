@@ -1,0 +1,72 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "5539b2a88ce3",
+  "session_id": "1d8cda60-04ac-4ea7-b76e-e19570714cde",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-26T02:29:39.926823Z",
+  "branch": "fix-bundle-crash-onboard",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Preferences/MenuBarSegmentsSeeder.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Store/UsageStore.swift",
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift",
+    "AIUsagesTrackers/Sources/App/MenuBarLabelRenderer.swift",
+    "AIUsagesTrackers/Sources/App/VendorBranding.swift",
+    "AIUsagesTrackers/Sources/App/Views/UsageDetailsView.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/MenuBarSegmentsSeederTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/VendorBrandingTests.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-4-6",
+  "turn_id": "a5648be2caf7",
+  "token_usage": {
+    "input_tokens": 4,
+    "cache_creation_tokens": 12120,
+    "cache_read_tokens": 30648,
+    "output_tokens": 1070,
+    "api_call_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-26T02:29:39.872684Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 72,
+    "total_committed": 0,
+    "total_lines_changed": 72,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 952,
+      "user_lines_removed": 72,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/pasted_text_2026-04-26_03-45-42.txt": 619,
+        ".context/attachments/plan.md": 71,
+        ".context/plans/plan-crash-bundle-module-onboarding-sans-segments-.md": 71,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Preferences/MenuBarSegmentsSeeder.swift": 5,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Store/UsageStore.swift": 21,
+        "AIUsagesTrackers/Sources/App/AppDelegate.swift": 3,
+        "AIUsagesTrackers/Sources/App/MenuBarLabelRenderer.swift": 50,
+        "AIUsagesTrackers/Sources/App/VendorBranding.swift": 62,
+        "AIUsagesTrackers/Sources/App/Views/UsageDetailsView.swift": 36,
+        "AIUsagesTrackers/Tests/AIUsagesTrackersTests/MenuBarSegmentsSeederTests.swift": 5,
+        "AIUsagesTrackers/Tests/AIUsagesTrackersTests/VendorBrandingTests.swift": 9
+      },
+      "user_removed_per_file": {
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Preferences/MenuBarSegmentsSeeder.swift": 16,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Store/UsageStore.swift": 2,
+        "AIUsagesTrackers/Sources/App/AppDelegate.swift": 1,
+        "AIUsagesTrackers/Sources/App/MenuBarLabelRenderer.swift": 7,
+        "AIUsagesTrackers/Sources/App/VendorBranding.swift": 7,
+        "AIUsagesTrackers/Sources/App/Views/UsageDetailsView.swift": 6,
+        "AIUsagesTrackers/Tests/AIUsagesTrackersTests/MenuBarSegmentsSeederTests.swift": 33
+      }
+    }
+  ]
+}
