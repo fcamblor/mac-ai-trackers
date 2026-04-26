@@ -23,6 +23,23 @@ struct ChartSeriesResolverTests {
         )
     }
 
+    private static func nullPoint(
+        vendor: Vendor = .claude,
+        account: AccountEmail,
+        metricName: String,
+        offset: Double
+    ) -> UsageHistoryPoint {
+        UsageHistoryPoint(
+            timestamp: now.addingTimeInterval(offset),
+            vendor: vendor,
+            account: account,
+            metricName: metricName,
+            metricKind: .timeWindow,
+            value: nil,
+            unit: "%"
+        )
+    }
+
     @Test("allAvailable keeps all points grouped by history series")
     func allAvailableKeepsAllPoints() {
         let points = [
@@ -124,6 +141,24 @@ struct ChartSeriesResolverTests {
         )
 
         #expect(resolved[0].points.map(\.account) == ["active@example.com"])
+    }
+
+    @Test("allAvailable excludes series whose every point has a nil value")
+    func allAvailableExcludesAllNullSeries() {
+        let points = [
+            Self.point(account: "a@example.com", metricName: "session", value: 10),
+            Self.nullPoint(account: "b@example.com", metricName: "weekly", offset: 20),
+        ]
+        let config = ChartConfiguration(title: "All", selection: .allAvailable)
+
+        let resolved = ChartSeriesResolver.resolve(
+            configuration: config,
+            points: points,
+            currentEntries: []
+        )
+
+        #expect(resolved.count == 1)
+        #expect(resolved[0].points.map(\.value) == [10.0])
     }
 
     @Test("currentlyActive with no active account produces empty series")

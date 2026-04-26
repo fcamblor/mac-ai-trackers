@@ -38,7 +38,9 @@ public enum ChartSeriesResolver {
     private static func allAvailableSeries(from points: [UsageHistoryPoint]) -> [ResolvedChartSeries] {
         let grouped = Dictionary(grouping: points, by: \.seriesID)
         return grouped.compactMap { seriesID, seriesPoints in
-            guard let latest = seriesPoints.max(by: { $0.timestamp < $1.timestamp }) else { return nil }
+            guard let latest = seriesPoints
+                .filter({ $0.value != nil })
+                .max(by: { $0.timestamp < $1.timestamp }) else { return nil }
             return ResolvedChartSeries(
                 id: seriesID,
                 label: latest.seriesLabel,
