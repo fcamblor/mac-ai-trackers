@@ -1,0 +1,1 @@
+pourrais-tu remplir la partie screenshots & features du readme avec les screenshots mis a dispo dans docs/assets/screenshots/*

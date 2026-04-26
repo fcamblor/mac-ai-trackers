@@ -1,0 +1,68 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "a24b8e70365a",
+  "session_id": "51fb239d-029f-4e84-8433-e842304e0037",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-26T01:35:19.064027Z",
+  "branch": "readme-install-build",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "README.md",
+    "docs/assets/screenshots/Claude_status_error.png",
+    "docs/assets/screenshots/Multi-claude_accounts.png",
+    "docs/assets/screenshots/Multi-colors_display.png",
+    "docs/assets/screenshots/graphics.png",
+    "docs/assets/screenshots/menubar_customization.png"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-4-6",
+  "turn_id": "d5e2fce2d261",
+  "token_usage": {
+    "input_tokens": 6,
+    "cache_creation_tokens": 26154,
+    "cache_read_tokens": 67132,
+    "output_tokens": 2064,
+    "api_call_count": 4
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-26T01:35:18.938213Z",
+    "agent_lines": 28,
+    "agent_removed": 5,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 3,
+    "total_committed": 28,
+    "total_lines_changed": 36,
+    "agent_percentage": 91.66666666666666,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 1014,
+      "user_lines_removed": 3,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/Review request.md": 92,
+        ".context/attachments/pasted_text_2026-04-26_03-03-18.txt": 693,
+        ".context/attachments/plan.md": 43,
+        ".context/plans/readme-for-ai-usages-tracker.md": 43,
+        ".idea/.gitignore": 10,
+        "README.md": 1,
+        "docs/assets/screenshots/.idea/codeStyles/codeStyleConfig.xml": 5,
+        "docs/assets/screenshots/.idea/misc.xml": 6,
+        "docs/assets/screenshots/.idea/modules.xml": 8,
+        "docs/assets/screenshots/.idea/screenshots.iml": 9,
+        "docs/assets/screenshots/.idea/vcs.xml": 6,
+        "docs/assets/screenshots/.idea/workspace.xml": 98
+      },
+      "user_removed_per_file": {
+        "README.md": 3
+      }
+    }
+  ]
+}
