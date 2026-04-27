@@ -114,8 +114,8 @@ struct UsagesFileManagerTests {
         #expect(result.usages[0].lastError == nil)
     }
 
-    @Test("merge keeps account_unknown placeholder when real account fetch succeeds")
-    func mergeKeepsUnknownAccountPlaceholderOnSuccess() async {
+    @Test("merge does not persist account_unknown placeholder")
+    func mergeDoesNotPersistAccountUnknownPlaceholder() async {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
         let placeholderError = VendorUsageEntry(
@@ -124,18 +124,31 @@ struct UsagesFileManagerTests {
         )
         await mgr.update(with: [placeholderError])
 
+        let result = await mgr.read()
+        #expect(result.usages.isEmpty)
+    }
+
+    @Test("merge removes account_unknown placeholder when real account fetch succeeds")
+    func mergeRemovesUnknownAccountPlaceholderOnSuccess() async {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+        let placeholderError = VendorUsageEntry(
+            vendor: "claude", account: "unknown",
+            lastError: UsageError(timestamp: "2026-04-17T10:00:00+00:00", type: "account_unknown")
+        )
+        let existing = UsagesFile(usages: [placeholderError])
+
         let successEntry = VendorUsageEntry(
             vendor: "claude", account: "real@b.com", isActive: true,
             lastAcquiredOn: "2026-04-17T11:00:00+00:00",
             metrics: [.timeWindow(name: "session", resetAt: "2026-04-17T16:00:00+00:00",
                                   windowDuration: 300, usagePercent: 20)]
         )
-        await mgr.update(with: [successEntry])
+        let result = await mgr.merge(existing: existing, incoming: [successEntry])
 
-        let result = await mgr.read()
-        #expect(result.usages.count == 2)
+        #expect(result.usages.count == 1)
         #expect(result.usages.contains(where: { $0.account == "real@b.com" && $0.lastError == nil }))
-        #expect(result.usages.contains(where: { $0.account == "unknown" && $0.lastError?.type == "account_unknown" }))
+        #expect(!result.usages.contains(where: { $0.account == "unknown" && $0.lastError?.type == "account_unknown" }))
     }
 
     @Test("merge keeps error entries for other vendors when one vendor succeeds")

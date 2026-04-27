@@ -101,6 +101,25 @@ public actor UsagesFileManager {
         }
     }
 
+    public func removeAccountUnknownPlaceholders() async -> Bool {
+        do {
+            return try await withFileLock(mode: LOCK_EX) {
+                var file = readUnsafe()
+                let originalCount = file.usages.count
+                file.usages.removeAll(where: Self.isAccountUnknownPlaceholder)
+                if file.usages.count != originalCount {
+                    writeUnsafe(file)
+                }
+                return true
+            }
+        } catch is CancellationError {
+            return false
+        } catch {
+            logger.log(.warning, "flock removeAccountUnknownPlaceholders failed — skipping: \(error)")
+            return false
+        }
+    }
+
     // MARK: - Outage replacement
 
     /// Replaces outages per-vendor while preserving outages for vendors absent from `replacements`.
@@ -124,12 +143,22 @@ public actor UsagesFileManager {
         // `applyOutageReplacement`, which the public `update(with:outagesByVendor:)` runs
         // after this merge. The file format is open to external outage producers for
         // vendors without a status connector.
-        var usages = existing.usages
+        let vendorsWithResolvedAccounts = Set(
+            incoming
+                .filter { !Self.isAccountUnknownPlaceholder($0) }
+                .map(\.vendor)
+        )
+        var usages = existing.usages.filter { entry in
+            !(vendorsWithResolvedAccounts.contains(entry.vendor) && Self.isAccountUnknownPlaceholder(entry))
+        }
         var indexByKey: [String: Int] = [:]
         for (i, entry) in usages.enumerated() {
             indexByKey["\(entry.vendor.rawValue)|\(entry.account.rawValue)"] = i
         }
         for entry in incoming {
+            guard !Self.isAccountUnknownPlaceholder(entry) else {
+                continue
+            }
             let key = "\(entry.vendor.rawValue)|\(entry.account.rawValue)"
             if let idx = indexByKey[key] {
                 if entry.lastError != nil {
@@ -154,6 +183,10 @@ public actor UsagesFileManager {
         }
 
         return UsagesFile(usages: usages, outages: existing.outages)
+    }
+
+    private static func isAccountUnknownPlaceholder(_ entry: VendorUsageEntry) -> Bool {
+        entry.account.rawValue == "unknown" && entry.lastError?.type == "account_unknown"
     }
 
     // MARK: - Lock-guarded internals
