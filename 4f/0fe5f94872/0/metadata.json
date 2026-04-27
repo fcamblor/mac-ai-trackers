@@ -1,0 +1,60 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "4f0fe5f94872",
+  "session_id": "ccdfdaf3-ea2c-4ea0-983b-02b6b148ec60",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-27T12:39:41.547936Z",
+  "branch": "unknown-anthropic-usage",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/StartupMigrationRunner.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/UsagesFileManager.swift",
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/StartupMigrationRunnerTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsagesFileManagerTests.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "b82efa97a4eb",
+  "token_usage": {
+    "input_tokens": 16,
+    "cache_creation_tokens": 74547,
+    "cache_read_tokens": 142696,
+    "output_tokens": 696,
+    "api_call_count": 6
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-27T12:39:41.461118Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 7,
+    "total_committed": 0,
+    "total_lines_changed": 7,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 395,
+      "user_lines_removed": 7,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/Review request.md": 92,
+        ".context/plans/oui-dans-ce-code-account-unknown-n-est-pas-un-comp.md": 27,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/StartupMigrationRunner.swift": 99,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/UsagesFileManager.swift": 34,
+        "AIUsagesTrackers/Sources/App/AppDelegate.swift": 1,
+        "AIUsagesTrackers/Tests/AIUsagesTrackersTests/StartupMigrationRunnerTests.swift": 123,
+        "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsagesFileManagerTests.swift": 19
+      },
+      "user_removed_per_file": {
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/UsagesFileManager.swift": 1,
+        "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsagesFileManagerTests.swift": 6
+      }
+    }
+  ]
+}

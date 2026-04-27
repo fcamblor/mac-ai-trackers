@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "4f0fe5f94872",
+  "strategy": "manual-commit",
+  "branch": "unknown-anthropic-usage",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/StartupMigrationRunner.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/UsagesFileManager.swift",
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/StartupMigrationRunnerTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsagesFileManagerTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/4f/0fe5f94872/0/metadata.json",
+      "transcript": "/4f/0fe5f94872/0/full.jsonl",
+      "content_hash": "/4f/0fe5f94872/0/content_hash.txt",
+      "prompt": "/4f/0fe5f94872/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 16,
+    "cache_creation_tokens": 74547,
+    "cache_read_tokens": 142696,
+    "output_tokens": 696,
+    "api_call_count": 6
+  }
+}
