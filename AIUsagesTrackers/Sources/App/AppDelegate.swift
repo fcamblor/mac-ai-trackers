@@ -112,6 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         trackStoreChanges(store: store)
 
         Task {
+            await StartupMigrationRunner(fileManager: fileManager).run()
             store.start()
             await poller.start()
             await snapshotScheduler.start()
