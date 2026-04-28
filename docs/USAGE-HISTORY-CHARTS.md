@@ -12,7 +12,7 @@ Pay-as-you-go metrics use `currentAmount`; time-window metrics use `usagePercent
 
 ## Reader behavior
 
-`UsageHistoryReader` recursively reads `.jsonl` files, filters points to the selected window, ignores future points, counts malformed lines, and reports whether data exists before or after the current window. The view uses those flags to enable previous/next window navigation.
+`UsageHistoryReader` recursively reads `.jsonl` files, filters points to the selected window, injects the last known point before the window start and the first known point after the window end for each series (so chart lines reach both edges of the window), ignores future points, counts malformed lines, and reports whether data exists before or after the current window. The view uses those flags to enable previous/next window navigation.
 
 Decoded files are cached by path, modification date, and file size. If a test or feature mutates an existing history file, preserve the signature invalidation behavior so the reader reloads changed files.
 

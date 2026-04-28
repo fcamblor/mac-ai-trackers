@@ -297,11 +297,11 @@ private struct UsageHistoryChartPanel: View {
             let f = DateFormatter()
             switch window {
             case .sixHours, .twentyFourHours:
-                f.dateFormat = "HH:mm"
+                f.dateFormat = "MMM d, HH:mm"
             case .sevenDays:
                 f.dateFormat = "MMM d, HH:mm"
             case .thirtyDays, .all:
-                f.dateFormat = "MMM d"
+                f.dateFormat = "MMM d, HH:mm"
             }
             dict[window] = f
         }
