@@ -1,0 +1,68 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "2597abdce6f8",
+  "session_id": "b98dd1ae-82d6-4ae7-a093-9ebaba5dc089",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-28T09:00:33.530354Z",
+  "branch": "chart-legend-datetime",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/UsageHistoryReader.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageHistoryReaderTests.swift",
+    "docs/USAGE-HISTORY-CHARTS.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "aeddbfd8f602",
+  "token_usage": {
+    "input_tokens": 7,
+    "cache_creation_tokens": 14241,
+    "cache_read_tokens": 59672,
+    "output_tokens": 1956,
+    "api_call_count": 3
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-28T09:00:33.470532Z",
+    "agent_lines": 11,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 4,
+    "total_committed": 11,
+    "total_lines_changed": 15,
+    "agent_percentage": 73.33333333333333,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 133,
+      "user_lines_removed": 4,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/plans/plan-ancrage-des-graphes-au-d-but-de-la-fen-tre-te.md": 64,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/UsageHistoryReader.swift": 11,
+        "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageHistoryReaderTests.swift": 57,
+        "docs/USAGE-HISTORY-CHARTS.md": 1
+      },
+      "user_removed_per_file": {
+        "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageHistoryReaderTests.swift": 3,
+        "docs/USAGE-HISTORY-CHARTS.md": 1
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 64,
+      "user_lines_removed": 0,
+      "agent_lines_added": 84,
+      "agent_lines_removed": 4,
+      "user_added_per_file": {
+        ".context/plans/plan-ancrage-des-graphes-au-d-but-de-la-fen-tre-te.md": 64
+      }
+    }
+  ]
+}
