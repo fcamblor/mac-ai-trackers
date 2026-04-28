@@ -15,7 +15,7 @@ struct UsageDetailsView: View {
     @State private var selectedHistoryWindow: UsageHistoryTimeWindow = .twentyFourHours
     @State private var historySnapshot: UsageHistorySnapshot = .empty
     @State private var historyReferenceDate = Date()
-    @State private var historyWindowEndDate: Date?
+    @State private var historyWindowOffset: Int = 0
     @State private var isLoadingHistory = false
 
     private static let popoverWidth: CGFloat = 320
@@ -145,7 +145,7 @@ struct UsageDetailsView: View {
             get: { selectedHistoryWindow },
             set: { newValue in
                 selectedHistoryWindow = newValue
-                historyWindowEndDate = nil
+                historyWindowOffset = 0
             }
         )
     }
@@ -304,16 +304,24 @@ struct UsageDetailsView: View {
         }
     }
 
+    private func computeReferenceDate() -> Date {
+        guard historyWindowOffset > 0,
+              let interval = selectedHistoryWindow.timeInterval else {
+            return Date()
+        }
+        return Date().addingTimeInterval(-Double(historyWindowOffset) * interval)
+    }
+
     @MainActor
     private func loadHistory() async {
         let requestedWindow = selectedHistoryWindow
-        let requestedEndDate = historyWindowEndDate
-        let requestedDate = requestedEndDate ?? Date()
+        let requestedOffset = historyWindowOffset
+        let requestedDate = computeReferenceDate()
         isLoadingHistory = true
         let snapshot = await historyReader.load(window: requestedWindow, now: requestedDate)
         guard contentMode == .chart,
               selectedHistoryWindow == requestedWindow,
-              historyWindowEndDate == requestedEndDate else {
+              historyWindowOffset == requestedOffset else {
             isLoadingHistory = false
             return
         }
@@ -324,17 +332,14 @@ struct UsageDetailsView: View {
 
     @MainActor
     private func moveHistoryWindow(direction: HistoryWindowDirection) async {
-        guard let interval = selectedHistoryWindow.timeInterval else { return }
-        let currentEndDate = historyReferenceDate
-        let targetEndDate: Date
+        guard selectedHistoryWindow.timeInterval != nil else { return }
         switch direction {
         case .previous:
-            targetEndDate = currentEndDate.addingTimeInterval(-interval)
+            historyWindowOffset += 1
         case .next:
-            targetEndDate = min(currentEndDate.addingTimeInterval(interval), Date())
+            guard historyWindowOffset > 0 else { return }
+            historyWindowOffset -= 1
         }
-        guard targetEndDate != currentEndDate else { return }
-        historyWindowEndDate = targetEndDate
         await loadHistory()
     }
 }
