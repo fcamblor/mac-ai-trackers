@@ -1,0 +1,63 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "2f81041eef91",
+  "session_id": "2ca85f19-567a-49d4-a580-743f9b96bb67",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-28T09:53:23.476984Z",
+  "branch": "chart-legend-datetime",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/UsageHistoryReader.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "1202c0da5882",
+  "token_usage": {
+    "input_tokens": 52,
+    "cache_creation_tokens": 247845,
+    "cache_read_tokens": 1393260,
+    "output_tokens": 12712,
+    "api_call_count": 31
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-28T09:53:23.298667Z",
+    "agent_lines": 7,
+    "agent_removed": 3,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 7,
+    "total_lines_changed": 10,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 266,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/Review request.md": 92,
+        ".context/plans/plan-ancrage-des-graphes-au-d-but-de-la-fen-tre-te.md": 64,
+        ".context/plans/plan-fen-tre-glissante-offset-based-pour-les-graph.md": 110
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 266,
+      "user_lines_removed": 0,
+      "agent_lines_added": 7,
+      "agent_lines_removed": 3,
+      "user_added_per_file": {
+        ".context/attachments/Review request.md": 92,
+        ".context/plans/plan-ancrage-des-graphes-au-d-but-de-la-fen-tre-te.md": 64,
+        ".context/plans/plan-fen-tre-glissante-offset-based-pour-les-graph.md": 110
+      }
+    }
+  ]
+}
