@@ -1,0 +1,59 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "9d7acd2ebaa4",
+  "session_id": "b98dd1ae-82d6-4ae7-a093-9ebaba5dc089",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-28T09:29:48.927576Z",
+  "branch": "chart-legend-datetime",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/App/Views/UsageDetailsView.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "cffb9324ff65",
+  "checkpoint_transcript_start": 31,
+  "transcript_lines_at_start": 31,
+  "token_usage": {
+    "input_tokens": 22,
+    "cache_creation_tokens": 49701,
+    "cache_read_tokens": 645842,
+    "output_tokens": 7396,
+    "api_call_count": 15
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-28T09:29:48.773602Z",
+    "agent_lines": 17,
+    "agent_removed": 12,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 17,
+    "total_lines_changed": 29,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 174,
+      "user_lines_removed": 0,
+      "agent_lines_added": 17,
+      "agent_lines_removed": 12,
+      "user_added_per_file": {
+        ".context/plans/plan-ancrage-des-graphes-au-d-but-de-la-fen-tre-te.md": 64,
+        ".context/plans/plan-fen-tre-glissante-offset-based-pour-les-graph.md": 110
+      }
+    }
+  ]
+}
