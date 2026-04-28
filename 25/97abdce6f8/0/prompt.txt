@@ -1,0 +1,31 @@
+<system_instruction>
+You are working inside Conductor, a Mac app that lets the user run many coding agents in parallel.
+Your work should take place in the /Users/fcamblor/conductor/workspaces/mac-ai-trackers/managua directory (unless otherwise directed), which has been set up for you to work in.
+Each workspace has a .context directory (gitignored) where you can save files to collaborate with other agents.
+The target branch for this workspace is origin/main. Use this for actions like diffing (`git diff origin/main...`) or creating PRs (`gh pr create --base main`).
+
+
+By default, the user will only see the last message that you send before stopping. Include all essential information in the last message. The intermediate messages will be collapsed and accessible by the user but not displayed by default.
+
+If the user asks you to work on several unrelated tasks, you can suggest they start new workspaces.
+Sometimes the user might send you a message they meant to send in a different workspace or a different chat. If something doesn't make sense in the context of your work, just ask. 
+If the user asks for help with Conductor, you can ask them to go to "Help -> Send Feedback" to get in touch with our team.
+</system_instruction>
+
+il existe un bug sur l'affichage des graphes, qui ne prend pas le dernier point dispo "en dehors de la fenêtre"
+
+Par exemple, actuellement à 10:19 du matin, lorsque j'affiche le graphe de 6h, je vois les traits qui démarrent à la première valeur connue dans la range des 6h (donc depuis 04:19 du matin)
+/Users/fcamblor/conductor/workspaces/mac-ai-trackers/managua/.context/attachments/StatusIndicator_and_Item-0_and_ScreenMirroring_and_WiFi_and_Battery_and_BentoBox-0.png 
+
+C'est parce qu'à 4h je dormais, et que le dernier point connu était sûrement plus tôt (quand je regarde les fichiers d'historique, j'ai un tick à 02:12 (00:12 UTC) qui n'est pas pris en considération
+=> il faudrait le prendre en considération
+
+Attention: si l'avant - première valeur connue se trouve dans un autre fichier historique (sous entendu: la première valeur connue est la première ligne du fichier actuellement chargé), il faudra pas hésiter à le charger le fichier du jour précédent pour en bénéficier
+
+---
+
+ok a fonctionne bien, mais il faudrait faire la même chose avec le dernier point et la (potentielle) fenêtre suivante (lorsqu'on a utilisé les boutons pour naviguer de fenêtre en fenêtre, et qu'on ne se trouve plus sur la dernière fenêtre)
+
+---
+
+ok, ca a l'air de bien fonctionner ... par contre, les traits débordent du graphique... /Users/fcamblor/conductor/workspaces/mac-ai-trackers/managua/.context/attachments/Item-0_and_NowPlaying_and_ScreenMirroring_and_WiFi.png

@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "2597abdce6f8",
+  "strategy": "manual-commit",
+  "branch": "chart-legend-datetime",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/UsageHistoryReader.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UsageHistoryReaderTests.swift",
+    "docs/USAGE-HISTORY-CHARTS.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/25/97abdce6f8/0/metadata.json",
+      "transcript": "/25/97abdce6f8/0/full.jsonl",
+      "content_hash": "/25/97abdce6f8/0/content_hash.txt",
+      "prompt": "/25/97abdce6f8/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 58,
+    "cache_creation_tokens": 122600,
+    "cache_read_tokens": 2081591,
+    "output_tokens": 22457,
+    "api_call_count": 36
+  }
+}
