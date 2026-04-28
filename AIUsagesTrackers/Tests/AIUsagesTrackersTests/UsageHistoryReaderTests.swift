@@ -86,7 +86,7 @@ struct UsageHistoryReaderTests {
         #expect(second.points.map(\.value) == [40.0, 55.0])
     }
 
-    @Test("filters points outside the selected time window")
+    @Test("includes last pre-window anchor point per series")
     func filtersBySelectedWindow() async throws {
         let root = Self.makeTempRoot()
         try Self.writeLines([
@@ -101,7 +101,7 @@ struct UsageHistoryReaderTests {
         let reader = UsageHistoryReader(rootPath: root, logger: Self.makeLogger(in: root))
         let snapshot = await reader.load(window: .twentyFourHours, now: Self.date("2026-04-20T12:00:00Z"))
 
-        #expect(snapshot.points.map(\.value) == [55.0])
+        #expect(snapshot.points.map(\.value) == [10.0, 55.0])
     }
 
     @Test("reports whether data exists before and after the selected window")
@@ -122,8 +122,63 @@ struct UsageHistoryReaderTests {
         let reader = UsageHistoryReader(rootPath: root, logger: Self.makeLogger(in: root))
         let snapshot = await reader.load(window: .twentyFourHours, now: Self.date("2026-04-20T12:00:00Z"))
 
-        #expect(snapshot.points.map(\.value) == [55.0])
+        #expect(snapshot.points.map(\.value) == [10.0, 55.0, 70.0])
         #expect(snapshot.hasDataBeforeWindow)
+        #expect(snapshot.hasDataAfterWindow)
+    }
+
+    @Test("injects last pre-window anchor point from a previous-day file")
+    func injectsLastPreWindowAnchorFromPreviousDayFile() async throws {
+        let root = Self.makeTempRoot()
+        try Self.writeLines([
+            try Self.tick(timestamp: "2026-04-19T02:12:00Z", metrics: [
+                MetricSnapshot(name: "session", kind: .timeWindow, usagePercent: 22),
+            ]),
+        ], to: "\(root)/2026/04/2026-04-19.jsonl")
+        try Self.writeLines([
+            try Self.tick(timestamp: "2026-04-20T09:00:00Z", metrics: [
+                MetricSnapshot(name: "session", kind: .timeWindow, usagePercent: 55),
+            ]),
+        ], to: "\(root)/2026/04/2026-04-20.jsonl")
+
+        let reader = UsageHistoryReader(rootPath: root, logger: Self.makeLogger(in: root))
+        // 6h window: 04:19 → 10:19; the 02:12 point is before the window
+        let snapshot = await reader.load(window: .sixHours, now: Self.date("2026-04-20T10:19:00Z"))
+
+        #expect(snapshot.points.count == 2)
+        #expect(snapshot.points.first?.value == 22.0)
+        // Timestamp is clamped to startDate so the point stays within the chart domain
+        #expect(snapshot.points.first?.timestamp == Self.date("2026-04-20T04:19:00Z"))
+        #expect(snapshot.points.last?.value == 55.0)
+        #expect(snapshot.hasDataBeforeWindow)
+    }
+
+    @Test("injects first post-window anchor point for the right chart edge")
+    func injectsFirstPostWindowAnchorForRightEdge() async throws {
+        let root = Self.makeTempRoot()
+        try Self.writeLines([
+            try Self.tick(timestamp: "2026-04-20T09:00:00Z", metrics: [
+                MetricSnapshot(name: "session", kind: .timeWindow, usagePercent: 55),
+            ]),
+        ], to: "\(root)/2026/04/2026-04-20.jsonl")
+        try Self.writeLines([
+            try Self.tick(timestamp: "2026-04-21T02:00:00Z", metrics: [
+                MetricSnapshot(name: "session", kind: .timeWindow, usagePercent: 80),
+            ]),
+            try Self.tick(timestamp: "2026-04-21T04:00:00Z", metrics: [
+                MetricSnapshot(name: "session", kind: .timeWindow, usagePercent: 90),
+            ]),
+        ], to: "\(root)/2026/04/2026-04-21.jsonl")
+
+        let reader = UsageHistoryReader(rootPath: root, logger: Self.makeLogger(in: root))
+        // Window ends at 2026-04-20T12:00:00Z; 02:00 and 04:00 on 04-21 are both after the window
+        let snapshot = await reader.load(window: .twentyFourHours, now: Self.date("2026-04-20T12:00:00Z"))
+
+        #expect(snapshot.points.count == 2)
+        #expect(snapshot.points.first?.value == 55.0)
+        // Value from the first post-window point (02:00, value 80) is injected, clamped to now
+        #expect(snapshot.points.last?.value == 80.0)
+        #expect(snapshot.points.last?.timestamp == Self.date("2026-04-20T12:00:00Z"))
         #expect(snapshot.hasDataAfterWindow)
     }
 

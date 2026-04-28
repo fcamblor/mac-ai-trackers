@@ -50,6 +50,7 @@ public struct UsageHistoryPoint: Equatable, Identifiable, Sendable {
     public let metricKind: MetricKind
     public let value: Double?
     public let unit: String
+    public let isSyntheticAnchor: Bool
 
     public init(
         timestamp: Date,
@@ -58,7 +59,8 @@ public struct UsageHistoryPoint: Equatable, Identifiable, Sendable {
         metricName: String,
         metricKind: MetricKind,
         value: Double?,
-        unit: String
+        unit: String,
+        isSyntheticAnchor: Bool = false
     ) {
         self.timestamp = timestamp
         self.vendor = vendor
@@ -67,6 +69,7 @@ public struct UsageHistoryPoint: Equatable, Identifiable, Sendable {
         self.metricKind = metricKind
         self.value = value
         self.unit = unit
+        self.isSyntheticAnchor = isSyntheticAnchor
     }
 
     public var id: String {
@@ -79,6 +82,19 @@ public struct UsageHistoryPoint: Equatable, Identifiable, Sendable {
 
     public var seriesLabel: String {
         "\(vendor.rawValue) / \(account.rawValue) / \(metricName)"
+    }
+
+    func clamping(timestamp: Date) -> UsageHistoryPoint {
+        UsageHistoryPoint(
+            timestamp: timestamp,
+            vendor: vendor,
+            account: account,
+            metricName: metricName,
+            metricKind: metricKind,
+            value: value,
+            unit: unit,
+            isSyntheticAnchor: true
+        )
     }
 }
 
@@ -126,7 +142,7 @@ public struct UsageHistorySnapshot: Equatable, Sendable {
     }
 
     public var seriesSummaries: [UsageHistorySeriesSummary] {
-        let grouped = Dictionary(grouping: points, by: \.seriesID)
+        let grouped = Dictionary(grouping: points.filter { !$0.isSyntheticAnchor }, by: \.seriesID)
         return grouped.compactMap { seriesID, points in
             guard let latest = points
                 .filter({ $0.value != nil })
@@ -165,6 +181,8 @@ public actor UsageHistoryReader {
     public func load(window: UsageHistoryTimeWindow, now: Date = Date()) async -> UsageHistorySnapshot {
         let startDate = window.startDate(relativeTo: now)
         var points: [UsageHistoryPoint] = []
+        var lastPreWindowPoints: [String: UsageHistoryPoint] = [:]
+        var firstPostWindowPoints: [String: UsageHistoryPoint] = [:]
         var skippedLineCount = 0
         var hasDataBeforeWindow = false
         var hasDataAfterWindow = false
@@ -186,13 +204,24 @@ public actor UsageHistoryReader {
 
             for point in decoded.points {
                 if let startDate, point.timestamp < startDate {
+                    lastPreWindowPoints[point.seriesID] = point
                     continue
                 }
                 if point.timestamp > now {
+                    if firstPostWindowPoints[point.seriesID] == nil {
+                        firstPostWindowPoints[point.seriesID] = point
+                    }
                     continue
                 }
                 points.append(point)
             }
+        }
+
+        if let startDate {
+            points.append(contentsOf: lastPreWindowPoints.values.map { $0.clamping(timestamp: startDate) })
+        }
+        if window != .all {
+            points.append(contentsOf: firstPostWindowPoints.values.map { $0.clamping(timestamp: now) })
         }
 
         points.sort {
