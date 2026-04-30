@@ -67,13 +67,6 @@ public actor CodexConnector: UsageConnector {
             return errorEntries(type: "token_error")
         }
 
-        // Check token expiry before making any network call
-        if let lastRefreshed = credentials.lastRefreshedAt,
-           Date().timeIntervalSince(lastRefreshed) > CodexConstants.tokenLifetimeSeconds {
-            logger.log(.warning, "Codex token expired (last refresh > 8 days ago) — run `codex login`")
-            return errorEntries(type: "token_expired", credentials: credentials)
-        }
-
         logger.log(.info, "Fetching Codex usages for accountId=\(credentials.accountId)")
 
         var request = URLRequest(url: Self.apiURL)
