@@ -334,11 +334,19 @@ struct CodexConnectorFetchTests {
         #expect(entries[0].lastError?.type == "token_error")
     }
 
-    @Test("expired token (>8 days since last_refresh) returns token_expired without network call")
-    func expiredTokenReturnsTokenExpiredNoNetworkCall() async throws {
+    @Test("old last_refresh still calls API and accepts successful response")
+    func oldLastRefreshStillCallsAPIAndAcceptsSuccess() async throws {
         let dir = try makeTempDir()
         CodexMockURLProtocol.capturedRequest = nil
-        CodexMockURLProtocol.handler = nil
+        mockHTTP200(json: """
+        {
+          "email": "user@openai.com",
+          "rate_limit": {
+            "primary_window": {"used_percent": 5.0, "reset_at": 1745000000, "limit_window_seconds": 18000},
+            "secondary_window": {"used_percent": 1.0, "reset_at": 1745500000, "limit_window_seconds": 604800}
+          }
+        }
+        """)
 
         let oldDate = Date(timeIntervalSinceNow: -(9 * 24 * 3600))  // 9 days ago
         let connector = makeConnector(dir: dir, credentials: CodexCredentials(
@@ -350,10 +358,11 @@ struct CodexConnectorFetchTests {
         let entries = try await connector.fetchUsages()
 
         #expect(entries.count == 1)
-        #expect(entries[0].account == "expired@openai.com")
-        #expect(entries[0].lastError?.type == "token_expired")
-        // Network must not have been called
-        #expect(CodexMockURLProtocol.capturedRequest == nil)
+        #expect(entries[0].account == "user@openai.com")
+        #expect(entries[0].lastError == nil)
+        #expect(entries[0].isActive == true)
+        #expect(entries[0].metrics.count == 2)
+        #expect(CodexMockURLProtocol.capturedRequest != nil)
     }
 
     @Test("fresh token (<8 days) is not treated as expired")
