@@ -112,6 +112,8 @@ cat > "$CONTENTS/Info.plist" <<PLIST
   <true/>
   <key>NSHumanReadableCopyright</key>
   <string>© $(date +%Y) Frédéric Camblor</string>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>AI Usages Tracker checks System Events for legacy login items so toggling "Launch at login" stays consistent and avoids registering duplicate entries.</string>
 </dict>
 </plist>
 PLIST
