@@ -1,0 +1,59 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "4a23c0f779d6",
+  "session_id": "29a70bc5-6244-4a46-b7bb-a46bcc5cf7f5",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-06T12:52:12.031125Z",
+  "branch": "fix-chart-delete-crash",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/App/Views/Settings/ChartSettingsView.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "12a7552ca54d",
+  "token_usage": {
+    "input_tokens": 51,
+    "cache_creation_tokens": 111458,
+    "cache_read_tokens": 657141,
+    "output_tokens": 5858,
+    "api_call_count": 14
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-06T12:52:11.935562Z",
+    "agent_lines": 16,
+    "agent_removed": 7,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 16,
+    "total_lines_changed": 23,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 75,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/pasted_text_2026-05-06_14-49-02.txt": 75
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 75,
+      "user_lines_removed": 0,
+      "agent_lines_added": 16,
+      "agent_lines_removed": 7,
+      "user_added_per_file": {
+        ".context/attachments/pasted_text_2026-05-06_14-49-02.txt": 75
+      }
+    }
+  ]
+}
