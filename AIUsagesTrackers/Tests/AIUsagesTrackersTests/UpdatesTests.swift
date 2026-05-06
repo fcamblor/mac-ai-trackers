@@ -205,18 +205,19 @@ struct InstallationDetectorTests {
         #expect(info.kind == .manual)
     }
 
-    @Test("returns homebrewCask when bundle lives under caskroom")
+    @Test("returns homebrewCask when caskroom contains the cask directory")
     func brewMatch() async throws {
-        // Create a fake brew binary file path so fileExists returns true.
         let tmp = NSTemporaryDirectory() + "brew-\(UUID().uuidString)"
         try FileManager.default.createDirectory(atPath: tmp, withIntermediateDirectories: true)
         let fakeBrew = tmp + "/brew"
         FileManager.default.createFile(atPath: fakeBrew, contents: Data())
 
-        let caskroom = "/opt/homebrew/Caskroom"
-        let bundlePath = "\(caskroom)/ai-usages-tracker/1.2.3/AI Usages Tracker.app"
+        let caskroom = "\(tmp)/Caskroom"
+        try FileManager.default.createDirectory(atPath: "\(caskroom)/ai-usages-tracker/1.2.3", withIntermediateDirectories: true)
+        // Cask installs the .app outside caskroom (in /Applications), so the
+        // bundle path is intentionally unrelated to the caskroom directory.
         let detector = InstallationDetector(
-            bundlePath: bundlePath,
+            bundlePath: "/Applications/AI Usages Tracker.app",
             process: StubProcessRunner(stdout: caskroom + "\n", exit: 0),
             homebrewBinaryPaths: [fakeBrew],
             pathEnvironment: nil
@@ -234,9 +235,9 @@ struct InstallationDetectorTests {
         FileManager.default.createFile(atPath: fakeBrew, contents: Data())
 
         let caskroom = "\(tmp)/Caskroom"
-        let bundlePath = "\(caskroom)/ai-usages-tracker/1.2.3/AI Usages Tracker.app"
+        try FileManager.default.createDirectory(atPath: "\(caskroom)/ai-usages-tracker/1.2.3", withIntermediateDirectories: true)
         let detector = InstallationDetector(
-            bundlePath: bundlePath,
+            bundlePath: "/Applications/AI Usages Tracker.app",
             process: StubProcessRunner(stdout: caskroom + "\n", exit: 0),
             homebrewBinaryPaths: [],
             pathEnvironment: binDir
@@ -246,16 +247,19 @@ struct InstallationDetectorTests {
         #expect(await detector.brewExecutablePath() == fakeBrew)
     }
 
-    @Test("returns manual when bundle lives outside caskroom")
+    @Test("returns manual when caskroom does not contain the cask directory")
     func brewMismatch() async throws {
         let tmp = NSTemporaryDirectory() + "brew-\(UUID().uuidString)"
         try FileManager.default.createDirectory(atPath: tmp, withIntermediateDirectories: true)
         let fakeBrew = tmp + "/brew"
         FileManager.default.createFile(atPath: fakeBrew, contents: Data())
+        // Caskroom exists but the ai-usages-tracker subdir does not.
+        let caskroom = "\(tmp)/Caskroom"
+        try FileManager.default.createDirectory(atPath: caskroom, withIntermediateDirectories: true)
 
         let detector = InstallationDetector(
-            bundlePath: "/Applications/Foo.app",
-            process: StubProcessRunner(stdout: "/opt/homebrew/Caskroom\n", exit: 0),
+            bundlePath: "/Applications/AI Usages Tracker.app",
+            process: StubProcessRunner(stdout: caskroom + "\n", exit: 0),
             homebrewBinaryPaths: [fakeBrew],
             pathEnvironment: nil
         )

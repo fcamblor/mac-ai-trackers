@@ -48,9 +48,10 @@ public actor InstallationDetector {
             return InstallationInfo(kind: .manual, bundlePath: bundlePath)
         }
         // `brew --caskroom` returns the directory containing per-cask folders.
-        // The cask owns artifacts under `<caskroom>/<name>/<version>/...`. If
-        // the running bundle's resolved path lives under that subtree, we know
-        // it was installed by Homebrew.
+        // The `app` cask stanza copies the .app into /Applications rather than
+        // symlinking it, so the running bundle path can't confirm provenance.
+        // Instead, the existence of `<caskroom>/<name>` as a directory is the
+        // canonical signal that the cask is installed on this machine.
         let caskroom: String
         do {
             let result = try await process.run(
@@ -71,9 +72,9 @@ public actor InstallationDetector {
             return InstallationInfo(kind: .manual, bundlePath: bundlePath)
         }
 
-        let resolved = resolveSymlinks(bundlePath)
-        let caskPrefix = caskroom.hasSuffix("/") ? "\(caskroom)\(Self.homebrewCaskName)" : "\(caskroom)/\(Self.homebrewCaskName)"
-        if resolved.hasPrefix(caskPrefix + "/") || resolved == caskPrefix {
+        let caskDir = caskroom.hasSuffix("/") ? "\(caskroom)\(Self.homebrewCaskName)" : "\(caskroom)/\(Self.homebrewCaskName)"
+        var isDirectory: ObjCBool = false
+        if fileManager.fileExists(atPath: caskDir, isDirectory: &isDirectory), isDirectory.boolValue {
             return InstallationInfo(kind: .homebrewCask, bundlePath: bundlePath)
         }
         return InstallationInfo(kind: .manual, bundlePath: bundlePath)
@@ -94,7 +95,4 @@ public actor InstallationDetector {
         return (homebrewBinaryPaths + pathBrewCandidates).first { fileManager.fileExists(atPath: $0) }
     }
 
-    private func resolveSymlinks(_ path: String) -> String {
-        URL(fileURLWithPath: path).resolvingSymlinksInPath().path
-    }
 }
