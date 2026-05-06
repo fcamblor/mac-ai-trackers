@@ -74,16 +74,16 @@ private struct ChartSettingsContent: View {
         } else {
             ScrollView {
                 VStack(spacing: 0) {
-                    ForEach(Array(preferences.chartConfigurations.enumerated()), id: \.element.id) { index, _ in
+                    ForEach(Array(preferences.chartConfigurations.enumerated()), id: \.element.id) { index, configuration in
                         ChartConfigurationCard(
                             preferences: preferences,
                             store: store,
-                            index: index,
+                            configurationID: configuration.id,
                             canMoveUp: index > 0,
                             canMoveDown: index < preferences.chartConfigurations.count - 1,
                             onMoveUp: { move(from: index, to: index - 1) },
                             onMoveDown: { move(from: index, to: index + 2) },
-                            onRequestDelete: { pendingDelete = preferences.chartConfigurations[index].id }
+                            onRequestDelete: { pendingDelete = configuration.id }
                         )
                         Divider()
                     }
@@ -147,7 +147,7 @@ private struct ChartSettingsContent: View {
 private struct ChartConfigurationCard: View {
     let preferences: UserDefaultsAppPreferences
     @Bindable var store: UsageStore
-    let index: Int
+    let configurationID: UUID
     let canMoveUp: Bool
     let canMoveDown: Bool
     let onMoveUp: () -> Void
@@ -157,10 +157,19 @@ private struct ChartConfigurationCard: View {
     @State private var isExpanded = false
 
     private var configurationBinding: Binding<ChartConfiguration>? {
-        guard preferences.chartConfigurations.indices.contains(index) else { return nil }
+        let id = configurationID
+        guard preferences.chartConfigurations.contains(where: { $0.id == id }) else { return nil }
         return Binding(
-            get: { preferences.chartConfigurations[index] },
-            set: { preferences.chartConfigurations[index] = $0 }
+            get: {
+                // Re-resolve by id: the index can shift between binding creation and
+                // SwiftUI's deferred reads during a delete transaction.
+                preferences.chartConfigurations.first(where: { $0.id == id })
+                    ?? ChartConfiguration(id: id, title: "", selection: .allAvailable)
+            },
+            set: { newValue in
+                guard let idx = preferences.chartConfigurations.firstIndex(where: { $0.id == id }) else { return }
+                preferences.chartConfigurations[idx] = newValue
+            }
         )
     }
 
