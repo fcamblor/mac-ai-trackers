@@ -24,28 +24,18 @@ enum MenuBarLabelRenderer {
         outageWarningPrefix: String? = nil
     ) -> NSImage {
         let textColor: NSColor = isDarkMenuBar ? .white : .black
-        let attributed: NSAttributedString
+        let main: NSAttributedString
         if isUnconfigured && segments.isEmpty {
-            attributed = unconfiguredAttributedString(textColor: textColor)
+            main = unconfiguredAttributedString(textColor: textColor)
         } else {
-            let main = attributedString(
+            main = attributedString(
                 segments: segments,
                 separator: separator,
                 fallbackText: fallbackText,
                 textColor: textColor
             )
-            if let prefix = outageWarningPrefix, !prefix.isEmpty {
-                let combined = NSMutableAttributedString()
-                combined.append(NSAttributedString(
-                    string: prefix + " ",
-                    attributes: [.font: font, .foregroundColor: textColor]
-                ))
-                combined.append(main)
-                attributed = combined
-            } else {
-                attributed = main
-            }
         }
+        let attributed = prefixed(main, prefix: outageWarningPrefix, textColor: textColor)
         let textSize = attributed.size()
         let width = ceil(textSize.width) + horizontalPadding * 2
         let size = NSSize(width: max(width, 1), height: height)
@@ -56,6 +46,21 @@ enum MenuBarLabelRenderer {
         image.unlockFocus()
         image.isTemplate = false
         return image
+    }
+
+    private static func prefixed(
+        _ main: NSAttributedString,
+        prefix: String?,
+        textColor: NSColor
+    ) -> NSAttributedString {
+        guard let prefix, !prefix.isEmpty else { return main }
+        let combined = NSMutableAttributedString()
+        combined.append(NSAttributedString(
+            string: prefix + " ",
+            attributes: [.font: font, .foregroundColor: textColor]
+        ))
+        combined.append(main)
+        return combined
     }
 
     private static func unconfiguredAttributedString(textColor: NSColor) -> NSAttributedString {
