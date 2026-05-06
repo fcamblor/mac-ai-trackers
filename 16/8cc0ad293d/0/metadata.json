@@ -1,0 +1,62 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "168cc0ad293d",
+  "session_id": "41b59a3a-62a6-400e-a268-6dec10cf9f54",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-06T22:27:15.028357Z",
+  "branch": "detect-github-release-updates",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Updates/InstallationDetector.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UpdatesTests.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "459f1b605137",
+  "token_usage": {
+    "input_tokens": 61,
+    "cache_creation_tokens": 102087,
+    "cache_read_tokens": 2391051,
+    "output_tokens": 15694,
+    "api_call_count": 42
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-06T22:27:14.885983Z",
+    "agent_lines": 11,
+    "agent_removed": 7,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 11,
+    "total_lines_changed": 18,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 109,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/PR instructions.md": 17,
+        ".context/attachments/Review request.md": 92
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 109,
+      "user_lines_removed": 0,
+      "agent_lines_added": 11,
+      "agent_lines_removed": 7,
+      "user_added_per_file": {
+        ".context/attachments/PR instructions.md": 17,
+        ".context/attachments/Review request.md": 92
+      }
+    }
+  ]
+}
