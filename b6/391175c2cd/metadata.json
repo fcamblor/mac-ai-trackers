@@ -3,7 +3,7 @@
   "checkpoint_id": "b6391175c2cd",
   "strategy": "manual-commit",
   "branch": "industrialize-new-assistant",
-  "checkpoints_count": 21,
+  "checkpoints_count": 22,
   "files_touched": [
     "roadmap/index.md",
     "roadmap/new-assistant-onboarding-workflow.md",
@@ -59,13 +59,19 @@
       "transcript": "/b6/391175c2cd/7/full.jsonl",
       "content_hash": "/b6/391175c2cd/7/content_hash.txt",
       "prompt": "/b6/391175c2cd/7/prompt.txt"
+    },
+    {
+      "metadata": "/b6/391175c2cd/8/metadata.json",
+      "transcript": "/b6/391175c2cd/8/full.jsonl",
+      "content_hash": "/b6/391175c2cd/8/content_hash.txt",
+      "prompt": "/b6/391175c2cd/8/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 1061,
-    "cache_creation_tokens": 1371571,
-    "cache_read_tokens": 38726468,
-    "output_tokens": 225833,
-    "api_call_count": 303
+    "input_tokens": 1094,
+    "cache_creation_tokens": 1458766,
+    "cache_read_tokens": 39905152,
+    "output_tokens": 232905,
+    "api_call_count": 326
   }
 }

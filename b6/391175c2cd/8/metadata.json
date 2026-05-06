@@ -1,0 +1,61 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "b6391175c2cd",
+  "session_id": "bfcc44fe-056e-408c-a555-95fe76ab9298",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-06T23:48:20.589799Z",
+  "branch": "industrialize-new-assistant",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "roadmap/index.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "e2623e1a073a",
+  "token_usage": {
+    "input_tokens": 33,
+    "cache_creation_tokens": 87195,
+    "cache_read_tokens": 1178684,
+    "output_tokens": 7072,
+    "api_call_count": 23
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-06T23:48:20.295428Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 23,
+    "human_modified": 1,
+    "human_removed": 0,
+    "total_committed": 23,
+    "total_lines_changed": 24,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 1927,
+      "user_lines_removed": 1,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/Review request-v1.md": 92,
+        ".context/attachments/Review request-v2.md": 92,
+        ".context/attachments/Review request-v3.md": 92,
+        ".context/attachments/Review request-v4.md": 92,
+        ".context/attachments/Review request.md": 92,
+        "roadmap/index.md": 6,
+        "roadmap/new-assistant-onboarding-workflow.md": 73,
+        "roadmap/new-assistant-onboarding-workflow.plan.md": 1055,
+        "roadmap/vendor-plugin-framework.md": 42,
+        "roadmap/vendor-plugin-framework.plan.md": 291
+      },
+      "user_removed_per_file": {
+        "roadmap/index.md": 1
+      }
+    }
+  ]
+}
