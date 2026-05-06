@@ -1,0 +1,39 @@
+quelle est la règle de détection d'une nouvelle version ? Qu'est-ce qui est comparé ?
+
+---
+
+pourrais-tu faire en sorte d'afficher la version actuelle de l'app ?
+
+---
+
+peux-tu afficher le numéro de la dernière version connue
+
+---
+
+Aucune valeur n'est affichée actuellement sur la version lancé via swift (pas installé officiellement) : /Users/fcamblor/conductor/workspaces/mac-ai-trackers/manila/.context/attachments/Updates.png
+
+---
+
+pourquoi supprimer la popup de mise à jour ? tu m'as pas dit qu'une fois affichée, on proposait de ne plus l'afficher jusqu'à l'arrivée d'une nouvelle version ?
+Vu qu'aucune nouvelle version ne va apparaître, c'est OK, non ?
+
+Il faudrait rajouter un bouton d'installation dans les préférences aussi (en-dehors de la popup affichée en automatique)
+
+---
+
+dans la popup, est-il possible d'afficher l'icone de l'app plutôt que l'icone standard d'un répertoire de Mac OS ?
+
+---
+
+dans le panneau de préférences, masque l'entrée "latest known version" (c'est déjà affiché sous le bouton "check now")
+et complète l'entrée "manual install" en listant le répertoire d'installation
+
+---
+
+lorsque j'ai cliqué sur le bouton "install", j'ai eu une erreur: invalidBundlePath(path: "/Users/fcamblor/conductor/workspaces/mac-ai-trackers/manila/AIUsagesTrackers/.build/arm64-apple-macosx/debug")
+
+Finalement, j'ai changé d'avis : masque le chemin d'installation dans le panneau de préférence pour les manual installs
+
+---
+
+dans le cas où ca ne se termine par par .app, pourrais-tu demander à l'utilisateur de sélectionner un répertoire d'installation (à partir du répertoire d'installation actuel)
