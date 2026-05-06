@@ -80,9 +80,9 @@ public actor UpdateScheduler {
             let result = try await checker.checkForUpdate(currentVersion: currentVersion)
             let now = Date()
             await Task { @MainActor in
-                stateAccessor().setAvailable(result, kind: installation.kind, checkedAt: now)
+                stateAccessor().setAvailable(result.update, latestVersion: result.latestVersion, kind: installation.kind, checkedAt: now)
             }.value
-            if let update = result {
+            if let update = result.update {
                 let isNewToUser = (lastNotifiedVersion != update.version.rawValue)
                 let isDismissed = prefs.dismissedVersions.contains(update.version.rawValue)
                 if isNewToUser && !isDismissed {

@@ -12,9 +12,38 @@ struct UpdatesSettingsView: View {
         return f
     }()
 
+    private var currentVersionString: String {
+        AppDelegate.currentAppVersionLabel()
+    }
+
+    private var installationKindLabel: String? {
+        switch updateState.installationKind {
+        case .homebrewCask: return "Homebrew cask"
+        case .manual: return "Manual install"
+        case .none: return nil
+        }
+    }
+
     var body: some View {
         let prefs = AppDelegate.sharedPreferences
         Form {
+            Section("Current version") {
+                HStack {
+                    Text("Installed version")
+                    Spacer()
+                    Text(currentVersionString)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+                HStack {
+                    Text("Installation type")
+                    Spacer()
+                    Text(installationKindLabel ?? "—")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section("Automatic updates") {
                 Toggle("Check for updates automatically", isOn: Binding(
                     get: { prefs.updatesAutoCheckEnabled },
@@ -56,6 +85,31 @@ struct UpdatesSettingsView: View {
                     Text("You are up to date.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+            }
+
+            if let available = updateState.availableUpdate {
+                Section("Install update") {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Version \(available.version.rawValue) ready to install")
+                            Text(updateState.installationKind == .homebrewCask
+                                 ? "Will run `brew upgrade --cask`."
+                                 : "Will download and replace the app bundle.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button(updateState.installationKind == .homebrewCask
+                               ? "Install via Homebrew"
+                               : "Download and install") {
+                            AppDelegate.sharedTriggerUpdateInstall?()
+                        }
+                        .disabled(updateState.phase == .installing)
+                        if updateState.phase == .installing {
+                            ProgressView().controlSize(.small).scaleEffect(0.7)
+                        }
+                    }
                 }
             }
 

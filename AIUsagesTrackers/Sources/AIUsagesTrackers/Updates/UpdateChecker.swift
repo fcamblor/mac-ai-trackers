@@ -1,5 +1,15 @@
 import Foundation
 
+public struct UpdateCheckResult: Sendable, Equatable {
+    public let latestVersion: AppVersion
+    public let update: AvailableUpdate?
+
+    public init(latestVersion: AppVersion, update: AvailableUpdate?) {
+        self.latestVersion = latestVersion
+        self.update = update
+    }
+}
+
 public struct AvailableUpdate: Sendable, Equatable {
     public let version: AppVersion
     public let releaseURL: URL
@@ -47,9 +57,9 @@ public actor UpdateChecker {
         self.logger = logger
     }
 
-    /// Returns an `AvailableUpdate` only when the latest release is strictly
-    /// greater than `currentVersion`. Returns nil when up-to-date.
-    public func checkForUpdate(currentVersion: AppVersion) async throws -> AvailableUpdate? {
+    /// Returns the latest version published on GitHub, plus an `AvailableUpdate`
+    /// payload only when it is strictly greater than `currentVersion`.
+    public func checkForUpdate(currentVersion: AppVersion) async throws -> UpdateCheckResult {
         guard let url = URL(string: endpointURLString) else {
             throw UpdateCheckerError.invalidEndpoint(rawValue: endpointURLString)
         }
@@ -88,7 +98,7 @@ public actor UpdateChecker {
         }
         guard version > currentVersion else {
             logger.log(.info, "Already up to date (current=\(currentVersion), latest=\(version))")
-            return nil
+            return UpdateCheckResult(latestVersion: version, update: nil)
         }
 
         guard let zipAsset = release.assets.first(where: { $0.name == downloadAssetName }),
@@ -107,13 +117,14 @@ public actor UpdateChecker {
             formatter.formatOptions = [.withInternetDateTime]
             return formatter.date(from: raw)
         }
-        return AvailableUpdate(
+        let update = AvailableUpdate(
             version: version,
             releaseURL: releaseURL,
             downloadURL: zipURL,
             sha256URL: shaURL,
             publishedAt: publishedAt
         )
+        return UpdateCheckResult(latestVersion: version, update: update)
     }
 
     private struct GitHubRelease: Decodable {

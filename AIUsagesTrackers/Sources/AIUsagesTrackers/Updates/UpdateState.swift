@@ -14,6 +14,7 @@ public final class UpdateState {
 
     public private(set) var phase: Phase = .idle
     public private(set) var availableUpdate: AvailableUpdate?
+    public private(set) var latestKnownVersion: AppVersion?
     public private(set) var lastCheckedAt: Date?
     public private(set) var lastError: String?
     public private(set) var installationKind: InstallationKind?
@@ -35,8 +36,9 @@ public final class UpdateState {
         lastCheckedAt = checkedAt
     }
 
-    public func setAvailable(_ update: AvailableUpdate?, kind: InstallationKind?, checkedAt: Date) {
+    public func setAvailable(_ update: AvailableUpdate?, latestVersion: AppVersion?, kind: InstallationKind?, checkedAt: Date) {
         availableUpdate = update
+        latestKnownVersion = latestVersion
         installationKind = kind
         lastCheckedAt = checkedAt
         phase = .idle

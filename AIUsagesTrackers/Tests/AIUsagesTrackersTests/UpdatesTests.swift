@@ -113,26 +113,29 @@ struct UpdateCheckerTests {
         mockJSON(Self.releaseBody)
         let checker = makeChecker(session: makeSession())
         let result = try await checker.checkForUpdate(currentVersion: AppVersion(string: "1.4.0")!)
-        #expect(result?.version.rawValue == "1.5.0")
-        #expect(result?.downloadURL.absoluteString == "https://example.com/zip")
-        #expect(result?.sha256URL?.absoluteString == "https://example.com/sha")
-        #expect(result?.releaseURL.absoluteString == "https://github.com/test/test/releases/tag/v1.5.0")
+        #expect(result.latestVersion.rawValue == "1.5.0")
+        #expect(result.update?.version.rawValue == "1.5.0")
+        #expect(result.update?.downloadURL.absoluteString == "https://example.com/zip")
+        #expect(result.update?.sha256URL?.absoluteString == "https://example.com/sha")
+        #expect(result.update?.releaseURL.absoluteString == "https://github.com/test/test/releases/tag/v1.5.0")
     }
 
-    @Test("returns nil when remote equals current")
+    @Test("returns nil update when remote equals current but exposes latest version")
     func equalVersion() async throws {
         mockJSON(Self.releaseBody)
         let checker = makeChecker(session: makeSession())
         let result = try await checker.checkForUpdate(currentVersion: AppVersion(string: "1.5.0")!)
-        #expect(result == nil)
+        #expect(result.update == nil)
+        #expect(result.latestVersion.rawValue == "1.5.0")
     }
 
-    @Test("returns nil when current is ahead")
+    @Test("returns nil update when current is ahead but exposes latest version")
     func currentAhead() async throws {
         mockJSON(Self.releaseBody)
         let checker = makeChecker(session: makeSession())
         let result = try await checker.checkForUpdate(currentVersion: AppVersion(string: "2.0.0")!)
-        #expect(result == nil)
+        #expect(result.update == nil)
+        #expect(result.latestVersion.rawValue == "1.5.0")
     }
 
     @Test("HTTP non-200 throws unexpectedResponse")
@@ -418,7 +421,7 @@ struct UpdateStateTests {
     @Test("dismissCurrent moves version into dismissedVersions")
     func dismiss() {
         let state = UpdateState()
-        state.setAvailable(makeUpdate("1.2.3"), kind: .manual, checkedAt: Date())
+        state.setAvailable(makeUpdate("1.2.3"), latestVersion: AppVersion(string: "1.2.3"), kind: .manual, checkedAt: Date())
         state.dismissCurrent()
         #expect(state.dismissedVersions.contains("1.2.3"))
         #expect(state.pendingUpdate == nil)
@@ -427,7 +430,7 @@ struct UpdateStateTests {
     @Test("pendingUpdate hides dismissed versions")
     func hidesDismissed() {
         let state = UpdateState(dismissedVersions: ["1.2.3"])
-        state.setAvailable(makeUpdate("1.2.3"), kind: .manual, checkedAt: Date())
+        state.setAvailable(makeUpdate("1.2.3"), latestVersion: AppVersion(string: "1.2.3"), kind: .manual, checkedAt: Date())
         #expect(state.pendingUpdate == nil)
     }
 }
