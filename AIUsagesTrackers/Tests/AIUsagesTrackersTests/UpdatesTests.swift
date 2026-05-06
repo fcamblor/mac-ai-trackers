@@ -198,7 +198,8 @@ struct InstallationDetectorTests {
         let detector = InstallationDetector(
             bundlePath: "/Applications/Foo.app",
             process: StubProcessRunner(stdout: "", exit: 0),
-            homebrewBinaryPaths: ["/no/such/path"]
+            homebrewBinaryPaths: ["/no/such/path"],
+            pathEnvironment: nil
         )
         let info = await detector.detect()
         #expect(info.kind == .manual)
@@ -217,10 +218,32 @@ struct InstallationDetectorTests {
         let detector = InstallationDetector(
             bundlePath: bundlePath,
             process: StubProcessRunner(stdout: caskroom + "\n", exit: 0),
-            homebrewBinaryPaths: [fakeBrew]
+            homebrewBinaryPaths: [fakeBrew],
+            pathEnvironment: nil
         )
         let info = await detector.detect()
         #expect(info.kind == .homebrewCask)
+    }
+
+    @Test("returns homebrewCask when brew is found through PATH")
+    func brewFromPath() async throws {
+        let tmp = NSTemporaryDirectory() + "brew-\(UUID().uuidString)"
+        let binDir = tmp + "/bin"
+        try FileManager.default.createDirectory(atPath: binDir, withIntermediateDirectories: true)
+        let fakeBrew = binDir + "/brew"
+        FileManager.default.createFile(atPath: fakeBrew, contents: Data())
+
+        let caskroom = "\(tmp)/Caskroom"
+        let bundlePath = "\(caskroom)/ai-usages-tracker/1.2.3/AI Usages Tracker.app"
+        let detector = InstallationDetector(
+            bundlePath: bundlePath,
+            process: StubProcessRunner(stdout: caskroom + "\n", exit: 0),
+            homebrewBinaryPaths: [],
+            pathEnvironment: binDir
+        )
+        let info = await detector.detect()
+        #expect(info.kind == .homebrewCask)
+        #expect(await detector.brewExecutablePath() == fakeBrew)
     }
 
     @Test("returns manual when bundle lives outside caskroom")
@@ -233,7 +256,8 @@ struct InstallationDetectorTests {
         let detector = InstallationDetector(
             bundlePath: "/Applications/Foo.app",
             process: StubProcessRunner(stdout: "/opt/homebrew/Caskroom\n", exit: 0),
-            homebrewBinaryPaths: [fakeBrew]
+            homebrewBinaryPaths: [fakeBrew],
+            pathEnvironment: nil
         )
         let info = await detector.detect()
         #expect(info.kind == .manual)
@@ -249,7 +273,8 @@ struct InstallationDetectorTests {
         let detector = InstallationDetector(
             bundlePath: "/Applications/Foo.app",
             process: ThrowingProcessRunner(),
-            homebrewBinaryPaths: [fakeBrew]
+            homebrewBinaryPaths: [fakeBrew],
+            pathEnvironment: nil
         )
         let info = await detector.detect()
         #expect(info.kind == .manual)
@@ -282,9 +307,9 @@ struct UpdateInstallerTests {
             currentPID: 4242
         )
         let body = try String(contentsOfFile: plan.scriptPath, encoding: .utf8)
-        #expect(body.contains("upgrade --cask ai-usages-tracker"))
-        #expect(body.contains("/opt/homebrew/bin/brew"))
-        #expect(body.contains("/Applications/Foo.app"))
+        #expect(body.contains("upgrade --cask 'ai-usages-tracker'"))
+        #expect(body.contains("'/opt/homebrew/bin/brew'"))
+        #expect(body.contains("'/Applications/Foo.app'"))
         #expect(body.contains("kill -0 4242"))
         let attrs = try FileManager.default.attributesOfItem(atPath: plan.scriptPath)
         let perms = (attrs[.posixPermissions] as? NSNumber)?.intValue ?? 0
@@ -319,10 +344,35 @@ struct UpdateInstallerTests {
             currentPID: 1
         )
         let body = try String(contentsOfFile: plan.scriptPath, encoding: .utf8)
-        #expect(body.contains("https://example.com/zip"))
-        #expect(body.contains("https://example.com/sha"))
+        #expect(body.contains("'https://example.com/zip'"))
+        #expect(body.contains("'https://example.com/sha'"))
+        #expect(body.contains("sha256 download failed"))
         #expect(body.contains("shasum -a 256"))
-        #expect(body.contains("/Applications/Foo.app"))
+        #expect(body.contains("'/Applications/Foo.app'"))
+    }
+
+    @Test("manual plan shell-quotes paths and URLs")
+    func manualPlanShellQuotes() async throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("ai-tracker-installer-\(UUID().uuidString)", isDirectory: true)
+        let installer = UpdateInstaller(scriptDirectory: dir)
+        let update = AvailableUpdate(
+            version: AppVersion(string: "1.5.0")!,
+            releaseURL: URL(string: "https://example.com/release")!,
+            downloadURL: URL(string: "https://example.com/releases/app?name=$USER")!,
+            sha256URL: URL(string: "https://example.com/sha?token=abc")!,
+            publishedAt: nil
+        )
+        let plan = try await installer.buildPlan(
+            for: update,
+            installation: InstallationInfo(kind: .manual, bundlePath: "/Applications/Foo $(touch bad)'s.app"),
+            brewExecutablePath: nil,
+            currentPID: 1
+        )
+        let body = try String(contentsOfFile: plan.scriptPath, encoding: .utf8)
+        #expect(body.contains("'/Applications/Foo $(touch bad)'\\''s.app'"))
+        #expect(body.contains("'https://example.com/releases/app?name=$USER'"))
+        #expect(!body.contains("\"/Applications/Foo $(touch bad)'s.app\""))
     }
 
     @Test("plan flags admin requirement when parent dir is not user-writable")

@@ -98,7 +98,7 @@ public actor UpdateInstaller {
             summary = "Download \(update.version) and replace app bundle"
         }
 
-        let scriptURL = scriptDirectory.appendingPathComponent("install-\(update.version.rawValue).sh")
+        let scriptURL = scriptDirectory.appendingPathComponent("install-\(Self.safeScriptFileComponent(update.version.rawValue)).sh")
         let data = Data(script.utf8)
         do {
             try data.write(to: scriptURL, options: .atomic)
@@ -153,37 +153,51 @@ public actor UpdateInstaller {
     ) -> String {
         // Wait for parent to exit (max 30 s) so brew can swap the bundle
         // without "in use" errors, then reinstall and relaunch.
-        let escapedBundle = bundlePath.replacingOccurrences(of: "\"", with: "\\\"")
+        let quotedBrew = shellQuote(brewPath)
+        let quotedCask = shellQuote(caskName)
+        let quotedLog = shellQuote(logPath)
+        let quotedBundle = shellQuote(bundlePath)
         return """
         #!/bin/bash
         set -u
-        exec >> "\(logPath)" 2>&1
+        exec >> \(quotedLog) 2>&1
         echo "[$(date)] update via brew starting (parent=\(parentPID))"
         for i in $(seq 1 60); do
             if ! kill -0 \(parentPID) 2>/dev/null; then break; fi
             sleep 0.5
         done
-        "\(brewPath)" update >/dev/null || true
-        if ! "\(brewPath)" upgrade --cask \(caskName); then
+        \(quotedBrew) update >/dev/null || true
+        if ! \(quotedBrew) upgrade --cask \(quotedCask); then
             echo "[$(date)] brew upgrade failed"
             exit 1
         fi
         echo "[$(date)] relaunching"
-        \(Self.relaunchSnippet(escapedBundle: escapedBundle))
+        \(Self.relaunchSnippet(quotedBundle: quotedBundle))
         """
+    }
+
+    private static func shellQuote(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
+    }
+
+    private static func safeScriptFileComponent(_ value: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-"))
+        let scalars = value.unicodeScalars.map { allowed.contains($0) ? Character($0) : "_" }
+        let sanitized = String(scalars)
+        return sanitized.isEmpty ? "update" : sanitized
     }
 
     /// Relaunch as the console user even when the script runs as root — when
     /// the script is invoked through `osascript ... with administrator
     /// privileges`, `/usr/bin/open` would otherwise launch the app as root and
     /// poison subsequent file ownership.
-    private static func relaunchSnippet(escapedBundle: String) -> String {
+    private static func relaunchSnippet(quotedBundle: String) -> String {
         return """
         if [ "$(id -u)" = "0" ]; then
             USER_UID=$(/usr/bin/stat -f "%u" /dev/console)
-            /bin/launchctl asuser "$USER_UID" /usr/bin/open "\(escapedBundle)"
+            /bin/launchctl asuser "$USER_UID" /usr/bin/open \(quotedBundle)
         else
-            /usr/bin/open "\(escapedBundle)"
+            /usr/bin/open \(quotedBundle)
         fi
         """
     }
@@ -195,14 +209,16 @@ public actor UpdateInstaller {
         parentPID: Int32,
         logPath: String
     ) -> String {
-        let escapedBundle = bundlePath.replacingOccurrences(of: "\"", with: "\\\"")
-        let zipURL = update.downloadURL.absoluteString
-        let shaURL = update.sha256URL?.absoluteString ?? ""
+        let quotedBundle = shellQuote(bundlePath)
+        let quotedLog = shellQuote(logPath)
+        let quotedWorkDir = shellQuote("\(workDir)/staging-\(update.version.rawValue)")
+        let quotedZipURL = shellQuote(update.downloadURL.absoluteString)
+        let quotedShaURL = shellQuote(update.sha256URL?.absoluteString ?? "")
         return """
         #!/bin/bash
         set -u
-        exec >> "\(logPath)" 2>&1
-        WORK="\(workDir)/staging-\(update.version.rawValue)"
+        exec >> \(quotedLog) 2>&1
+        WORK=\(quotedWorkDir)
         rm -rf "$WORK"
         mkdir -p "$WORK"
         cd "$WORK"
@@ -211,16 +227,18 @@ public actor UpdateInstaller {
             if ! kill -0 \(parentPID) 2>/dev/null; then break; fi
             sleep 0.5
         done
-        if ! /usr/bin/curl --fail --silent --show-error --location -o release.zip "\(zipURL)"; then
+        if ! /usr/bin/curl --fail --silent --show-error --location -o release.zip \(quotedZipURL); then
             echo "[$(date)] download failed"; exit 1
         fi
-        if [ -n "\(shaURL)" ]; then
-            if /usr/bin/curl --fail --silent --show-error --location -o release.zip.sha256 "\(shaURL)"; then
-                EXPECTED=$(awk '{print $1}' release.zip.sha256)
-                ACTUAL=$(/usr/bin/shasum -a 256 release.zip | awk '{print $1}')
-                if [ "$EXPECTED" != "$ACTUAL" ]; then
-                    echo "[$(date)] sha256 mismatch: expected=$EXPECTED actual=$ACTUAL"; exit 2
-                fi
+        SHA_URL=\(quotedShaURL)
+        if [ -n "$SHA_URL" ]; then
+            if ! /usr/bin/curl --fail --silent --show-error --location -o release.zip.sha256 "$SHA_URL"; then
+                echo "[$(date)] sha256 download failed"; exit 2
+            fi
+            EXPECTED=$(awk '{print $1}' release.zip.sha256)
+            ACTUAL=$(/usr/bin/shasum -a 256 release.zip | awk '{print $1}')
+            if [ "$EXPECTED" != "$ACTUAL" ]; then
+                echo "[$(date)] sha256 mismatch: expected=$EXPECTED actual=$ACTUAL"; exit 2
             fi
         fi
         if ! /usr/bin/ditto -x -k release.zip extracted; then
@@ -230,21 +248,21 @@ public actor UpdateInstaller {
         if [ -z "$NEW_APP" ]; then
             echo "[$(date)] no .app inside zip"; exit 4
         fi
-        BACKUP="\(escapedBundle).old-$(date +%s)"
-        if [ -e "\(escapedBundle)" ]; then
-            if ! /bin/mv "\(escapedBundle)" "$BACKUP"; then
+        BACKUP=\(quotedBundle).old-$(date +%s)
+        if [ -e \(quotedBundle) ]; then
+            if ! /bin/mv \(quotedBundle) "$BACKUP"; then
                 echo "[$(date)] backup failed"; exit 5
             fi
         fi
-        if ! /bin/mv "$NEW_APP" "\(escapedBundle)"; then
+        if ! /bin/mv "$NEW_APP" \(quotedBundle); then
             echo "[$(date)] move new bundle failed; restoring backup"
-            /bin/mv "$BACKUP" "\(escapedBundle)" 2>/dev/null
+            /bin/mv "$BACKUP" \(quotedBundle) 2>/dev/null
             exit 6
         fi
         rm -rf "$BACKUP"
         echo "[$(date)] relaunching"
-        /usr/bin/xattr -dr com.apple.quarantine "\(escapedBundle)" 2>/dev/null || true
-        \(Self.relaunchSnippet(escapedBundle: escapedBundle))
+        /usr/bin/xattr -dr com.apple.quarantine \(quotedBundle) 2>/dev/null || true
+        \(Self.relaunchSnippet(quotedBundle: quotedBundle))
         """
     }
 }

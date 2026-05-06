@@ -25,6 +25,7 @@ public actor InstallationDetector {
     private let process: ProcessRunning
     private let fileManager: FileManager
     private let homebrewBinaryPaths: [String]
+    private let pathEnvironment: String?
 
     public static let homebrewCaskName = "ai-usages-tracker"
 
@@ -32,12 +33,14 @@ public actor InstallationDetector {
         bundlePath: String,
         process: ProcessRunning = FoundationProcessRunner(),
         fileManager: FileManager = .default,
-        homebrewBinaryPaths: [String] = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
+        homebrewBinaryPaths: [String] = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"],
+        pathEnvironment: String? = ProcessInfo.processInfo.environment["PATH"]
     ) {
         self.bundlePath = bundlePath
         self.process = process
         self.fileManager = fileManager
         self.homebrewBinaryPaths = homebrewBinaryPaths
+        self.pathEnvironment = pathEnvironment
     }
 
     public func detect() async -> InstallationInfo {
@@ -83,7 +86,12 @@ public actor InstallationDetector {
     }
 
     private func firstExistingBrewPath() -> String? {
-        homebrewBinaryPaths.first { fileManager.fileExists(atPath: $0) }
+        let pathBrewCandidates = (pathEnvironment ?? "")
+            .split(separator: ":")
+            .map { String($0) }
+            .filter { !$0.isEmpty }
+            .map { URL(fileURLWithPath: $0).appendingPathComponent("brew").path }
+        return (homebrewBinaryPaths + pathBrewCandidates).first { fileManager.fileExists(atPath: $0) }
     }
 
     private func resolveSymlinks(_ path: String) -> String {
