@@ -106,6 +106,8 @@ struct UserDefaultsAppPreferencesTests {
         #expect(prefs.menuBarSegments.isEmpty)
         #expect(prefs.menuBarSegmentsInitialized == false)
         #expect(prefs.menuBarSeparator == " | ")
+        #expect(prefs.menuBarOutageWarningEnabled == true)
+        #expect(prefs.menuBarOutageWarningText == "⚠️")
         #expect(prefs.chartConfigurations.isEmpty)
         #expect(prefs.chartConfigurationsInitialized == false)
     }
@@ -133,6 +135,39 @@ struct UserDefaultsAppPreferencesTests {
         let prefs = UserDefaultsAppPreferences(defaults: defaults)
         prefs.menuBarSeparator = ""
         #expect(prefs.menuBarSeparator == "")
+    }
+
+    @Test("menuBarOutageWarningEnabled round-trips and supports explicit disable")
+    @MainActor
+    func menuBarOutageWarningEnabledRoundTrip() {
+        let (defaults, name) = makeSuite()
+        defer { cleanUp(suiteName: name) }
+
+        let prefs = UserDefaultsAppPreferences(defaults: defaults)
+        // Default-on: confirmed by emptyDefaults — disabling must persist as false,
+        // not be re-interpreted as "never set" (the seed is true).
+        prefs.menuBarOutageWarningEnabled = false
+        #expect(prefs.menuBarOutageWarningEnabled == false)
+
+        let reader = UserDefaultsAppPreferences(defaults: defaults)
+        #expect(reader.menuBarOutageWarningEnabled == false)
+
+        reader.menuBarOutageWarningEnabled = true
+        #expect(reader.menuBarOutageWarningEnabled == true)
+    }
+
+    @Test("menuBarOutageWarningText round-trips through UserDefaults")
+    @MainActor
+    func menuBarOutageWarningTextRoundTrip() {
+        let (defaults, name) = makeSuite()
+        defer { cleanUp(suiteName: name) }
+
+        let prefs = UserDefaultsAppPreferences(defaults: defaults)
+        prefs.menuBarOutageWarningText = "🛑"
+        #expect(prefs.menuBarOutageWarningText == "🛑")
+
+        let reader = UserDefaultsAppPreferences(defaults: defaults)
+        #expect(reader.menuBarOutageWarningText == "🛑")
     }
 
     @Test("menuBarSegments round-trips through UserDefaults")

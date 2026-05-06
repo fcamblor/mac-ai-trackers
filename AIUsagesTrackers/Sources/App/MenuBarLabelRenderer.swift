@@ -20,19 +20,31 @@ enum MenuBarLabelRenderer {
         separator: String,
         fallbackText: String,
         isDarkMenuBar: Bool,
-        isUnconfigured: Bool = false
+        isUnconfigured: Bool = false,
+        outageWarningPrefix: String? = nil
     ) -> NSImage {
         let textColor: NSColor = isDarkMenuBar ? .white : .black
         let attributed: NSAttributedString
         if isUnconfigured && segments.isEmpty {
             attributed = unconfiguredAttributedString(textColor: textColor)
         } else {
-            attributed = attributedString(
+            let main = attributedString(
                 segments: segments,
                 separator: separator,
                 fallbackText: fallbackText,
                 textColor: textColor
             )
+            if let prefix = outageWarningPrefix, !prefix.isEmpty {
+                let combined = NSMutableAttributedString()
+                combined.append(NSAttributedString(
+                    string: prefix + " ",
+                    attributes: [.font: font, .foregroundColor: textColor]
+                ))
+                combined.append(main)
+                attributed = combined
+            } else {
+                attributed = main
+            }
         }
         let textSize = attributed.size()
         let width = ceil(textSize.width) + horizontalPadding * 2

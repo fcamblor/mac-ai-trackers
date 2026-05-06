@@ -176,14 +176,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let store = usageStore, let button = statusItem?.button else { return }
         let isDark = button.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
         let isUnconfigured = Self.sharedPreferences.menuBarSegments.isEmpty
+        let warningPrefix = outageWarningPrefix(store: store)
         let image = MenuBarLabelRenderer.render(
             segments: store.menuBarSegments,
             separator: Self.sharedPreferences.menuBarSeparator,
             fallbackText: store.menuBarText,
             isDarkMenuBar: isDark,
-            isUnconfigured: isUnconfigured
+            isUnconfigured: isUnconfigured,
+            outageWarningPrefix: warningPrefix
         )
         button.image = image
+    }
+
+    /// Returns the configured warning text when outage hinting is enabled and at
+    /// least one vendor currently has an active outage; nil otherwise.
+    private func outageWarningPrefix(store: UsageStore) -> String? {
+        let prefs = Self.sharedPreferences
+        guard prefs.menuBarOutageWarningEnabled else { return nil }
+        let text = prefs.menuBarOutageWarningText
+        guard !text.isEmpty else { return nil }
+        guard store.outagesByVendor.values.contains(where: { !$0.isEmpty }) else { return nil }
+        return text
     }
 
     @objc private func togglePopover(_ sender: Any?) {
@@ -201,9 +214,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Re-arms `withObservationTracking` after every change so the status item
     /// keeps mirroring the store. Tracking fires exactly once per registration.
     private func trackStoreChanges(store: UsageStore) {
+        let prefs = Self.sharedPreferences
         withObservationTracking {
             _ = store.menuBarSegments
             _ = store.menuBarText
+            _ = store.outagesByVendor
+            _ = prefs.menuBarOutageWarningEnabled
+            _ = prefs.menuBarOutageWarningText
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self, let store = self.usageStore else { return }

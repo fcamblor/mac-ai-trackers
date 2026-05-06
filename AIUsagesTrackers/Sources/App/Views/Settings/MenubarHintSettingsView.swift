@@ -37,6 +37,8 @@ private struct MenubarHintContent: View {
         VStack(alignment: .leading, spacing: 0) {
             previewPanel
             Divider()
+            generalPanel
+            Divider()
             segmentsPanel
         }
         .confirmationDialog(
@@ -72,7 +74,8 @@ private struct MenubarHintContent: View {
                     segments: store.menuBarSegments,
                     separator: preferences.menuBarSeparator,
                     fallbackText: store.menuBarText,
-                    isDarkMenuBar: isDark
+                    isDarkMenuBar: isDark,
+                    outageWarningPrefix: previewOutageWarningPrefix
                 ))
                 Spacer()
             }
@@ -99,6 +102,49 @@ private struct MenubarHintContent: View {
             }
         }
         .padding(16)
+    }
+
+    // MARK: General
+
+    private var generalPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("General")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+
+            Toggle("Show outage warning in menu bar", isOn: Binding(
+                get: { preferences.menuBarOutageWarningEnabled },
+                set: { preferences.menuBarOutageWarningEnabled = $0 }
+            ))
+
+            HStack(spacing: 6) {
+                Text("Warning text")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextField("", text: Binding(
+                    get: { preferences.menuBarOutageWarningText },
+                    set: { preferences.menuBarOutageWarningText = $0 }
+                ))
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 120)
+                .disabled(!preferences.menuBarOutageWarningEnabled)
+            }
+
+            Text("Prepended to the menu bar label while at least one vendor listed in the popover has an active outage.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(16)
+    }
+
+    /// Always preview the warning when enabled so the user sees what the menu
+    /// bar will look like during an outage, even when no vendor is currently
+    /// reporting one.
+    private var previewOutageWarningPrefix: String? {
+        guard preferences.menuBarOutageWarningEnabled else { return nil }
+        let text = preferences.menuBarOutageWarningText
+        return text.isEmpty ? nil : text
     }
 
     // MARK: Segments list
