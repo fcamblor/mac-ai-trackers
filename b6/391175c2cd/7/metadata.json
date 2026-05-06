@@ -1,0 +1,72 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "b6391175c2cd",
+  "session_id": "958c8833-4ca1-4f39-8b3b-ff8b56162dcc",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-06T23:48:20.270491Z",
+  "branch": "industrialize-new-assistant",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "roadmap/index.md",
+    "roadmap/new-assistant-onboarding-workflow.plan.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "315d66b44ec5",
+  "token_usage": {
+    "input_tokens": 36,
+    "cache_creation_tokens": 88180,
+    "cache_read_tokens": 1169564,
+    "output_tokens": 6581,
+    "api_call_count": 21
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-06T23:48:19.991554Z",
+    "agent_lines": 36,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 1,
+    "total_committed": 36,
+    "total_lines_changed": 37,
+    "agent_percentage": 97.2972972972973,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 1730,
+      "user_lines_removed": 1,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/Review request-v1.md": 92,
+        ".context/attachments/Review request-v2.md": 92,
+        ".context/attachments/Review request.md": 92,
+        "roadmap/index.md": 6,
+        "roadmap/new-assistant-onboarding-workflow.md": 73,
+        "roadmap/new-assistant-onboarding-workflow.plan.md": 1042,
+        "roadmap/vendor-plugin-framework.md": 42,
+        "roadmap/vendor-plugin-framework.plan.md": 291
+      },
+      "user_removed_per_file": {
+        "roadmap/index.md": 1
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 276,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1454,
+      "agent_lines_removed": 1,
+      "user_added_per_file": {
+        ".context/attachments/Review request-v1.md": 92,
+        ".context/attachments/Review request-v2.md": 92,
+        ".context/attachments/Review request.md": 92
+      }
+    }
+  ]
+}
