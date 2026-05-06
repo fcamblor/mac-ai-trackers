@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "5302a9ea08de",
+  "strategy": "manual-commit",
+  "branch": "detect-github-release-updates",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Updates/InstallationDetector.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UpdatesTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/53/02a9ea08de/0/metadata.json",
+      "transcript": "/53/02a9ea08de/0/full.jsonl",
+      "content_hash": "/53/02a9ea08de/0/content_hash.txt",
+      "prompt": "/53/02a9ea08de/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 17,
+    "cache_creation_tokens": 23141,
+    "cache_read_tokens": 1908846,
+    "output_tokens": 11740,
+    "api_call_count": 12
+  }
+}

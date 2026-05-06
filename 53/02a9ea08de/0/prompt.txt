@@ -1,0 +1,1 @@
+ca n'a pas résolu le problème, je viens d'installer la version 0.4.1 qui embarque ton fix, et j'ai toujours "Manual install" d'affiché
