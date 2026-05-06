@@ -15,4 +15,7 @@ public enum AppPreferenceKeys: String {
     case chartConfigurations = "ai-tracker.chartConfigurations"
     case chartConfigurationsInitialized = "ai-tracker.chartConfigurationsInitialized"
     case ignoredAccounts = "ai-tracker.ignoredAccounts"
+    case updatesAutoCheckEnabled = "ai-tracker.updatesAutoCheckEnabled"
+    case updatesAutoCheckEnabledInitialized = "ai-tracker.updatesAutoCheckEnabledInitialized"
+    case updatesDismissedVersions = "ai-tracker.updatesDismissedVersions"
 }

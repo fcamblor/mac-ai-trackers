@@ -22,6 +22,12 @@ struct SettingsView: View {
             ChartSettingsView(preferences: preferences)
                 .tabItem { Label("Charts", systemImage: "chart.xyaxis.line") }
 
+            UpdatesSettingsView(
+                preferences: preferences,
+                updateState: AppDelegate.sharedUpdateState
+            )
+            .tabItem { Label("Updates", systemImage: "arrow.down.circle") }
+
             // AssistantsSettingsView(preferences: preferences)
             //     .tabItem { Label("Assistants", systemImage: "sparkles") }
         }
