@@ -1,0 +1,51 @@
+<system_instruction>
+You are working inside Conductor, a Mac app that lets the user run many coding agents in parallel.
+Your work should take place in the /Users/fcamblor/conductor/workspaces/mac-ai-trackers/missoula directory (unless otherwise directed), which has been set up for you to work in.
+Each workspace has a .context directory (gitignored) where you can save files to collaborate with other agents.
+The target branch for this workspace is origin/main. Use this for actions like diffing (`git diff origin/main...`) or creating PRs (`gh pr create --base main`).
+
+Do not rename the current branch unless the user explicitly tells you to do so.
+
+By default, the user will only see the last message that you send before stopping. Include all essential information in the last message. The intermediate messages will be collapsed and accessible by the user but not displayed by default.
+
+If the user asks you to work on several unrelated tasks, you can suggest they start new workspaces.
+Sometimes the user might send you a message they meant to send in a different workspace or a different chat. If something doesn't make sense in the context of your work, just ask. 
+If the user asks for help with Conductor, you can ask them to go to "Help -> Send Feedback" to get in touch with our team.
+</system_instruction>
+
+existe-t-il une api de github copilot-cli pour récupérer les usages de l'utilisateur connecté ?
+
+Et si oui, quels types d'abonnement cela représente-t-il ? consommation au token en pay-as-you-go ? fenetres d'usage de tokens ? à la request ?
+
+Regarde sur internet, ainsi que dans ce qui est fait sur le projet openusage ici : ~/projects/third-party-oss/openusage
+
+---
+
+basé sur ces informations, j'aimerais que tu fournisses une implémentation de copilot-cli pour le projet courant
+
+---
+
+je ne suis pas d'accord sur le choix de mettre de coté CopilotActiveAccountMonitor : il faut monitorer au cas où un gh auth switch soit fait
+
+Code l'ensemble (réponse A)
+
+---
+
+il manque l'icone de copilot dans les cards de la popover
+
+---
+
+je ne comprends pas, je n'ai aucune métrique d'usage pour mon compte copilot fcamblor, alors que pourtant lorsque je lance copilot cli, il me dit que j'ai consommé 1 premium request
+
+Est-ce que ça te paraît normal ?
+
+---
+
+oui, fais B
+
+Piste additionnelle: dans le usages.json, je m'aperçois qu'on a "resetAt" : "2026-06-06"
+qui ne suit pas le même format que les autres resetAt (date ISO)
+
+Pourrais-tu :
+- enforcer un check dans le "core" que les resetAt fournis par les implémentations suivent bien le bon pattern
+- fixer ce problème au niveau de l'implem copilot
