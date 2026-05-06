@@ -27,6 +27,12 @@ public protocol AppPreferences: AnyObject, Observable, Sendable {
     /// configuration list is preserved after first initialization.
     var chartConfigurationsInitialized: Bool { get set }
     var ignoredAccounts: [IgnoredAccount] { get set }
+    /// When true, the scheduler periodically polls GitHub for new releases.
+    /// Defaults to true (opt-out).
+    var updatesAutoCheckEnabled: Bool { get set }
+    /// Versions the user explicitly dismissed via the "Skip this version"
+    /// banner action. Stored as raw `tag_name` strings (without leading `v`).
+    var updatesDismissedVersions: [String] { get set }
 }
 
 // MARK: - UserDefaults-backed implementation
@@ -212,6 +218,35 @@ public final class UserDefaultsAppPreferences: AppPreferences {
             }
         }
     }
+
+    public var updatesAutoCheckEnabled: Bool {
+        get {
+            access(keyPath: \.updatesAutoCheckEnabled)
+            // Default-on requires distinguishing "never set" from "explicitly false".
+            if !defaults.bool(forKey: AppPreferenceKeys.updatesAutoCheckEnabledInitialized.rawValue) {
+                return true
+            }
+            return defaults.bool(forKey: AppPreferenceKeys.updatesAutoCheckEnabled.rawValue)
+        }
+        set {
+            withMutation(keyPath: \.updatesAutoCheckEnabled) {
+                defaults.set(newValue, forKey: AppPreferenceKeys.updatesAutoCheckEnabled.rawValue)
+                defaults.set(true, forKey: AppPreferenceKeys.updatesAutoCheckEnabledInitialized.rawValue)
+            }
+        }
+    }
+
+    public var updatesDismissedVersions: [String] {
+        get {
+            access(keyPath: \.updatesDismissedVersions)
+            return defaults.stringArray(forKey: AppPreferenceKeys.updatesDismissedVersions.rawValue) ?? []
+        }
+        set {
+            withMutation(keyPath: \.updatesDismissedVersions) {
+                defaults.set(newValue, forKey: AppPreferenceKeys.updatesDismissedVersions.rawValue)
+            }
+        }
+    }
 }
 
 // MARK: - In-memory test double
@@ -231,6 +266,8 @@ public final class InMemoryAppPreferences: AppPreferences {
     public var chartConfigurations: [ChartConfiguration]
     public var chartConfigurationsInitialized: Bool
     public var ignoredAccounts: [IgnoredAccount]
+    public var updatesAutoCheckEnabled: Bool
+    public var updatesDismissedVersions: [String]
 
     public init(
         refreshInterval: RefreshInterval = .default,
@@ -243,7 +280,9 @@ public final class InMemoryAppPreferences: AppPreferences {
         menuBarOutageWarningText: String = "⚠️",
         chartConfigurations: [ChartConfiguration] = [],
         chartConfigurationsInitialized: Bool = false,
-        ignoredAccounts: [IgnoredAccount] = []
+        ignoredAccounts: [IgnoredAccount] = [],
+        updatesAutoCheckEnabled: Bool = true,
+        updatesDismissedVersions: [String] = []
     ) {
         self.refreshInterval = refreshInterval
         self.launchAtLogin = launchAtLogin
@@ -256,5 +295,7 @@ public final class InMemoryAppPreferences: AppPreferences {
         self.chartConfigurations = chartConfigurations
         self.chartConfigurationsInitialized = chartConfigurationsInitialized
         self.ignoredAccounts = ignoredAccounts
+        self.updatesAutoCheckEnabled = updatesAutoCheckEnabled
+        self.updatesDismissedVersions = updatesDismissedVersions
     }
 }

@@ -7,9 +7,13 @@ struct UsageDetailsView: View {
     let store: UsageStore
     let refreshState: RefreshState
     let historyReader: UsageHistoryReader
+    let updateState: UpdateState
     let onRefresh: () async -> Void
     let onOpenSettings: () -> Void
     let onQuit: () -> Void
+    let onInstallUpdate: () -> Void
+    let onSkipUpdate: () -> Void
+    let onLaterUpdate: () -> Void
 
     @State private var contentMode: PopoverContentMode = .list
     @State private var selectedHistoryWindow: UsageHistoryTimeWindow = .twentyFourHours
@@ -35,6 +39,20 @@ struct UsageDetailsView: View {
             header
 
             Divider()
+
+            if let pending = updateState.pendingUpdate {
+                UpdateAvailableBanner(
+                    update: pending,
+                    installationKind: updateState.installationKind,
+                    isInstalling: updateState.phase == .installing,
+                    onInstall: onInstallUpdate,
+                    onSkip: onSkipUpdate,
+                    onLater: onLaterUpdate
+                )
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                Divider()
+            }
 
             content
 

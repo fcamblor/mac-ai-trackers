@@ -16,6 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var popover: NSPopover?
     private var appearanceObserver: NSKeyValueObservation?
     private var settingsWindowObserver: NSObjectProtocol?
+    private var updateScheduler: UpdateScheduler?
+    private var updateInstaller: UpdateInstaller?
+    private var installationDetector: InstallationDetector?
 
     /// Shared preferences store — exposed as static so the SwiftUI Settings scene
     /// (constructed before applicationDidFinishLaunching) can access it.
@@ -25,6 +28,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// scene is instantiated before the store exists, so it must read through this
     /// mutable holder. Nil until the first launch callback has run.
     static var sharedStore: UsageStore?
+
+    /// Shared observable update state — read by the popover banner and Settings.
+    static let sharedUpdateState: UpdateState = UpdateState()
+
+    /// Pointer to the running update scheduler so Settings can trigger a manual check.
+    static var sharedUpdateScheduler: UpdateScheduler?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
@@ -108,8 +117,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.usageStore = store
         Self.sharedStore = store
 
+        Self.sharedUpdateState.dismissedVersions = Set(Self.sharedPreferences.updatesDismissedVersions)
+
         setupStatusItem(store: store, refreshState: refreshState, historyReader: historyReader)
         trackStoreChanges(store: store)
+        setupUpdateScheduler()
 
         Task {
             await StartupMigrationRunner(fileManager: fileManager).run()
@@ -118,7 +130,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await snapshotScheduler.start()
             await accountMonitor.start()
             await codexMonitor.start()
+            if let scheduler = self.updateScheduler {
+                await scheduler.start()
+            }
         }
+    }
+
+    private func setupUpdateScheduler() {
+        guard let currentVersion = Self.currentAppVersion() else {
+            Loggers.app.log(.warning, "No CFBundleShortVersionString — update checker disabled")
+            return
+        }
+        let bundlePath = Bundle.main.bundleURL.path
+        let detector = InstallationDetector(bundlePath: bundlePath)
+        self.installationDetector = detector
+        self.updateInstaller = UpdateInstaller()
+        let scheduler = UpdateScheduler(
+            checker: UpdateChecker(),
+            detector: detector,
+            currentVersion: currentVersion,
+            preferencesAccessor: { Self.sharedPreferences },
+            stateAccessor: { Self.sharedUpdateState },
+            onUpdateAvailable: { [weak self] update, kind in
+                self?.presentUpdateAlert(update: update, kind: kind)
+            }
+        )
+        self.updateScheduler = scheduler
+        Self.sharedUpdateScheduler = scheduler
+    }
+
+    static func currentAppVersion() -> AppVersion? {
+        guard let raw = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String else {
+            return nil
+        }
+        return AppVersion(string: raw)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -142,6 +187,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 store: store,
                 refreshState: refreshState,
                 historyReader: historyReader,
+                updateState: Self.sharedUpdateState,
                 onRefresh: { [weak self] in
                     await self?.poller?.pollOnce(now: Date(), force: true)
                 },
@@ -150,6 +196,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 },
                 onQuit: { [weak self] in
                     self?.quit()
+                },
+                onInstallUpdate: { [weak self] in
+                    self?.triggerUpdateInstall()
+                },
+                onSkipUpdate: { [weak self] in
+                    self?.skipCurrentUpdate()
+                },
+                onLaterUpdate: { [weak self] in
+                    self?.laterUpdate()
                 }
             )
         )
@@ -325,6 +380,163 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+    }
+
+    // MARK: - Updates
+
+    private func presentUpdateAlert(update: AvailableUpdate, kind: InstallationKind) {
+        let alert = NSAlert()
+        alert.messageText = "Update available"
+        alert.informativeText = "Version \(update.version.rawValue) of AI Usages Tracker is available. Install it now?"
+        alert.alertStyle = .informational
+        let installLabel = kind == .homebrewCask ? "Update via Homebrew" : "Install"
+        alert.addButton(withTitle: installLabel)
+        alert.addButton(withTitle: "Later")
+        alert.addButton(withTitle: "Skip this version")
+        // .accessory apps don't get focus by default; activate so the modal alert
+        // surfaces above other windows when the user is mid-task.
+        let previousPolicy = NSApp.activationPolicy()
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        defer { NSApp.setActivationPolicy(previousPolicy) }
+
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            triggerUpdateInstall()
+        case .alertSecondButtonReturn:
+            break
+        case .alertThirdButtonReturn:
+            skipCurrentUpdate()
+        default:
+            break
+        }
+    }
+
+    private func triggerUpdateInstall() {
+        guard let installer = updateInstaller,
+              let detector = installationDetector,
+              let update = Self.sharedUpdateState.availableUpdate else {
+            return
+        }
+        Self.sharedUpdateState.setInstalling()
+        let bundlePath = Bundle.main.bundleURL.path
+        let installation = InstallationInfo(
+            kind: Self.sharedUpdateState.installationKind ?? .manual,
+            bundlePath: bundlePath
+        )
+        let pid = ProcessInfo.processInfo.processIdentifier
+        Task { [weak self] in
+            do {
+                let brewPath = await detector.brewExecutablePath()
+                let plan = try await installer.buildPlan(
+                    for: update,
+                    installation: installation,
+                    brewExecutablePath: brewPath,
+                    currentPID: pid
+                )
+                if plan.requiresAdminPrivileges {
+                    let confirmed = await MainActor.run { Self.confirmAdminElevation(version: update.version.rawValue) }
+                    guard confirmed else {
+                        await MainActor.run { Self.sharedUpdateState.setIdle(checkedAt: Date()) }
+                        return
+                    }
+                    try await Self.launchWithAdminPrivileges(scriptPath: plan.scriptPath)
+                } else {
+                    try Self.launchDetached(scriptPath: plan.scriptPath)
+                }
+                await MainActor.run {
+                    self?.quit()
+                }
+            } catch {
+                await MainActor.run {
+                    let alert = NSAlert()
+                    alert.messageText = "Failed to install update"
+                    alert.informativeText = String(describing: error)
+                    alert.runModal()
+                    Self.sharedUpdateState.setError(String(describing: error), at: Date())
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private static func confirmAdminElevation(version: String) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "Administrator permission required"
+        alert.informativeText = "AI Usages Tracker is installed in a location that requires administrator privileges to update. macOS will prompt you for your password to install version \(version)."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Continue")
+        alert.addButton(withTitle: "Cancel")
+        let previousPolicy = NSApp.activationPolicy()
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        defer { NSApp.setActivationPolicy(previousPolicy) }
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    /// Launch the install script as root via AppleScript's
+    /// `do shell script ... with administrator privileges`. The bash script is
+    /// spawned in the background (`&`) so osascript exits as soon as the user
+    /// approves the prompt — the script itself waits for the parent app to
+    /// terminate before performing the actual swap.
+    private static func launchWithAdminPrivileges(scriptPath: String) async throws {
+        let escaped = scriptPath
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        let appleScript = """
+        do shell script "/bin/bash \\"\(escaped)\\" >/dev/null 2>&1 &" with administrator privileges
+        """
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            DispatchQueue.global().async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+                process.arguments = ["-e", appleScript]
+                process.standardOutput = FileHandle.nullDevice
+                process.standardError = FileHandle.nullDevice
+                do {
+                    try process.run()
+                } catch {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                process.waitUntilExit()
+                guard process.terminationStatus == 0 else {
+                    continuation.resume(throwing: NSError(
+                        domain: "AIUsagesTracker.UpdateInstaller",
+                        code: Int(process.terminationStatus),
+                        userInfo: [NSLocalizedDescriptionKey: "Authorization was cancelled or denied (status \(process.terminationStatus))."]
+                    ))
+                    return
+                }
+                continuation.resume()
+            }
+        }
+    }
+
+    private func skipCurrentUpdate() {
+        guard let version = Self.sharedUpdateState.availableUpdate?.version.rawValue else { return }
+        Self.sharedUpdateState.dismissCurrent()
+        var stored = Self.sharedPreferences.updatesDismissedVersions
+        if !stored.contains(version) {
+            stored.append(version)
+            Self.sharedPreferences.updatesDismissedVersions = stored
+        }
+    }
+
+    private func laterUpdate() {
+        // No-op aside from clearing the in-popover banner this session.
+        Self.sharedUpdateState.dismissCurrent()
+    }
+
+    private static func launchDetached(scriptPath: String) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = [scriptPath]
+        // Detach: redirect IO to /dev/null so the child outlives the app.
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        process.standardInput = FileHandle.nullDevice
+        try process.run()
     }
 
     // MARK: - Quit
