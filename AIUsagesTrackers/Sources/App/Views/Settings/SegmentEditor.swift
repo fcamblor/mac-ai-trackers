@@ -7,19 +7,7 @@ struct SegmentEditor: View {
     let segmentID: UUID
 
     private var segmentBinding: Binding<MenuBarSegmentConfig>? {
-        let id = segmentID
-        guard let current = preferences.menuBarSegments.first(where: { $0.id == id }) else { return nil }
-        return Binding(
-            get: {
-                // Re-resolve by id: the index can shift between binding creation and
-                // SwiftUI's deferred reads during a delete transaction.
-                preferences.menuBarSegments.first(where: { $0.id == id }) ?? current
-            },
-            set: { newValue in
-                guard let idx = preferences.menuBarSegments.firstIndex(where: { $0.id == id }) else { return }
-                preferences.menuBarSegments[idx] = newValue
-            }
-        )
+        SettingsConfigurationBindings.menuBarSegment(preferences: preferences, segmentID: segmentID)
     }
 
     var body: some View {

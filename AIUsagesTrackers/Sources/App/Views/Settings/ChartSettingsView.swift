@@ -157,20 +157,7 @@ private struct ChartConfigurationCard: View {
     @State private var isExpanded = false
 
     private var configurationBinding: Binding<ChartConfiguration>? {
-        let id = configurationID
-        guard preferences.chartConfigurations.contains(where: { $0.id == id }) else { return nil }
-        return Binding(
-            get: {
-                // Re-resolve by id: the index can shift between binding creation and
-                // SwiftUI's deferred reads during a delete transaction.
-                preferences.chartConfigurations.first(where: { $0.id == id })
-                    ?? ChartConfiguration(id: id, title: "", selection: .allAvailable)
-            },
-            set: { newValue in
-                guard let idx = preferences.chartConfigurations.firstIndex(where: { $0.id == id }) else { return }
-                preferences.chartConfigurations[idx] = newValue
-            }
-        )
+        SettingsConfigurationBindings.chartConfiguration(preferences: preferences, configurationID: configurationID)
     }
 
     var body: some View {
