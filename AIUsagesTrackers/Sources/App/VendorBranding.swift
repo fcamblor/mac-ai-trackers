@@ -23,6 +23,12 @@ enum VendorBranding {
                 displayName: "Codex",
                 tintHex: "10A37F"
             )
+        case .copilot:
+            Brand(
+                assetName: "copilot-mark",
+                displayName: "Copilot CLI",
+                tintHex: "24292F"
+            )
         default:
             nil
         }

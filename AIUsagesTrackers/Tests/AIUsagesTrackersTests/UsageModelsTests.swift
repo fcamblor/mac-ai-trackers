@@ -2,6 +2,68 @@ import Foundation
 import Testing
 @testable import AIUsagesTrackersLib
 
+// MARK: - ISODate validating factories
+
+@Suite("ISODate format validation")
+struct ISODateValidationTests {
+    @Test("parsing(_:) accepts strict ISO 8601 datetime")
+    func parsingAcceptsStrictDatetime() {
+        let parsed = ISODate.parsing("2026-06-06T12:34:56Z")
+        #expect(parsed != nil)
+        #expect(parsed?.rawValue == "2026-06-06T12:34:56Z")
+        #expect(parsed?.isStrictlyValid == true)
+    }
+
+    @Test("parsing(_:) rejects calendar-only date")
+    func parsingRejectsDateOnly() {
+        #expect(ISODate.parsing("2026-06-06") == nil)
+    }
+
+    @Test("parsing(_:) rejects gibberish")
+    func parsingRejectsGibberish() {
+        #expect(ISODate.parsing("not a date") == nil)
+        #expect(ISODate.parsing("") == nil)
+    }
+
+    @Test("parsingFlexibleDate(_:) accepts strict datetime as-is")
+    func flexibleAcceptsDatetime() {
+        let parsed = ISODate.parsingFlexibleDate("2026-06-06T12:34:56Z")
+        #expect(parsed?.rawValue == "2026-06-06T12:34:56Z")
+    }
+
+    @Test("parsingFlexibleDate(_:) promotes calendar date to UTC midnight datetime")
+    func flexiblePromotesDateOnly() throws {
+        let parsed = ISODate.parsingFlexibleDate("2026-06-06")
+        let resolved = try #require(parsed)
+        // Promoted form must be strictly valid for downstream encoders.
+        #expect(resolved.isStrictlyValid)
+        #expect(resolved.rawValue.contains("T"))
+        // UTC midnight — verify by re-parsing the Date.
+        let date = try #require(resolved.date)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+        #expect(components.year == 2026)
+        #expect(components.month == 6)
+        #expect(components.day == 6)
+        #expect(components.hour == 0)
+        #expect(components.minute == 0)
+    }
+
+    @Test("parsingFlexibleDate(_:) rejects non-date strings")
+    func flexibleRejectsGibberish() {
+        #expect(ISODate.parsingFlexibleDate("nonsense") == nil)
+        #expect(ISODate.parsingFlexibleDate("2026/06/06") == nil)
+    }
+
+    @Test("isStrictlyValid distinguishes parseable from raw-only values")
+    func isStrictlyValidSurfacesContract() {
+        #expect(ISODate(rawValue: "2026-06-06T12:34:56Z").isStrictlyValid)
+        #expect(!ISODate(rawValue: "2026-06-06").isStrictlyValid)
+        #expect(!ISODate(rawValue: "garbage").isStrictlyValid)
+    }
+}
+
 // MARK: - UsageMetric Codable round-trip
 
 @Suite("UsageMetric encoding/decoding")

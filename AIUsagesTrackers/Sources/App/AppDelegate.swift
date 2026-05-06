@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var snapshotScheduler: SnapshotScheduler?
     private var accountMonitor: ClaudeActiveAccountMonitor?
     private var codexMonitor: CodexActiveAccountMonitor?
+    private var copilotMonitor: CopilotActiveAccountMonitor?
     private var pidGuard: AppPidGuard?
     private var usageStore: UsageStore?
     private var refreshState: RefreshState?
@@ -84,8 +85,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let fileManager = UsagesFileManager.shared
         let refreshState = RefreshState()
         let codexConnector = CodexConnector()
+        let copilotConnector = CopilotConnector()
         let poller = UsagePoller(
-            connectors: [ClaudeCodeConnector(), codexConnector],
+            connectors: [ClaudeCodeConnector(), codexConnector, copilotConnector],
             statusConnectors: [ClaudeStatusConnector(), CodexStatusConnector()],
             fileManager: fileManager,
             refreshState: refreshState,
@@ -103,6 +105,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await poller?.pollOnce(force: true)
             }
         )
+        let copilotMonitor = CopilotActiveAccountMonitor(
+            onActiveAccountChanged: { [weak copilotConnector, weak poller] _ in
+                await copilotConnector?.invalidateLoginCache()
+                await poller?.pollOnce(force: true)
+            }
+        )
         let snapshotRecorder = SnapshotRecorder()
         let historyReader = UsageHistoryReader(rootPath: snapshotRecorder.rootPath)
         let snapshotScheduler = SnapshotScheduler(
@@ -113,6 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.snapshotScheduler = snapshotScheduler
         self.accountMonitor = accountMonitor
         self.codexMonitor = codexMonitor
+        self.copilotMonitor = copilotMonitor
         self.refreshState = refreshState
 
         let usagesPath = fileManager.filePath
@@ -134,6 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await snapshotScheduler.start()
             await accountMonitor.start()
             await codexMonitor.start()
+            await copilotMonitor.start()
             if let scheduler = self.updateScheduler {
                 await scheduler.start()
             }
@@ -610,11 +620,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let schedulerRef = snapshotScheduler
         let monitorRef = accountMonitor
         let codexMonitorRef = codexMonitor
+        let copilotMonitorRef = copilotMonitor
         Task {
             await pollerRef?.stop()
             await schedulerRef?.stop()
             await monitorRef?.stop()
             await codexMonitorRef?.stop()
+            await copilotMonitorRef?.stop()
         }
         usageStore?.stop()
         pidGuard?.release()

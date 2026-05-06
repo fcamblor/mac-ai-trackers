@@ -68,6 +68,44 @@ public struct ISODate: RawRepresentable, Codable, Equatable, Hashable, Sendable 
         ISO8601DateFormatter().date(from: rawValue)
     }
 
+    /// Whether `rawValue` parses as a valid ISO 8601 datetime. Connectors must
+    /// produce values for which this is `true` — see `parsing(_:)` for the
+    /// validating factory enforced by `UsageMetric`'s encoder in DEBUG builds.
+    public var isStrictlyValid: Bool { date != nil }
+
+    /// Strict factory: returns nil unless `raw` parses as a valid ISO 8601
+    /// datetime. Use this at every connector boundary that consumes a string
+    /// from an external API — `init(rawValue:)` stays lenient for Codable
+    /// round-trips of pre-existing data.
+    public static func parsing(_ raw: String) -> ISODate? {
+        // New formatter per call — ISO8601DateFormatter is not thread-safe; acceptable for this cold path
+        guard ISO8601DateFormatter().date(from: raw) != nil else { return nil }
+        return ISODate(rawValue: raw)
+    }
+
+    /// Flexible factory: accepts strict ISO 8601 datetime, or a calendar date
+    /// `yyyy-MM-dd` which is promoted to UTC midnight (`T00:00:00Z`). Some
+    /// vendor APIs (notably GitHub Copilot's `quota_reset_date`) hand back
+    /// date-only values; without normalization the rest of the app — which
+    /// expects a parseable datetime — would silently treat them as missing.
+    public static func parsingFlexibleDate(_ raw: String) -> ISODate? {
+        if let strict = parsing(raw) { return strict }
+
+        // Regex shape-check before DateFormatter: `isLenient = false` is not
+        // enough — DateFormatter still accepts variant separators like
+        // `2026/06/06` against a `yyyy-MM-dd` pattern. We want to reject
+        // anything that isn't exactly the documented upstream shape.
+        let pattern = #/^\d{4}-\d{2}-\d{2}$/#
+        guard (try? pattern.wholeMatch(in: raw)) != nil else { return nil }
+
+        let dateOnly = DateFormatter()
+        dateOnly.dateFormat = "yyyy-MM-dd"
+        dateOnly.timeZone = TimeZone(identifier: "UTC")
+        dateOnly.locale = Locale(identifier: "en_US_POSIX")
+        guard let date = dateOnly.date(from: raw) else { return nil }
+        return ISODate(date: date)
+    }
+
     public init(from decoder: Decoder) throws {
         rawValue = try decoder.singleValueContainer().decode(String.self)
     }
@@ -91,6 +129,7 @@ public struct Vendor: RawRepresentable, Codable, Equatable, Hashable, Sendable {
 
     public static let claude = Vendor(rawValue: "claude")
     public static let codex = Vendor(rawValue: "codex")
+    public static let copilot = Vendor(rawValue: "copilot")
 
     public init(from decoder: Decoder) throws {
         rawValue = try decoder.singleValueContainer().decode(String.self)
