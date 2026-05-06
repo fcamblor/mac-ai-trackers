@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "1b056cb28e89",
+  "strategy": "manual-commit",
+  "branch": "detect-github-release-updates",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Preferences/AppPreferenceKeys.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Preferences/AppPreferences.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Updates/AppVersion.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Updates/InstallationDetector.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Updates/UpdateChecker.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Updates/UpdateInstaller.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Updates/UpdateScheduler.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Updates/UpdateState.swift",
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/UpdatesSettingsView.swift",
+    "AIUsagesTrackers/Sources/App/Views/SettingsView.swift",
+    "AIUsagesTrackers/Sources/App/Views/UpdateAvailableBanner.swift",
+    "AIUsagesTrackers/Sources/App/Views/UsageDetailsView.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UpdatesTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/1b/056cb28e89/0/metadata.json",
+      "transcript": "/1b/056cb28e89/0/full.jsonl",
+      "content_hash": "/1b/056cb28e89/0/content_hash.txt",
+      "prompt": "/1b/056cb28e89/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 443,
+    "cache_creation_tokens": 351520,
+    "cache_read_tokens": 14736606,
+    "output_tokens": 69461,
+    "api_call_count": 144
+  }
+}
