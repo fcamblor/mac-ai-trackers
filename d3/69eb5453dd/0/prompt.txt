@@ -1,0 +1,12 @@
+comment as-tu converti la date de copilot en une datetime ISO ?
+Car j'ai l'impression que l'ajout de la partie time n'est pas bonne (j'ai 30d 11h de remaining, ce qui me paraît assez bizarre comme nombre sachant que ma première requête était aujourd'hui ... ça ne fait pas un compte rond, je me serais attendu à 29d 11h ou 9h plutot)
+
+---
+
+existe-t-il de la documentation sur le net (reddit, issues github de copilot-cli, etc) permettant d'avoir des infos sur cette API interne ?
+
+---
+
+ok, deal with it
+
+Tu peux créer un test pour enforcer cette règle avec les différentes sources liées ?
