@@ -1,0 +1,1 @@
+je viens d'installer la nouvelle version via homebrew et "Installation type" apparaît comme "Manual install"
