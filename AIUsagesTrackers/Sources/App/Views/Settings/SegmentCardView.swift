@@ -6,7 +6,7 @@ struct SegmentCardView: View {
     let preferences: any AppPreferences
     @Bindable var store: UsageStore
     let isDark: Bool
-    let index: Int
+    let segmentID: UUID
     let canMoveUp: Bool
     let canMoveDown: Bool
     let onMoveUp: () -> Void
@@ -16,8 +16,7 @@ struct SegmentCardView: View {
     @State private var isExpanded: Bool = false
 
     private var segment: MenuBarSegmentConfig? {
-        guard preferences.menuBarSegments.indices.contains(index) else { return nil }
-        return preferences.menuBarSegments[index]
+        preferences.menuBarSegments.first(where: { $0.id == segmentID })
     }
 
     var body: some View {
@@ -26,7 +25,7 @@ struct SegmentCardView: View {
                 SegmentEditor(
                     preferences: preferences,
                     store: store,
-                    index: index
+                    segmentID: segmentID
                 )
                 .padding(.top, 8)
             } label: {

@@ -151,17 +151,17 @@ private struct MenubarHintContent: View {
 
             ScrollView {
                 VStack(spacing: 0) {
-                    ForEach(Array(AppDelegate.sharedPreferences.menuBarSegments.enumerated()), id: \.element.id) { index, _ in
+                    ForEach(Array(AppDelegate.sharedPreferences.menuBarSegments.enumerated()), id: \.element.id) { index, segment in
                         SegmentCardView(
                             preferences: preferences,
                             store: store,
                             isDark: isDark,
-                            index: index,
+                            segmentID: segment.id,
                             canMoveUp: index > 0,
                             canMoveDown: index < AppDelegate.sharedPreferences.menuBarSegments.count - 1,
                             onMoveUp: { move(from: index, to: index - 1) },
                             onMoveDown: { move(from: index, to: index + 2) },
-                            onRequestDelete: { pendingDelete = AppDelegate.sharedPreferences.menuBarSegments[index].id }
+                            onRequestDelete: { pendingDelete = segment.id }
                         )
                         Divider()
                     }

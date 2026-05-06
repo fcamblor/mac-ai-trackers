@@ -4,13 +4,21 @@ import AIUsagesTrackersLib
 struct SegmentEditor: View {
     let preferences: any AppPreferences
     @Bindable var store: UsageStore
-    let index: Int
+    let segmentID: UUID
 
     private var segmentBinding: Binding<MenuBarSegmentConfig>? {
-        guard preferences.menuBarSegments.indices.contains(index) else { return nil }
+        let id = segmentID
+        guard let current = preferences.menuBarSegments.first(where: { $0.id == id }) else { return nil }
         return Binding(
-            get: { preferences.menuBarSegments[index] },
-            set: { preferences.menuBarSegments[index] = $0 }
+            get: {
+                // Re-resolve by id: the index can shift between binding creation and
+                // SwiftUI's deferred reads during a delete transaction.
+                preferences.menuBarSegments.first(where: { $0.id == id }) ?? current
+            },
+            set: { newValue in
+                guard let idx = preferences.menuBarSegments.firstIndex(where: { $0.id == id }) else { return }
+                preferences.menuBarSegments[idx] = newValue
+            }
         )
     }
 
