@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "07914c082411",
+  "strategy": "manual-commit",
+  "branch": "analyze-token-window-ratios",
+  "checkpoints_count": 8,
+  "files_touched": [
+    "scripts/README.md",
+    "scripts/analyze-token-ratios.py",
+    "scripts/ratios-to-csv.py",
+    "scripts/ratios-to-png.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/07/914c082411/0/metadata.json",
+      "transcript": "/07/914c082411/0/full.jsonl",
+      "content_hash": "/07/914c082411/0/content_hash.txt",
+      "prompt": "/07/914c082411/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 187,
+    "cache_creation_tokens": 339085,
+    "cache_read_tokens": 5971455,
+    "output_tokens": 61489,
+    "api_call_count": 78
+  }
+}
