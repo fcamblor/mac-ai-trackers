@@ -3,7 +3,7 @@ import Foundation
 /// GitHub Copilot CLI plugin namespace — see `ClaudeCodePlugin` for the
 /// rationale on factory-style assembly. Copilot does not currently
 /// expose a public statuspage we consume, so the bundle's `status`
-/// remains `nil`.
+/// stays optional with a `nil` default.
 public enum CopilotCLIPlugin {
     public static let branding = VendorBranding(
         vendor: .copilot,
@@ -19,22 +19,18 @@ public enum CopilotCLIPlugin {
 
     @discardableResult
     public static func register(
-        session: URLSession = .shared,
-        accountChangeCallback: (@Sendable (AccountEmail) async -> Void)? = nil
+        connector: CopilotConnector,
+        status: (any StatusConnector)? = nil,
+        monitor: CopilotActiveAccountMonitor? = nil,
+        logger: FileLogger = Loggers.copilot,
+        sanitizer: CopilotPayloadSanitizer = CopilotPayloadSanitizer()
     ) -> VendorBundle {
-        let logger = Loggers.copilot
-        let sanitizer = CopilotPayloadSanitizer()
         let proxy = LoggingProxy(logger: logger, sanitizer: sanitizer)
-        let connector = CopilotConnector(logger: logger, session: session)
-        let monitor = CopilotActiveAccountMonitor(
-            logger: logger,
-            onActiveAccountChanged: accountChangeCallback
-        )
         let bundle = VendorBundle(
             vendor: .copilot,
             branding: branding,
             usage: connector,
-            status: nil,
+            status: status,
             activeAccountMonitor: monitor,
             logger: logger,
             loggingProxy: proxy,

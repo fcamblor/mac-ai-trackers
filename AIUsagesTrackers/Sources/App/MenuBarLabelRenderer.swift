@@ -120,10 +120,10 @@ enum MenuBarLabelRenderer {
                 ))
             }
             if let vendor = segment.vendorIcon,
-               let icon = VendorBranding.tintedNSImage(for: vendor, height: font.capHeight) {
+               let icon = VendorBrandingResolver.tintedNSImage(for: vendor, height: font.capHeight) {
                 let attachment = NSTextAttachment()
                 attachment.image = icon
-                let pad = VendorBranding.iconGlowPadding
+                let pad = VendorBrandingResolver.iconGlowPadding
                 attachment.bounds = CGRect(
                     x: -pad,
                     y: -pad,

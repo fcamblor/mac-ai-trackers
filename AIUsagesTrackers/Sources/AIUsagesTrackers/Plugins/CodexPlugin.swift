@@ -1,7 +1,7 @@
 import Foundation
 
 /// Codex (ChatGPT) plugin namespace — see `ClaudeCodePlugin` for the
-/// rationale on factory-style assembly.
+/// rationale on factory-style assembly with pre-built sub-components.
 public enum CodexPlugin {
     public static let branding = VendorBranding(
         vendor: .codex,
@@ -15,24 +15,15 @@ public enum CodexPlugin {
         slug: "codex"
     )
 
-    /// Builds and registers a `VendorBundle` for Codex. The
-    /// `accountChangeCallback` runs on the cooperative thread pool when
-    /// the active Codex account changes — typically a closure that
-    /// invalidates the connector's email cache and forces a poll.
     @discardableResult
     public static func register(
-        session: URLSession = .shared,
-        accountChangeCallback: (@Sendable (AccountId) async -> Void)? = nil
+        connector: CodexConnector,
+        status: CodexStatusConnector? = nil,
+        monitor: CodexActiveAccountMonitor? = nil,
+        logger: FileLogger = Loggers.codex,
+        sanitizer: CodexPayloadSanitizer = CodexPayloadSanitizer()
     ) -> VendorBundle {
-        let logger = Loggers.codex
-        let sanitizer = CodexPayloadSanitizer()
         let proxy = LoggingProxy(logger: logger, sanitizer: sanitizer)
-        let connector = CodexConnector(logger: logger, session: session)
-        let status = CodexStatusConnector(logger: logger, session: session)
-        let monitor = CodexActiveAccountMonitor(
-            logger: logger,
-            onActiveAccountChanged: accountChangeCallback
-        )
         let bundle = VendorBundle(
             vendor: .codex,
             branding: branding,

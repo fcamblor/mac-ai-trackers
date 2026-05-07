@@ -7,9 +7,6 @@ import AppIconKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var poller: UsagePoller?
     private var snapshotScheduler: SnapshotScheduler?
-    private var accountMonitor: ClaudeActiveAccountMonitor?
-    private var codexMonitor: CodexActiveAccountMonitor?
-    private var copilotMonitor: CopilotActiveAccountMonitor?
     private var pidGuard: AppPidGuard?
     private var usageStore: UsageStore?
     private var refreshState: RefreshState?
@@ -97,16 +94,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let fileManager = UsagesFileManager.shared
         let refreshState = RefreshState()
+        let claudeConnector = ClaudeCodeConnector()
+        let claudeStatus = ClaudeStatusConnector()
         let codexConnector = CodexConnector()
+        let codexStatus = CodexStatusConnector()
         let copilotConnector = CopilotConnector()
         let poller = UsagePoller(
-            connectors: [ClaudeCodeConnector(), codexConnector, copilotConnector],
-            statusConnectors: [ClaudeStatusConnector(), CodexStatusConnector()],
+            connectors: [claudeConnector, codexConnector, copilotConnector],
+            statusConnectors: [claudeStatus, codexStatus],
             fileManager: fileManager,
             refreshState: refreshState,
             preferences: Self.sharedPreferences
         )
-        let accountMonitor = ClaudeActiveAccountMonitor(
+        let claudeMonitor = ClaudeActiveAccountMonitor(
             fileManager: fileManager,
             onActiveAccountChanged: { [weak poller] _ in
                 await poller?.pollOnce(force: true)
@@ -124,6 +124,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await poller?.pollOnce(force: true)
             }
         )
+        VendorRegistry.resetForTesting()
+        ClaudeCodePlugin.register(connector: claudeConnector, status: claudeStatus, monitor: claudeMonitor)
+        CodexPlugin.register(connector: codexConnector, status: codexStatus, monitor: codexMonitor)
+        CopilotCLIPlugin.register(connector: copilotConnector, monitor: copilotMonitor)
         let snapshotRecorder = SnapshotRecorder()
         let historyReader = UsageHistoryReader(rootPath: snapshotRecorder.rootPath)
         let snapshotScheduler = SnapshotScheduler(
@@ -132,9 +136,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         self.poller = poller
         self.snapshotScheduler = snapshotScheduler
-        self.accountMonitor = accountMonitor
-        self.codexMonitor = codexMonitor
-        self.copilotMonitor = copilotMonitor
         self.refreshState = refreshState
 
         let usagesPath = fileManager.filePath
@@ -154,9 +155,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             store.start()
             await poller.start()
             await snapshotScheduler.start()
-            await accountMonitor.start()
-            await codexMonitor.start()
-            await copilotMonitor.start()
+            for bundle in VendorRegistry.bundles {
+                await bundle.activeAccountMonitor?.start()
+            }
             if let scheduler = self.updateScheduler {
                 await scheduler.start()
             }
@@ -752,14 +753,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func gracefulShutdownAndTerminate() async {
         let pollerRef = poller
         let schedulerRef = snapshotScheduler
-        let monitorRef = accountMonitor
-        let codexMonitorRef = codexMonitor
-        let copilotMonitorRef = copilotMonitor
+        let monitors = VendorRegistry.bundles.compactMap(\.activeAccountMonitor)
         await pollerRef?.stop()
         await schedulerRef?.stop()
-        await monitorRef?.stop()
-        await codexMonitorRef?.stop()
-        await copilotMonitorRef?.stop()
+        for monitor in monitors {
+            await monitor.stop()
+        }
         usageStore?.stop()
         pidGuard?.release()
         NSApplication.shared.terminate(nil)

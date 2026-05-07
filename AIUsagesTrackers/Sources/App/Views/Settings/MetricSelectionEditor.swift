@@ -48,7 +48,7 @@ struct MetricSelectionEditor: View {
                 }
             )) {
                 ForEach(availableVendors, id: \.rawValue) { vendor in
-                    Text(VendorBranding.displayName(for: vendor)).tag(vendor)
+                    Text(VendorBrandingResolver.displayName(for: vendor)).tag(vendor)
                 }
             }
             .labelsHidden()

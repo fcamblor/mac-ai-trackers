@@ -2,35 +2,19 @@ import SwiftUI
 import AppKit
 import AIUsagesTrackersLib
 
-enum VendorBranding {
-    struct Brand: Equatable, Sendable {
-        let assetName: String
-        let displayName: String
-        let tintHex: String
-    }
-
-    static func brand(for vendor: Vendor) -> Brand? {
+enum VendorBrandingResolver {
+    /// Looks the brand up in `VendorRegistry`, falling back to the
+    /// per-plugin static `branding` so the UI keeps working before the
+    /// registry is populated (e.g. in tests).
+    static func brand(for vendor: Vendor) -> AIUsagesTrackersLib.VendorBranding? {
+        if let bundle = VendorRegistry.bundle(for: vendor) {
+            return bundle.branding
+        }
         switch vendor {
-        case .claude:
-            Brand(
-                assetName: "claude-mark",
-                displayName: "Claude Code",
-                tintHex: "DA7756"
-            )
-        case .codex:
-            Brand(
-                assetName: "codex-mark",
-                displayName: "Codex",
-                tintHex: "10A37F"
-            )
-        case .copilot:
-            Brand(
-                assetName: "copilot-mark",
-                displayName: "Copilot CLI",
-                tintHex: "24292F"
-            )
-        default:
-            nil
+        case .claude:  return ClaudeCodePlugin.branding
+        case .codex:   return CodexPlugin.branding
+        case .copilot: return CopilotCLIPlugin.branding
+        default:       return nil
         }
     }
 
@@ -174,8 +158,8 @@ struct VendorIconView: View {
     var size: CGFloat = 14
 
     var body: some View {
-        if let image = VendorBranding.icon(for: vendor),
-           let tint = VendorBranding.tint(for: vendor) {
+        if let image = VendorBrandingResolver.icon(for: vendor),
+           let tint = VendorBrandingResolver.tint(for: vendor) {
             Image(nsImage: image)
                 .renderingMode(.template)
                 .resizable()
@@ -186,9 +170,9 @@ struct VendorIconView: View {
         } else {
             // Asset bundle missing (defensive fallback): show the vendor's first
             // letter so the rest of the UI stays informative instead of blank.
-            Text(VendorBranding.displayName(for: vendor).prefix(1).uppercased())
+            Text(VendorBrandingResolver.displayName(for: vendor).prefix(1).uppercased())
                 .font(.system(size: size * 0.8, weight: .semibold))
-                .foregroundStyle(VendorBranding.tint(for: vendor) ?? .primary)
+                .foregroundStyle(VendorBrandingResolver.tint(for: vendor) ?? .primary)
                 .frame(width: size, height: size)
                 .accessibilityHidden(true)
         }
@@ -202,7 +186,7 @@ struct VendorLabelView: View {
     var body: some View {
         HStack(spacing: 6) {
             VendorIconView(vendor: vendor, size: iconSize)
-            Text(VendorBranding.displayName(for: vendor))
+            Text(VendorBrandingResolver.displayName(for: vendor))
         }
     }
 }
