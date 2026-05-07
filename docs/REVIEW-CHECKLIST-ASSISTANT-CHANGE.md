@@ -74,10 +74,11 @@ If this checklist disagrees with `docs/ASSISTANT-ONBOARDING.md` or
 - [ ] DMG present in the issue's sticky build comment, filename matches
       `AI-Usages-Tracker-<vendor>-<sha8>.dmg`, SHA-256 listed, full commit
       SHA called out, vendor-debug slug shown.
-- [ ] Tester threshold met on the latest build SHA — ≥ 2 non-author
+- [ ] Tester threshold met on the latest build SHA — ≥ 2 distinct
       confirmations for `type:new-assistant` / `kind:enrichment` /
       `kind:breaking`; ≥ 1 for `kind:urgent-fix` (with follow-up
-      confirmations expected post-release).
+      confirmations expected post-release). The PR author may be one
+      of the counted testers.
 - [ ] Every counted confirmation lists the matching short SHA + full SHA
       in the sign-off body.
 - [ ] Each counted confirmation has an attached connector log audited

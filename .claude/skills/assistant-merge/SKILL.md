@@ -31,10 +31,13 @@ merge if any gate is not green.
 
 Threshold rules:
 
-- `type:vendor-evolution` + `kind:urgent-fix` → ≥ 1 non-author
-  confirmation is sufficient.
-- All other cases → ≥ 2 non-author confirmations on the latest build
+- `type:vendor-evolution` + `kind:urgent-fix` → ≥ 1 confirmation is
+  sufficient.
+- All other cases → ≥ 2 distinct confirmations on the latest build
   SHA, with audited-clean attached logs.
+
+The PR author is allowed to count as one of those confirmations when
+they post a sign-off comment as a tester.
 
 ### Phase C — Squash-merge
 

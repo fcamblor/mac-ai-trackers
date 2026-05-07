@@ -79,5 +79,5 @@ body:
       options:
         - label: I understand the existing `docs/vendors/<vendor>.md` will be re-dated and superseded samples kept (not deleted), with a Change log entry summarizing the drift.
           required: true
-        - label: I understand merge requires ≥ 2 non-author testers ✅ for kind:enrichment / kind:breaking, and ≥ 1 for kind:urgent-fix (with follow-up confirmations expected post-release).
+        - label: I understand merge requires ≥ 2 distinct testers ✅ for kind:enrichment / kind:breaking, and ≥ 1 for kind:urgent-fix (with follow-up confirmations expected post-release).
           required: true

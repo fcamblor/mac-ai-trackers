@@ -8,7 +8,7 @@ body:
       value: |
         Thanks for proposing a new vendor. The lifecycle is documented in
         [`docs/ASSISTANT-ONBOARDING.md`](../blob/main/docs/ASSISTANT-ONBOARDING.md);
-        merging requires ≥ 2 non-author tester confirmations on the latest
+        merging requires ≥ 2 distinct tester confirmations on the latest
         build SHA, with attached connector logs.
   - type: input
     id: vendor-slug
@@ -79,5 +79,5 @@ body:
       options:
         - label: I understand the app reads credentials but never writes, refreshes, or rotates them.
           required: true
-        - label: I understand merge requires ≥ 2 non-author testers ✅ on the latest build SHA, with attached sanitized connector logs.
+        - label: I understand merge requires ≥ 2 distinct testers ✅ on the latest build SHA, with attached sanitized connector logs.
           required: true

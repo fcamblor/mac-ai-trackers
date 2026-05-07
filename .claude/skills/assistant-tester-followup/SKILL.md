@@ -34,7 +34,6 @@ counted confirmation must match — older builds are invalidated.
 Iterate through the issue's comments and pick the ones starting with the
 `✅ tester-confirm` sentinel. For each, validate:
 
-- author is **not** the PR author,
 - the build SHA in the body matches the latest sticky's SHA (both
   forms),
 - required Verified boxes are ticked,
@@ -63,10 +62,10 @@ leak.
 
 | Issue labels | Threshold |
 |---|---|
-| `type:new-assistant` | ≥ 2 non-author confirmations |
-| `type:vendor-evolution` + `kind:enrichment` | ≥ 2 non-author confirmations |
-| `type:vendor-evolution` + `kind:breaking` | ≥ 2 non-author confirmations |
-| `type:vendor-evolution` + `kind:urgent-fix` | ≥ 1 non-author confirmation |
+| `type:new-assistant` | ≥ 2 distinct confirmations |
+| `type:vendor-evolution` + `kind:enrichment` | ≥ 2 distinct confirmations |
+| `type:vendor-evolution` + `kind:breaking` | ≥ 2 distinct confirmations |
+| `type:vendor-evolution` + `kind:urgent-fix` | ≥ 1 confirmation |
 
 ### Phase F — Sticky tally comment
 

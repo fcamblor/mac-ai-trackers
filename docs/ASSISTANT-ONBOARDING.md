@@ -27,7 +27,7 @@ nightly-build pipeline, and the same tester sign-off threshold:
     version bump and an explicit release-notes callout.
   - `kind:urgent-fix` — vendor unilaterally broke compat; the connector is
     currently broken in the field. **Emergency escape hatch**: a single
-    non-author tester confirmation is acceptable to merge; the issue stays
+    tester confirmation is acceptable to merge; the issue stays
     open after release for follow-up confirmations.
 
 The skills branch on those labels where the work genuinely differs
@@ -228,7 +228,10 @@ copy them from the sticky build comment.
 
 ##### Counting rules
 
-- The author of the sign-off must differ from the PR author.
+- Each distinct GitHub account counts at most once; multiple sign-off
+  comments by the same account collapse to the most recent valid one.
+  The PR author is allowed to sign off as a tester (they exercise the
+  same DMG against their own vendor account like any other tester).
 - The build SHA must match the latest sticky build comment (a rebase
   invalidates older confirmations; testers re-confirm on the new build).
 - A sign-off without an attached connector log is **incomplete** —
@@ -242,9 +245,9 @@ copy them from the sticky build comment.
 ##### Threshold for merge
 
 - **`type:new-assistant`** / **`kind:enrichment`** / **`kind:breaking`**:
-  ≥ 2 distinct non-author testers with valid sign-offs on the latest
+  ≥ 2 distinct testers with valid sign-offs on the latest
   build SHA, with audited-clean attached logs.
-- **`kind:urgent-fix`**: ≥ 1 non-author tester. The issue stays open
+- **`kind:urgent-fix`**: ≥ 1 tester. The issue stays open
   after release for follow-up confirmations.
 
 #### 3.1.6 Merge-ready
