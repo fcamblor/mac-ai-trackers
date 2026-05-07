@@ -1,0 +1,56 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "e57e0de99f40",
+  "session_id": "ffa52c38-54e9-4525-8ed0-0786ff195d64",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-07T01:33:40.287695Z",
+  "branch": "vendor-plugin-framework",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "tech-debt/20260507_medium_M_w6-migrate-payload-to-logging-proxy/debt.md",
+    "tech-debt/20260507_medium_S_loggers-managed-not-from-registry/debt.md",
+    "tech-debt/20260507_medium_S_cache-invalidation-not-in-bundle/debt.md",
+    "tech-debt/20260507_low_XS_vendorbranding-resolver-fallback-switch/debt.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "1382edb482df",
+  "checkpoint_transcript_start": 1036,
+  "transcript_lines_at_start": 1036,
+  "token_usage": {
+    "input_tokens": 24,
+    "cache_creation_tokens": 292831,
+    "cache_read_tokens": 4616312,
+    "output_tokens": 11286,
+    "api_call_count": 17
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-07T01:33:38.78984Z",
+    "agent_lines": 346,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 346,
+    "total_lines_changed": 346,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 49,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/api-captures/claude-raw.json": 3,
+        ".context/api-captures/codex-raw.json": 45,
+        ".context/api-captures/copilot-raw.json": 1
+      }
+    }
+  ]
+}

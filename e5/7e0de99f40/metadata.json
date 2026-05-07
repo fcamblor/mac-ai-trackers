@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "e57e0de99f40",
+  "strategy": "manual-commit",
+  "branch": "vendor-plugin-framework",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "tech-debt/20260507_low_XS_vendorbranding-resolver-fallback-switch/debt.md",
+    "tech-debt/20260507_medium_M_w6-migrate-payload-to-logging-proxy/debt.md",
+    "tech-debt/20260507_medium_S_cache-invalidation-not-in-bundle/debt.md",
+    "tech-debt/20260507_medium_S_loggers-managed-not-from-registry/debt.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e5/7e0de99f40/0/metadata.json",
+      "transcript": "/e5/7e0de99f40/0/full.jsonl",
+      "content_hash": "/e5/7e0de99f40/0/content_hash.txt",
+      "prompt": "/e5/7e0de99f40/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 24,
+    "cache_creation_tokens": 292831,
+    "cache_read_tokens": 4616312,
+    "output_tokens": 11286,
+    "api_call_count": 17
+  }
+}
