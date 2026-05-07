@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "b95145d56e5a",
+  "strategy": "manual-commit",
+  "branch": "vendor-plugin-framework",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".github/ISSUE_TEMPLATE/config.yml",
+    ".github/ISSUE_TEMPLATE/new-assistant-request.yml",
+    ".github/ISSUE_TEMPLATE/vendor-evolution-request.yml",
+    ".github/PULL_REQUEST_TEMPLATE/assistant-change.md",
+    ".github/workflows/phase-label-gate.yml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/b9/5145d56e5a/0/metadata.json",
+      "transcript": "/b9/5145d56e5a/0/full.jsonl",
+      "content_hash": "/b9/5145d56e5a/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 8,
+    "cache_creation_tokens": 7168,
+    "cache_read_tokens": 884847,
+    "output_tokens": 6180,
+    "api_call_count": 8
+  }
+}

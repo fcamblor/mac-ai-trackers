@@ -1,0 +1,43 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "b95145d56e5a",
+  "session_id": "0ac8aafa-6ee5-4262-9165-c613fca0d658",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-07T01:45:55.366851Z",
+  "branch": "vendor-plugin-framework",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".github/ISSUE_TEMPLATE/new-assistant-request.yml",
+    ".github/ISSUE_TEMPLATE/vendor-evolution-request.yml",
+    ".github/ISSUE_TEMPLATE/config.yml",
+    ".github/PULL_REQUEST_TEMPLATE/assistant-change.md",
+    ".github/workflows/phase-label-gate.yml"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "16a6e57a3dc8",
+  "checkpoint_transcript_start": 126,
+  "transcript_lines_at_start": 126,
+  "token_usage": {
+    "input_tokens": 8,
+    "cache_creation_tokens": 7168,
+    "cache_read_tokens": 884847,
+    "output_tokens": 6180,
+    "api_call_count": 8
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-07T01:45:55.030159Z",
+    "agent_lines": 304,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 304,
+    "total_lines_changed": 304,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}
