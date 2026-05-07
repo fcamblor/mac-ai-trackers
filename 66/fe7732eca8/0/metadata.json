@@ -1,0 +1,67 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "66fe7732eca8",
+  "session_id": "ffa52c38-54e9-4525-8ed0-0786ff195d64",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-07T00:58:18.012759Z",
+  "branch": "vendor-plugin-framework",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Plugins/VendorBranding.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Plugins/VendorDocumentation.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/ActiveAccountMonitoring.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CredentialLocator.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Logging/PayloadSanitizing.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Logging/BaseSanitizers.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Logging/LoggingProxy.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Plugins/VendorBundle.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Plugins/VendorRegistry.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "271be83e3611",
+  "checkpoint_transcript_start": 212,
+  "transcript_lines_at_start": 212,
+  "token_usage": {
+    "input_tokens": 78,
+    "cache_creation_tokens": 240415,
+    "cache_read_tokens": 12022425,
+    "output_tokens": 26128,
+    "api_call_count": 70
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-07T00:58:17.209287Z",
+    "agent_lines": 8,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 8,
+    "total_lines_changed": 8,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 478,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/api-captures/claude-raw.json": 3,
+        ".context/api-captures/codex-raw.json": 45,
+        ".context/api-captures/copilot-raw.json": 1,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/ActiveAccountMonitoring.swift": 17,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CredentialLocator.swift": 21,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Logging/BaseSanitizers.swift": 126,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Logging/LoggingProxy.swift": 120,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Logging/PayloadSanitizing.swift": 16,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Plugins/VendorBranding.swift": 23,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Plugins/VendorBundle.swift": 43,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Plugins/VendorDocumentation.swift": 18,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Plugins/VendorRegistry.swift": 45
+      }
+    }
+  ]
+}
