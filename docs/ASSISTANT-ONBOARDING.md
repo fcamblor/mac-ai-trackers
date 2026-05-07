@@ -149,6 +149,29 @@ read (always from durable state), outputs, exit condition.
 - **Transition**: `phase:review` → `phase:testing`.
 - **Skill**: `assistant-tester-followup` — invoked each time a tester
   comment arrives, especially when incomplete. Does not transition.
+
+> **Phase labels are signals, not triggers.** Applying `phase:testing` (or
+> any other `phase:*` label) does **not** start any GitHub Actions
+> workflow. The label only tells humans — testers, maintainers, the
+> follow-up skill — what stage the issue is at. The DMG build workflow
+> reacts to **pull request events** (`opened`, `reopened`,
+> `synchronize`, `ready_for_review`), and additionally requires:
+>
+> - the PR is **not a draft** (the workflow gates every job on
+>   `github.event.pull_request.draft != true`, so draft PRs produce no
+>   sticky build comment and no DMG artifact);
+> - the PR is **not in conflict** with the base branch (a conflicting PR
+>   may build but cannot be merged, and reviewers should not ask testers
+>   to validate a build that will need to be rebuilt after rebase).
+>
+> Before transitioning to `phase:testing`, the maintainer must therefore
+> confirm: PR is ready-for-review (`gh pr ready <n>`), `mergeable` is not
+> `CONFLICTING` (`gh pr view <n> --json isDraft,mergeable`), and a fresh
+> sticky build comment exists on the PR for the latest head SHA. If any
+> of these is missing, the workflow run that produces the DMG either has
+> not fired or has been skipped — push a new commit (or run the
+> `workflow_dispatch` fallback with the PR number) once the prerequisites
+> are met to re-trigger it.
 - **Inputs**: tester sign-off comments on the issue (each ideally with
   attached connector log), latest sticky build comment (also posted on the
   issue), the build SHA, the vendor doc's `Sanitized fields` section.
