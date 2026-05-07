@@ -13,7 +13,6 @@ enum VendorBrandingResolver {
         switch vendor {
         case .claude:  return ClaudeCodePlugin.branding
         case .codex:   return CodexPlugin.branding
-        case .copilot: return CopilotCLIPlugin.branding
         default:       return nil
         }
     }

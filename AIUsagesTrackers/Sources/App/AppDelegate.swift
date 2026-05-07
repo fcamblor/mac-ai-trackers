@@ -98,9 +98,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let claudeStatus = ClaudeStatusConnector()
         let codexConnector = CodexConnector()
         let codexStatus = CodexStatusConnector()
-        let copilotConnector = CopilotConnector()
         let poller = UsagePoller(
-            connectors: [claudeConnector, codexConnector, copilotConnector],
+            connectors: [claudeConnector, codexConnector],
             statusConnectors: [claudeStatus, codexStatus],
             fileManager: fileManager,
             refreshState: refreshState,
@@ -118,16 +117,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await poller?.pollOnce(force: true)
             }
         )
-        let copilotMonitor = CopilotActiveAccountMonitor(
-            onActiveAccountChanged: { [weak copilotConnector, weak poller] _ in
-                await copilotConnector?.invalidateLoginCache()
-                await poller?.pollOnce(force: true)
-            }
-        )
         VendorRegistry.resetForTesting()
         ClaudeCodePlugin.register(connector: claudeConnector, status: claudeStatus, monitor: claudeMonitor)
         CodexPlugin.register(connector: codexConnector, status: codexStatus, monitor: codexMonitor)
-        CopilotCLIPlugin.register(connector: copilotConnector, monitor: copilotMonitor)
         let snapshotRecorder = SnapshotRecorder()
         let historyReader = UsageHistoryReader(rootPath: snapshotRecorder.rootPath)
         let snapshotScheduler = SnapshotScheduler(

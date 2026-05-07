@@ -90,8 +90,8 @@ Invariants:
 - Every emitted `UsageMetric` must be `.timeWindow` or `.payAsYouGo` —
   never `.unknown`. The contract conformance test enforces this.
 - Every emitted `resetAt` must parse as a strict ISO 8601 datetime via
-  `ISODate.parsing(_:)`. Calendar dates (e.g. Copilot's
-  `quota_reset_date`) are promoted to UTC midnight via
+  `ISODate.parsing(_:)`. Calendar dates (e.g. a vendor field handed back
+  as `yyyy-MM-dd`) are promoted to UTC midnight via
   `ISODate.parsingFlexibleDate(_:)` at the connector boundary.
 - The connector emits whatever number of metrics the vendor exposes — no
   artificial cap, no "hide if zero" filter. The UI decides what to render.
@@ -348,7 +348,6 @@ public enum VendorRegistry {
     public static let bundles: [VendorBundle] = [
         ClaudeCodePlugin.bundle,
         CodexPlugin.bundle,
-        CopilotCLIPlugin.bundle,
     ]
 }
 ```
