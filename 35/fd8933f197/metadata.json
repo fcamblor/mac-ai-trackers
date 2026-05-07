@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "35fd8933f197",
+  "strategy": "manual-commit",
+  "branch": "vendor-plugin-framework",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".claude/skills/assistant-merge/SKILL.md",
+    ".claude/skills/assistant-tester-followup/SKILL.md",
+    ".github/ISSUE_TEMPLATE/new-assistant-request.yml",
+    ".github/ISSUE_TEMPLATE/vendor-evolution-request.yml",
+    "README.md",
+    "docs/ASSISTANT-ONBOARDING.md",
+    "docs/REVIEW-CHECKLIST-ASSISTANT-CHANGE.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/35/fd8933f197/0/metadata.json",
+      "transcript": "/35/fd8933f197/0/full.jsonl",
+      "content_hash": "/35/fd8933f197/0/content_hash.txt",
+      "prompt": "/35/fd8933f197/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 45,
+    "cache_creation_tokens": 96451,
+    "cache_read_tokens": 1422519,
+    "output_tokens": 9642,
+    "api_call_count": 26
+  }
+}
