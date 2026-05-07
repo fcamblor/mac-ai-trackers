@@ -268,6 +268,7 @@ jobs:
             "PR: #${PR}"
             ""
             "- [Download ${DMG_NAME}](${DOWNLOAD_URL}) — SHA-256 \`${DMG_SHA}\`"
+            "- Alternative: build it yourself from the branch (~5 min) — see [\`docs/CHECKOUT-AND-BUILD.md\`](https://github.com/${REPO}/blob/main/docs/CHECKOUT-AND-BUILD.md)."
             ""
             "Builds are ad-hoc signed only. First launch: right-click → Open to bypass Gatekeeper."
             ""
@@ -284,8 +285,6 @@ jobs:
             "The build sanitizes secrets (tokens, API keys, emails) before writing to the log;"
             "if you spot anything that looks confidential, flag it in your comment without"
             "quoting the value — it's a bug we want to fix before merge."
-            ""
-            "Don't trust this prebuilt DMG? Build it yourself in 5 minutes — see [\`docs/CHECKOUT-AND-BUILD.md\`](https://github.com/${REPO}/blob/main/docs/CHECKOUT-AND-BUILD.md)."
           )
           body=$(printf '%s\n' "${body_lines[@]}")
           existing=$(gh api "repos/${REPO}/issues/${ISSUE}/comments" --paginate \
