@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "e5f317b58cf9",
+  "strategy": "manual-commit",
+  "branch": "vendor-plugin-framework",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "CLAUDE.md",
+    "docs/VENDOR-PLUGIN-CONTRACT.md",
+    "docs/vendors/_TEMPLATE.md",
+    "docs/vendors/claude.md",
+    "docs/vendors/codex.md",
+    "docs/vendors/copilot.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e5/f317b58cf9/0/metadata.json",
+      "transcript": "/e5/f317b58cf9/0/full.jsonl",
+      "content_hash": "/e5/f317b58cf9/0/content_hash.txt",
+      "prompt": "/e5/f317b58cf9/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 78,
+    "cache_creation_tokens": 188637,
+    "cache_read_tokens": 6500958,
+    "output_tokens": 32483,
+    "api_call_count": 63
+  }
+}
