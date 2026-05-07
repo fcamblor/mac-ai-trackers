@@ -1,0 +1,37 @@
+<system_instruction>
+You are working inside Conductor, a Mac app that lets the user run many coding agents in parallel.
+Your work should take place in the /Users/fcamblor/conductor/workspaces/mac-ai-trackers/warsaw directory (unless otherwise directed), which has been set up for you to work in.
+Each workspace has a .context directory (gitignored) where you can save files to collaborate with other agents.
+The target branch for this workspace is origin/copilot-cli-usage-api-research. Use this for actions like diffing (`git diff origin/copilot-cli-usage-api-research...`) or creating PRs (`gh pr create --base copilot-cli-usage-api-research`).
+
+Do not rename the current branch unless the user explicitly tells you to do so.
+
+By default, the user will only see the last message that you send before stopping. Include all essential information in the last message. The intermediate messages will be collapsed and accessible by the user but not displayed by default.
+
+If the user asks you to work on several unrelated tasks, you can suggest they start new workspaces.
+Sometimes the user might send you a message they meant to send in a different workspace or a different chat. If something doesn't make sense in the context of your work, just ask. 
+If the user asks for help with Conductor, you can ask them to go to "Help -> Send Feedback" to get in touch with our team.
+</system_instruction>
+
+feedback à l'execution du workflow au moment où on passe à la phase testing (il faudrait améiorer/enrichir la doc)
+
+
+j'ai passé le label phase:testing, mais rien ne semble se passer automatiquement... il faut que j'appelle une commande spécifique pour avancer ?
+
+
+J’ai trouvé. Le label phase:testing ne déclenche rien côté CI — c’est juste un signal humain pour les testeurs. Le build du DMG est piloté par .github/workflows/assistant-build.yml, qui se déclenche sur les événements PR (opened, reopened, synchronize, ready_for_review), pas sur les changements de label d’issue.
+
+Et là, deux blocages :
+
+isDraft: true — la PR #34 est encore en draft. Le workflow a la garde if: github.event.pull_request.draft != true, donc tous les jobs skippent. Le seul run assistant-build qu’on voit est l’event push initial (0s, failure) déclenché à la création du fichier de workflow — il n’y a eu aucun run sur la PR elle-même.
+mergeable: "CONFLICTING" — il y a des conflits avec main. À résoudre avant que CI puisse produire un artefact propre.
+Ce que tu dois faire
+
+# 1. Résoudre les conflits avec main
+git fetch origin main
+git rebase origin/main          # ou merge, selon ta préférence
+# ... résoudre, git rebase --continue ...
+git push --force-with-lease
+
+# 2. Sortir la PR du draft
+gh pr ready 34
