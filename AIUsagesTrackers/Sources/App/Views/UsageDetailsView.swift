@@ -28,6 +28,7 @@ struct UsageDetailsView: View {
     private static let historyAutoRefreshInterval: Duration = .seconds(60)
     /// Reserved for header + footer + dividers so the full popover stays within the ratio cap.
     private static let chromeHeightReserve: CGFloat = 80
+    private static let sponsorURL = URL(string: "https://github.com/sponsors/fcamblor")!
 
     private var maxScrollHeight: CGFloat {
         let screenHeight = NSScreen.main?.visibleFrame.height ?? Self.fallbackScreenHeight
@@ -293,6 +294,23 @@ struct UsageDetailsView: View {
             .focusable(false)
 
             Spacer()
+
+            Button {
+                NSWorkspace.shared.open(Self.sponsorURL)
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.pink)
+                    Text("Support")
+                        .font(.system(size: 11))
+                }
+                .hoverAffordance()
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .help("Like the app ? You can buy me a coffee")
+            .focusable(false)
 
             Button {
                 onQuit()
