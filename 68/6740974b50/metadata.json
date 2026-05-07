@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "686740974b50",
+  "strategy": "manual-commit",
+  "branch": "buy-me-a-coffee-github-sponsor",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/App/Views/UsageDetailsView.swift",
+    "roadmap/buy-me-a-coffee.md",
+    "roadmap/index.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/68/6740974b50/0/metadata.json",
+      "transcript": "/68/6740974b50/0/full.jsonl",
+      "content_hash": "/68/6740974b50/0/content_hash.txt",
+      "prompt": "/68/6740974b50/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 88,
+    "cache_creation_tokens": 260352,
+    "cache_read_tokens": 1707444,
+    "output_tokens": 10016,
+    "api_call_count": 42
+  }
+}
