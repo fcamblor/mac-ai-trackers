@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "3a5e4191adff",
+  "strategy": "manual-commit",
+  "branch": "detect-github-release-updates",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Updates/BrewUpgradeRunner.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Updates/UpdateDownloader.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Updates/UpdateInstaller.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Updates/UpdateState.swift",
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/UpdatesSettingsView.swift",
+    "AIUsagesTrackers/Sources/App/Views/UpdateAvailableBanner.swift",
+    "AIUsagesTrackers/Sources/App/Views/UsageDetailsView.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/UpdatesTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/3a/5e4191adff/0/metadata.json",
+      "transcript": "/3a/5e4191adff/0/full.jsonl",
+      "content_hash": "/3a/5e4191adff/0/content_hash.txt",
+      "prompt": "/3a/5e4191adff/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 3958,
+    "cache_creation_tokens": 382705,
+    "cache_read_tokens": 6235005,
+    "output_tokens": 63536,
+    "api_call_count": 56
+  }
+}
