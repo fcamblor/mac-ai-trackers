@@ -25,14 +25,15 @@ public enum CopilotCLIPlugin {
         logger: FileLogger = Loggers.copilot,
         sanitizer: CopilotPayloadSanitizer = CopilotPayloadSanitizer()
     ) -> VendorBundle {
-        let proxy = LoggingProxy(logger: logger, sanitizer: sanitizer)
+        let resolvedLogger = VerboseVendorMode.logger(for: .copilot, default: logger)
+        let proxy = LoggingProxy(logger: resolvedLogger, sanitizer: sanitizer)
         let bundle = VendorBundle(
             vendor: .copilot,
             branding: branding,
             usage: connector,
             status: status,
             activeAccountMonitor: monitor,
-            logger: logger,
+            logger: resolvedLogger,
             loggingProxy: proxy,
             sanitizer: sanitizer,
             documentation: documentation

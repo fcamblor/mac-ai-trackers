@@ -27,14 +27,15 @@ public enum ClaudeCodePlugin {
         logger: FileLogger = Loggers.claude,
         sanitizer: ClaudePayloadSanitizer = ClaudePayloadSanitizer()
     ) -> VendorBundle {
-        let proxy = LoggingProxy(logger: logger, sanitizer: sanitizer)
+        let resolvedLogger = VerboseVendorMode.logger(for: .claude, default: logger)
+        let proxy = LoggingProxy(logger: resolvedLogger, sanitizer: sanitizer)
         let bundle = VendorBundle(
             vendor: .claude,
             branding: branding,
             usage: connector,
             status: status,
             activeAccountMonitor: monitor,
-            logger: logger,
+            logger: resolvedLogger,
             loggingProxy: proxy,
             sanitizer: sanitizer,
             documentation: documentation

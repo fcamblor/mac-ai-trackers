@@ -23,14 +23,15 @@ public enum CodexPlugin {
         logger: FileLogger = Loggers.codex,
         sanitizer: CodexPayloadSanitizer = CodexPayloadSanitizer()
     ) -> VendorBundle {
-        let proxy = LoggingProxy(logger: logger, sanitizer: sanitizer)
+        let resolvedLogger = VerboseVendorMode.logger(for: .codex, default: logger)
+        let proxy = LoggingProxy(logger: resolvedLogger, sanitizer: sanitizer)
         let bundle = VendorBundle(
             vendor: .codex,
             branding: branding,
             usage: connector,
             status: status,
             activeAccountMonitor: monitor,
-            logger: logger,
+            logger: resolvedLogger,
             loggingProxy: proxy,
             sanitizer: sanitizer,
             documentation: documentation
