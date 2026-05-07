@@ -260,10 +260,14 @@ jobs:
         run: |
           set -euo pipefail
           SENTINEL='<!-- assistant-build:sticky -->'
+          # ISO 8601 UTC, minute precision — second precision is noise for a
+          # human reader and date -u is portable across runners.
+          BUILT_AT=$(date -u '+%Y-%m-%d %H:%M UTC')
           body_lines=(
             "${SENTINEL}"
             "🛠 Build for commit \`${SHORT}\` — vendor-debug enabled for \`${VENDOR}\`"
             ""
+            "Built at: ${BUILT_AT}"
             "Full commit: \`${SHA}\`"
             "PR: #${PR}"
             ""
