@@ -1,0 +1,11 @@
+autre feedback : quand je clic sur le bouton pour télécharger le soi-disant dmg :
+- ca m'emmene sur le résultat du build où je dois télécharger l'artefact moi-même : https://github.com/fcamblor/mac-ai-trackers/actions/runs/25508644240#artifacts (si c'était possible de mettre le lien de téléchargement de l'artefact "direct" ce serait mieux)
+- l'artefact téléchargé est un zip, pas un dmg (contrairement à ce qui est mis dans le commentaire) - si c'est possible de générer un dmg plutot qu'un zip ce serait mieux
+
+---
+
+pour #2, tu peux me confirmer que ces prerelease seront pas prises en compte lorsqu'on check l'existence de nouvelle version dans l'app "standard" ?
+
+---
+
+ok vas-y
