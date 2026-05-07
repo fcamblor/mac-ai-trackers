@@ -19,6 +19,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var updateScheduler: UpdateScheduler?
     private var updateInstaller: UpdateInstaller?
     private var installationDetector: InstallationDetector?
+    private var updateDownloader: UpdateDownloader?
+    private var brewUpgradeRunner: BrewUpgradeRunner?
+    /// Holds the in-flight install Task so a second click on "Install" doesn't
+    /// kick off a parallel pipeline.
+    private var activeInstallTask: Task<Void, Never>?
+    /// Captured at the start of an install so the finalize step knows whether
+    /// we ran the Homebrew or manual path.
+    private var activeInstallKind: InstallationKind?
+    private var activeInstallBundlePath: String?
 
     /// Shared preferences store — exposed as static so the SwiftUI Settings scene
     /// (constructed before applicationDidFinishLaunching) can access it.
@@ -38,6 +47,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Closure exposed to Settings so the user can launch installation of the
     /// current pending update without going through the popover banner.
     static var sharedTriggerUpdateInstall: (() -> Void)?
+
+    /// Closure called when the user clicks "Restart now" once the update has
+    /// been downloaded/extracted (manual) or installed by Homebrew.
+    static var sharedTriggerRestart: (() -> Void)?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
@@ -150,6 +163,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let detector = InstallationDetector(bundlePath: bundlePath)
         self.installationDetector = detector
         self.updateInstaller = UpdateInstaller()
+        self.updateDownloader = UpdateDownloader()
+        self.brewUpgradeRunner = BrewUpgradeRunner()
         let scheduler = UpdateScheduler(
             checker: UpdateChecker(),
             detector: detector,
@@ -164,6 +179,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Self.sharedUpdateScheduler = scheduler
         Self.sharedTriggerUpdateInstall = { [weak self] in
             self?.triggerUpdateInstall()
+        }
+        Self.sharedTriggerRestart = { [weak self] in
+            self?.triggerRestart()
         }
     }
 
@@ -213,6 +231,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 },
                 onInstallUpdate: { [weak self] in
                     self?.triggerUpdateInstall()
+                },
+                onRestartUpdate: { [weak self] in
+                    self?.triggerRestart()
                 },
                 onSkipUpdate: { [weak self] in
                     self?.skipCurrentUpdate()
@@ -427,20 +448,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Kicks off the in-app preparation pipeline (download/extract for manual
+    /// installs, `brew upgrade --cask` streaming for Homebrew). The app stays
+    /// alive throughout, with progress mirrored into `UpdateState`. When the
+    /// pipeline reaches `readyToRestart`, the popover banner exposes a
+    /// "Restart now" button that invokes `triggerRestart()`.
     private func triggerUpdateInstall() {
-        guard let installer = updateInstaller,
-              let detector = installationDetector,
+        // Re-entrancy guard: the user can hit "Install" multiple times across
+        // the popover and Settings — only the first click should do work.
+        if activeInstallTask != nil { return }
+        guard let detector = installationDetector,
+              let downloader = updateDownloader,
+              let brewRunner = brewUpgradeRunner,
               let update = Self.sharedUpdateState.availableUpdate else {
             return
         }
-        let kind = Self.sharedUpdateState.installationKind ?? .manual
+        let detectedKind = Self.sharedUpdateState.installationKind ?? .manual
         let runningPath = Bundle.main.bundleURL.path
-        // For manual installs, the script needs an actual `.app` bundle path —
-        // fine when running from /Applications/Foo.app, but `swift run` or any
-        // ad-hoc binary lives in a flat directory. Prompt the user for an
-        // installation directory and synthesize the target `.app` path from it.
+        // For manual installs, finalization needs an actual `.app` bundle path
+        // — fine when running from /Applications/Foo.app, but `swift run` or
+        // any ad-hoc binary lives in a flat directory. Prompt the user for an
+        // installation directory and synthesize the target `.app` path.
         let bundlePath: String
-        if kind == .manual && !runningPath.hasSuffix(".app") {
+        if detectedKind == .manual && !runningPath.hasSuffix(".app") {
             guard let chosen = Self.promptForInstallDirectory(startingAt: runningPath) else {
                 return
             }
@@ -448,43 +478,132 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             bundlePath = runningPath
         }
-        Self.sharedUpdateState.setInstalling()
-        let installation = InstallationInfo(
-            kind: kind,
-            bundlePath: bundlePath
-        )
+
+        Self.sharedUpdateState.setPreparing()
+        activeInstallBundlePath = bundlePath
+
+        activeInstallTask = Task { [weak self] in
+            defer {
+                Task { @MainActor [weak self] in self?.activeInstallTask = nil }
+            }
+            do {
+                // Resolve brew at install time too — the user may have just
+                // installed Homebrew since the periodic check.
+                let brewPath = await detector.brewExecutablePath()
+                let effectiveKind: InstallationKind = (detectedKind == .homebrewCask && brewPath != nil) ? .homebrewCask : .manual
+                await MainActor.run { self?.activeInstallKind = effectiveKind }
+
+                switch effectiveKind {
+                case .homebrewCask:
+                    guard let brew = brewPath else {
+                        // Should never happen given effectiveKind logic above,
+                        // but bail safely rather than running brew with a nil path.
+                        await MainActor.run { Self.sharedUpdateState.setFailed("Homebrew binary disappeared after detection.") }
+                        return
+                    }
+                    try await brewRunner.runUpgrade(
+                        brewExecutablePath: brew,
+                        caskName: InstallationDetector.homebrewCaskName,
+                        onEvent: { event in
+                            Task { @MainActor in
+                                if case .outputLine(let line) = event {
+                                    Self.sharedUpdateState.setRunningHomebrew(lastLine: line)
+                                }
+                            }
+                        }
+                    )
+                    // Brew has already swapped the bundle on disk — no staged path.
+                    await MainActor.run { Self.sharedUpdateState.setReadyToRestart(stagedAppPath: nil) }
+
+                case .manual:
+                    let stagedURL = try await downloader.downloadAndStage(
+                        update: update,
+                        onEvent: { event in
+                            Task { @MainActor in
+                                Self.applyDownloadEvent(event)
+                            }
+                        }
+                    )
+                    await MainActor.run { Self.sharedUpdateState.setReadyToRestart(stagedAppPath: stagedURL.path) }
+                }
+            } catch is CancellationError {
+                await MainActor.run { Self.sharedUpdateState.setFailed("Install cancelled.") }
+            } catch {
+                let message = String(describing: error)
+                await MainActor.run { Self.sharedUpdateState.setFailed(message) }
+            }
+        }
+    }
+
+    /// Translates an `UpdateDownloadEvent` into a phase update.
+    @MainActor
+    private static func applyDownloadEvent(_ event: UpdateDownloadEvent) {
+        switch event {
+        case .progress(let received, let total):
+            Self.sharedUpdateState.setDownloading(received: received, total: total)
+        case .verifying:
+            Self.sharedUpdateState.setVerifying()
+        case .extracting:
+            Self.sharedUpdateState.setExtracting()
+        }
+    }
+
+    /// User clicked "Restart now": build a tiny finalize script (swap-and-relaunch
+    /// for manual, relaunch-only for brew), launch it detached, then quit.
+    private func triggerRestart() {
+        guard let installer = updateInstaller,
+              let update = Self.sharedUpdateState.availableUpdate,
+              let bundlePath = activeInstallBundlePath,
+              let kind = activeInstallKind else {
+            return
+        }
+        let stagedAppPath = Self.sharedUpdateState.stagedAppPath
+        Self.sharedUpdateState.setRestarting()
         let pid = ProcessInfo.processInfo.processIdentifier
+
         Task { [weak self] in
             do {
-                let brewPath = await detector.brewExecutablePath()
-                let plan = try await installer.buildPlan(
-                    for: update,
-                    installation: installation,
-                    brewExecutablePath: brewPath,
-                    currentPID: pid
-                )
+                let plan: UpdateFinalizationPlan
+                switch kind {
+                case .manual:
+                    guard let staged = stagedAppPath else {
+                        throw UpdateInstallerError.missingStagedApp(path: "(none)")
+                    }
+                    plan = try await installer.buildManualFinalizationPlan(
+                        stagedAppPath: staged,
+                        bundlePath: bundlePath,
+                        currentPID: pid,
+                        update: update
+                    )
+                case .homebrewCask:
+                    plan = try await installer.buildHomebrewFinalizationPlan(
+                        bundlePath: bundlePath,
+                        currentPID: pid,
+                        update: update
+                    )
+                }
+
                 if plan.requiresAdminPrivileges {
-                    let confirmed = await MainActor.run { Self.confirmAdminElevation(version: update.version.rawValue) }
+                    let confirmed = await MainActor.run {
+                        Self.confirmAdminElevation(version: update.version.rawValue)
+                    }
                     guard confirmed else {
-                        await MainActor.run { Self.sharedUpdateState.setIdle(checkedAt: Date()) }
+                        await MainActor.run {
+                            Self.sharedUpdateState.setReadyToRestart(stagedAppPath: stagedAppPath)
+                        }
                         return
                     }
                     try await Self.launchWithAdminPrivileges(scriptPath: plan.scriptPath)
                 } else {
                     try Self.launchDetached(scriptPath: plan.scriptPath)
                 }
-                await MainActor.run {
-                    self?.quit()
-                }
+
+                // Stop background work cleanly before terminating so the
+                // finalize script (which polls our PID) sees a quick exit.
+                await self?.gracefulShutdownAndTerminate()
             } catch {
-                await MainActor.run {
-                    let alert = NSAlert()
-                    alert.icon = NSApplication.shared.applicationIconImage
-                    alert.messageText = "Failed to install update"
-                    alert.informativeText = String(describing: error)
-                    alert.runModal()
-                    Self.sharedUpdateState.setError(String(describing: error), at: Date())
-                }
+                let message = String(describing: error)
+                await MainActor.run { Self.sharedUpdateState.setFailed(message) }
             }
         }
     }
@@ -606,16 +725,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Quit
 
     private func quit() {
+        // Trigger a clean async shutdown but don't block the main thread:
+        // NSApp.terminate is invoked from the async closure once the actors
+        // have settled. Falls back to an immediate terminate if the task
+        // doesn't run within a short grace window (e.g. main thread starved).
+        Task { [weak self] in
+            await self?.gracefulShutdownAndTerminate()
+        }
+    }
+
+    /// Awaits the actor stops, releases the PID guard, then asks AppKit to
+    /// terminate. Used both by the menu's Quit item and by the update flow's
+    /// "Restart now" path — in the latter case, the finalize script polls our
+    /// PID, so a clean exit unblocks the swap quicker.
+    @MainActor
+    private func gracefulShutdownAndTerminate() async {
         let pollerRef = poller
         let schedulerRef = snapshotScheduler
         let monitorRef = accountMonitor
         let codexMonitorRef = codexMonitor
-        Task {
-            await pollerRef?.stop()
-            await schedulerRef?.stop()
-            await monitorRef?.stop()
-            await codexMonitorRef?.stop()
-        }
+        await pollerRef?.stop()
+        await schedulerRef?.stop()
+        await monitorRef?.stop()
+        await codexMonitorRef?.stop()
         usageStore?.stop()
         pidGuard?.release()
         NSApplication.shared.terminate(nil)

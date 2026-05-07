@@ -405,142 +405,113 @@ struct UpdateInstallerTests {
         )
     }
 
-    @Test("homebrew plan invokes brew upgrade --cask in script")
-    func brewPlan() async throws {
-        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+    /// Creates a fresh script directory and a staged dummy `.app` so the
+    /// finalize plan's existence check passes without us shipping a real bundle.
+    private func makeScratch() throws -> (scriptDir: URL, stagedApp: String) {
+        let scriptDir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("ai-tracker-installer-\(UUID().uuidString)", isDirectory: true)
-        let installer = UpdateInstaller(scriptDirectory: dir)
-        let plan = try await installer.buildPlan(
-            for: makeUpdate(),
-            installation: InstallationInfo(kind: .homebrewCask, bundlePath: "/Applications/Foo.app"),
-            brewExecutablePath: "/opt/homebrew/bin/brew",
-            currentPID: 4242
+        let stagingRoot = scriptDir.appendingPathComponent("staging-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: stagingRoot, withIntermediateDirectories: true)
+        let stagedApp = stagingRoot.appendingPathComponent("AI Usages Tracker.app", isDirectory: true)
+        try FileManager.default.createDirectory(at: stagedApp, withIntermediateDirectories: true)
+        return (scriptDir, stagedApp.path)
+    }
+
+    @Test("homebrew finalize plan only relaunches (no swap, no admin)")
+    func brewPlan() async throws {
+        let (scriptDir, _) = try makeScratch()
+        let installer = UpdateInstaller(scriptDirectory: scriptDir)
+        let plan = try await installer.buildHomebrewFinalizationPlan(
+            bundlePath: "/Applications/Foo.app",
+            currentPID: 4242,
+            update: makeUpdate()
         )
         let body = try String(contentsOfFile: plan.scriptPath, encoding: .utf8)
-        #expect(body.contains("upgrade --cask 'ai-usages-tracker'"))
-        #expect(body.contains("'/opt/homebrew/bin/brew'"))
         #expect(body.contains("'/Applications/Foo.app'"))
         #expect(body.contains("kill -0 4242"))
+        #expect(body.contains("/usr/bin/open"))
+        // Pure relaunch: no curl/ditto/brew invocations.
+        #expect(!body.contains("/bin/mv"))
+        #expect(!body.contains("curl"))
+        #expect(plan.requiresAdminPrivileges == false)
         let attrs = try FileManager.default.attributesOfItem(atPath: plan.scriptPath)
-        let perms = (attrs[.posixPermissions] as? NSNumber)?.intValue ?? 0
+        let perms = (attrs[FileAttributeKey.posixPermissions] as? NSNumber)?.intValue ?? 0
         #expect(perms == 0o755)
     }
 
-    @Test("homebrew plan falls back to manual when brew is unavailable")
-    func brewFallback() async throws {
-        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("ai-tracker-installer-\(UUID().uuidString)", isDirectory: true)
-        let installer = UpdateInstaller(scriptDirectory: dir)
-        let plan = try await installer.buildPlan(
-            for: makeUpdate(),
-            installation: InstallationInfo(kind: .homebrewCask, bundlePath: "/Applications/Foo.app"),
-            brewExecutablePath: nil,
-            currentPID: 1
-        )
-        let body = try String(contentsOfFile: plan.scriptPath, encoding: .utf8)
-        #expect(body.contains("curl"))
-        #expect(body.contains("ditto"))
-    }
-
-    @Test("manual plan downloads, verifies sha256, and replaces bundle")
+    @Test("manual finalize plan swaps staged bundle and relaunches")
     func manualPlan() async throws {
-        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("ai-tracker-installer-\(UUID().uuidString)", isDirectory: true)
-        let installer = UpdateInstaller(scriptDirectory: dir)
-        let plan = try await installer.buildPlan(
-            for: makeUpdate(),
-            installation: InstallationInfo(kind: .manual, bundlePath: "/Applications/Foo.app"),
-            brewExecutablePath: nil,
-            currentPID: 1
+        let (scriptDir, stagedApp) = try makeScratch()
+        let installer = UpdateInstaller(scriptDirectory: scriptDir)
+        let plan = try await installer.buildManualFinalizationPlan(
+            stagedAppPath: stagedApp,
+            bundlePath: "/Applications/Foo.app",
+            currentPID: 4242,
+            update: makeUpdate()
         )
         let body = try String(contentsOfFile: plan.scriptPath, encoding: .utf8)
-        #expect(body.contains("'https://example.com/zip'"))
-        #expect(body.contains("'https://example.com/sha'"))
-        #expect(body.contains("sha256 download failed"))
-        #expect(body.contains("shasum -a 256"))
+        #expect(body.contains("'\(stagedApp)'"))
         #expect(body.contains("'/Applications/Foo.app'"))
+        #expect(body.contains("kill -0 4242"))
+        #expect(body.contains("/bin/mv"))
+        #expect(body.contains("xattr -dr com.apple.quarantine"))
+        // No download steps — those happen in the app before this script runs.
+        #expect(!body.contains("curl"))
+        #expect(!body.contains("ditto"))
     }
 
-    @Test("manual plan shell-quotes paths and URLs")
+    @Test("manual finalize plan shell-quotes paths")
     func manualPlanShellQuotes() async throws {
-        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("ai-tracker-installer-\(UUID().uuidString)", isDirectory: true)
-        let installer = UpdateInstaller(scriptDirectory: dir)
-        let update = AvailableUpdate(
-            version: AppVersion(string: "1.5.0")!,
-            releaseURL: URL(string: "https://example.com/release")!,
-            downloadURL: URL(string: "https://example.com/releases/app?name=$USER")!,
-            sha256URL: URL(string: "https://example.com/sha?token=abc")!,
-            publishedAt: nil
-        )
-        let plan = try await installer.buildPlan(
-            for: update,
-            installation: InstallationInfo(kind: .manual, bundlePath: "/Applications/Foo $(touch bad)'s.app"),
-            brewExecutablePath: nil,
-            currentPID: 1
+        let (scriptDir, stagedApp) = try makeScratch()
+        let installer = UpdateInstaller(scriptDirectory: scriptDir)
+        let plan = try await installer.buildManualFinalizationPlan(
+            stagedAppPath: stagedApp,
+            bundlePath: "/Applications/Foo $(touch bad)'s.app",
+            currentPID: 1,
+            update: makeUpdate()
         )
         let body = try String(contentsOfFile: plan.scriptPath, encoding: .utf8)
         #expect(body.contains("'/Applications/Foo $(touch bad)'\\''s.app'"))
-        #expect(body.contains("'https://example.com/releases/app?name=$USER'"))
         #expect(!body.contains("\"/Applications/Foo $(touch bad)'s.app\""))
     }
 
-    @Test("plan flags admin requirement when parent dir is not user-writable")
+    @Test("manual plan flags admin requirement when parent dir is not user-writable")
     func adminFlagSet() async throws {
-        // /private/var/db is root-owned and not writable by regular users.
-        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("ai-tracker-installer-\(UUID().uuidString)", isDirectory: true)
-        let installer = UpdateInstaller(scriptDirectory: dir)
-        let plan = try await installer.buildPlan(
-            for: makeUpdate(),
-            installation: InstallationInfo(kind: .manual, bundlePath: "/private/var/db/AI Usages Tracker.app"),
-            brewExecutablePath: nil,
-            currentPID: 1
+        let (scriptDir, stagedApp) = try makeScratch()
+        let installer = UpdateInstaller(scriptDirectory: scriptDir)
+        let plan = try await installer.buildManualFinalizationPlan(
+            stagedAppPath: stagedApp,
+            bundlePath: "/private/var/db/AI Usages Tracker.app",
+            currentPID: 1,
+            update: makeUpdate()
         )
         #expect(plan.requiresAdminPrivileges == true)
     }
 
-    @Test("plan does NOT flag admin when bundle lives in a user-writable dir")
+    @Test("manual plan does NOT flag admin when bundle lives in a user-writable dir")
     func noAdminInUserDir() async throws {
+        let (scriptDir, stagedApp) = try makeScratch()
         let userBundleParent = NSTemporaryDirectory() + "user-apps-\(UUID().uuidString)"
         try FileManager.default.createDirectory(atPath: userBundleParent, withIntermediateDirectories: true)
-        let bundlePath = "\(userBundleParent)/Foo.app"
-        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("ai-tracker-installer-\(UUID().uuidString)", isDirectory: true)
-        let installer = UpdateInstaller(scriptDirectory: dir)
-        let plan = try await installer.buildPlan(
-            for: makeUpdate(),
-            installation: InstallationInfo(kind: .manual, bundlePath: bundlePath),
-            brewExecutablePath: nil,
-            currentPID: 1
-        )
-        #expect(plan.requiresAdminPrivileges == false)
-    }
-
-    @Test("homebrew plan never flags admin requirement")
-    func brewNoAdmin() async throws {
-        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("ai-tracker-installer-\(UUID().uuidString)", isDirectory: true)
-        let installer = UpdateInstaller(scriptDirectory: dir)
-        let plan = try await installer.buildPlan(
-            for: makeUpdate(),
-            installation: InstallationInfo(kind: .homebrewCask, bundlePath: "/private/var/db/Foo.app"),
-            brewExecutablePath: "/opt/homebrew/bin/brew",
-            currentPID: 1
+        let installer = UpdateInstaller(scriptDirectory: scriptDir)
+        let plan = try await installer.buildManualFinalizationPlan(
+            stagedAppPath: stagedApp,
+            bundlePath: "\(userBundleParent)/Foo.app",
+            currentPID: 1,
+            update: makeUpdate()
         )
         #expect(plan.requiresAdminPrivileges == false)
     }
 
     @Test("relaunch snippet drops privileges back to console user when run as root")
     func relaunchDropsPrivileges() async throws {
-        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("ai-tracker-installer-\(UUID().uuidString)", isDirectory: true)
-        let installer = UpdateInstaller(scriptDirectory: dir)
-        let plan = try await installer.buildPlan(
-            for: makeUpdate(),
-            installation: InstallationInfo(kind: .manual, bundlePath: "/Applications/Foo.app"),
-            brewExecutablePath: nil,
-            currentPID: 1
+        let (scriptDir, stagedApp) = try makeScratch()
+        let installer = UpdateInstaller(scriptDirectory: scriptDir)
+        let plan = try await installer.buildManualFinalizationPlan(
+            stagedAppPath: stagedApp,
+            bundlePath: "/Applications/Foo.app",
+            currentPID: 1,
+            update: makeUpdate()
         )
         let body = try String(contentsOfFile: plan.scriptPath, encoding: .utf8)
         #expect(body.contains("launchctl asuser"))
@@ -549,15 +520,29 @@ struct UpdateInstallerTests {
 
     @Test("manual plan rejects bundle paths that don't end in .app")
     func rejectsBadBundle() async throws {
-        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("ai-tracker-installer-\(UUID().uuidString)", isDirectory: true)
-        let installer = UpdateInstaller(scriptDirectory: dir)
+        let (scriptDir, stagedApp) = try makeScratch()
+        let installer = UpdateInstaller(scriptDirectory: scriptDir)
         await #expect(throws: UpdateInstallerError.self) {
-            try await installer.buildPlan(
-                for: makeUpdate(),
-                installation: InstallationInfo(kind: .manual, bundlePath: "/tmp/not-a-bundle"),
-                brewExecutablePath: nil,
-                currentPID: 1
+            try await installer.buildManualFinalizationPlan(
+                stagedAppPath: stagedApp,
+                bundlePath: "/tmp/not-a-bundle",
+                currentPID: 1,
+                update: makeUpdate()
+            )
+        }
+    }
+
+    @Test("manual plan throws when staged bundle is missing")
+    func rejectsMissingStaged() async throws {
+        let scriptDir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("ai-tracker-installer-\(UUID().uuidString)", isDirectory: true)
+        let installer = UpdateInstaller(scriptDirectory: scriptDir)
+        await #expect(throws: UpdateInstallerError.self) {
+            try await installer.buildManualFinalizationPlan(
+                stagedAppPath: "/no/such/path/AI Usages Tracker.app",
+                bundlePath: "/Applications/Foo.app",
+                currentPID: 1,
+                update: makeUpdate()
             )
         }
     }
@@ -578,13 +563,47 @@ struct UpdateStateTests {
         )
     }
 
-    @Test("dismissCurrent moves version into dismissedVersions")
+    @Test("dismissCurrent moves version into dismissedVersions and clears phase")
     func dismiss() {
         let state = UpdateState()
         state.setAvailable(makeUpdate("1.2.3"), latestVersion: AppVersion(string: "1.2.3"), kind: .manual, checkedAt: Date())
+        state.setReadyToRestart(stagedAppPath: "/tmp/staged.app")
         state.dismissCurrent()
         #expect(state.dismissedVersions.contains("1.2.3"))
         #expect(state.pendingUpdate == nil)
+        #expect(state.stagedAppPath == nil)
+        #expect(state.phase == .idle)
+    }
+
+    @Test("isInstallInProgress reflects in-flight phases")
+    func progressFlag() {
+        let state = UpdateState()
+        #expect(state.isInstallInProgress == false)
+        state.setPreparing()
+        #expect(state.isInstallInProgress == true)
+        state.setDownloading(received: 1024, total: 4096)
+        #expect(state.isInstallInProgress == true)
+        state.setVerifying()
+        #expect(state.isInstallInProgress == true)
+        state.setExtracting()
+        #expect(state.isInstallInProgress == true)
+        state.setRunningHomebrew(lastLine: "Pouring …")
+        #expect(state.isInstallInProgress == true)
+        state.setReadyToRestart(stagedAppPath: nil)
+        #expect(state.isInstallInProgress == false)
+        #expect(state.isReadyToRestart == true)
+        state.setRestarting()
+        #expect(state.isInstallInProgress == true)
+        state.setFailed("boom")
+        #expect(state.isInstallInProgress == false)
+    }
+
+    @Test("setReadyToRestart records staged path")
+    func readyRecordsStaged() {
+        let state = UpdateState()
+        state.setReadyToRestart(stagedAppPath: "/tmp/X.app")
+        #expect(state.stagedAppPath == "/tmp/X.app")
+        #expect(state.isReadyToRestart)
     }
 
     @Test("pendingUpdate hides dismissed versions")

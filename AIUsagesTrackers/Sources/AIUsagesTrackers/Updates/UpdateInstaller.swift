@@ -1,14 +1,18 @@
 import Foundation
 
-/// Strategy describing how to install a given `AvailableUpdate` for a given
-/// `InstallationInfo`. The actual launch is deferred to the caller so the app
-/// can run the script *after* releasing its own resources.
-public struct UpdateInstallationPlan: Sendable, Equatable {
+/// Strategy describing how to finalize a previously-prepared update — i.e.
+/// swap the staged bundle into place (manual installs) or simply relaunch
+/// (Homebrew installs, where `brew upgrade --cask` already replaced the bundle).
+///
+/// The actual download + extraction (manual) and `brew upgrade` invocation
+/// happen earlier, in-app, so the UI can render progress. The script returned
+/// here only handles the post-quit hand-off: wait for parent → swap → relaunch.
+public struct UpdateFinalizationPlan: Sendable, Equatable {
     /// Path to the shell script that must be executed in a detached child
     /// process. The script handles waiting for parent exit, performing the
-    /// upgrade, and relaunching the app.
+    /// final swap (manual only), and relaunching the app.
     public let scriptPath: String
-    /// Human-readable summary of what the script will do.
+    /// Human-readable summary.
     public let summary: String
     /// True when the bundle (or its parent directory) is not writable by the
     /// current user — the caller must launch the script with elevated
@@ -25,13 +29,12 @@ public struct UpdateInstallationPlan: Sendable, Equatable {
 public enum UpdateInstallerError: Error, Equatable {
     case scriptWriteFailed(path: String, message: String)
     case invalidBundlePath(path: String)
+    case missingStagedApp(path: String)
 }
 
-/// Builds an installation plan tailored to the detected installation kind.
-/// - Homebrew: emits a shell script that waits for the app to exit, runs
-///   `brew upgrade --cask <name>`, then relaunches.
-/// - Manual: emits a shell script that downloads the release zip, verifies
-///   its sha256, atomically replaces the bundle, then relaunches.
+/// Builds finalization scripts that run after the app quits:
+/// - Manual: move staged `.app` over the running bundle, then relaunch.
+/// - Homebrew: relaunch only (brew has already swapped the bundle in-place).
 public actor UpdateInstaller {
     private let fileManager: FileManager
     private let scriptDirectory: URL
@@ -52,81 +55,91 @@ public actor UpdateInstaller {
         return home.appendingPathComponent(".cache/ai-usages-tracker/updates", isDirectory: true)
     }
 
-    public func buildPlan(
-        for update: AvailableUpdate,
-        installation: InstallationInfo,
-        brewExecutablePath: String?,
-        currentPID: Int32
-    ) throws -> UpdateInstallationPlan {
+    /// Returns the standard staging directory for downloaded / extracted bundles
+    /// — exposed so the downloader and the installer agree on the location.
+    public static func defaultStagingDirectory() -> URL {
+        defaultScriptDirectory().appendingPathComponent("staging", isDirectory: true)
+    }
+
+    /// Build a finalization plan for the manual install path. The caller must
+    /// have already extracted the new `.app` to `stagedAppPath` (see
+    /// `UpdateDownloader`).
+    public func buildManualFinalizationPlan(
+        stagedAppPath: String,
+        bundlePath: String,
+        currentPID: Int32,
+        update: AvailableUpdate
+    ) throws -> UpdateFinalizationPlan {
+        guard bundlePath.hasSuffix(".app") else {
+            throw UpdateInstallerError.invalidBundlePath(path: bundlePath)
+        }
+        guard fileManager.fileExists(atPath: stagedAppPath) else {
+            throw UpdateInstallerError.missingStagedApp(path: stagedAppPath)
+        }
         try fileManager.createDirectory(at: scriptDirectory, withIntermediateDirectories: true)
 
-        let script: String
-        let summary: String
-        switch installation.kind {
-        case .homebrewCask:
-            // brew is required; without it we degrade to manual installation.
-            if let brew = brewExecutablePath {
-                script = Self.brewUpgradeScript(
-                    brewPath: brew,
-                    caskName: InstallationDetector.homebrewCaskName,
-                    bundlePath: installation.bundlePath,
-                    parentPID: currentPID,
-                    logPath: scriptDirectory.appendingPathComponent("install.log").path
-                )
-                summary = "Upgrade via Homebrew cask \(InstallationDetector.homebrewCaskName)"
-            } else {
-                script = Self.manualUpgradeScript(
-                    update: update,
-                    bundlePath: installation.bundlePath,
-                    workDir: scriptDirectory.path,
-                    parentPID: currentPID,
-                    logPath: scriptDirectory.appendingPathComponent("install.log").path
-                )
-                summary = "Download \(update.version) and replace app bundle"
-            }
-        case .manual:
-            guard installation.bundlePath.hasSuffix(".app") else {
-                throw UpdateInstallerError.invalidBundlePath(path: installation.bundlePath)
-            }
-            script = Self.manualUpgradeScript(
-                update: update,
-                bundlePath: installation.bundlePath,
-                workDir: scriptDirectory.path,
-                parentPID: currentPID,
-                logPath: scriptDirectory.appendingPathComponent("install.log").path
-            )
-            summary = "Download \(update.version) and replace app bundle"
-        }
+        let logPath = scriptDirectory.appendingPathComponent("install.log").path
+        let script = Self.manualSwapScript(
+            stagedAppPath: stagedAppPath,
+            bundlePath: bundlePath,
+            parentPID: currentPID,
+            logPath: logPath
+        )
+        let scriptURL = scriptDirectory
+            .appendingPathComponent("finalize-manual-\(Self.safeScriptFileComponent(update.version.rawValue)).sh")
+        try Self.writeScript(script, to: scriptURL, fileManager: fileManager)
 
-        let scriptURL = scriptDirectory.appendingPathComponent("install-\(Self.safeScriptFileComponent(update.version.rawValue)).sh")
-        let data = Data(script.utf8)
-        do {
-            try data.write(to: scriptURL, options: .atomic)
-        } catch {
-            throw UpdateInstallerError.scriptWriteFailed(
-                path: scriptURL.path,
-                message: String(describing: error)
-            )
-        }
-        try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptURL.path)
-
-        // Brew handles its own ownership semantics, so we never need admin auth
-        // for the cask path; only the manual replacement can hit a root-owned
-        // bundle (e.g. when installed via a privileged .pkg).
-        let requiresAdmin: Bool
-        switch installation.kind {
-        case .homebrewCask where brewExecutablePath != nil:
-            requiresAdmin = false
-        case .homebrewCask, .manual:
-            requiresAdmin = !Self.canReplaceBundle(at: installation.bundlePath, fileManager: fileManager)
-        }
-
-        logger.log(.info, "Built update plan: \(summary) → \(scriptURL.path) (admin=\(requiresAdmin))")
-        return UpdateInstallationPlan(
+        let requiresAdmin = !Self.canReplaceBundle(at: bundlePath, fileManager: fileManager)
+        let summary = "Swap staged \(update.version) bundle into place and relaunch"
+        logger.log(.info, "Built manual finalize plan: \(summary) → \(scriptURL.path) (admin=\(requiresAdmin))")
+        return UpdateFinalizationPlan(
             scriptPath: scriptURL.path,
             summary: summary,
             requiresAdminPrivileges: requiresAdmin
         )
+    }
+
+    /// Build a finalization plan for the Homebrew path: brew has already
+    /// replaced the bundle, so we only need to wait for parent exit and
+    /// relaunch as the console user.
+    public func buildHomebrewFinalizationPlan(
+        bundlePath: String,
+        currentPID: Int32,
+        update: AvailableUpdate
+    ) throws -> UpdateFinalizationPlan {
+        try fileManager.createDirectory(at: scriptDirectory, withIntermediateDirectories: true)
+
+        let logPath = scriptDirectory.appendingPathComponent("install.log").path
+        let script = Self.relaunchOnlyScript(
+            bundlePath: bundlePath,
+            parentPID: currentPID,
+            logPath: logPath
+        )
+        let scriptURL = scriptDirectory
+            .appendingPathComponent("finalize-brew-\(Self.safeScriptFileComponent(update.version.rawValue)).sh")
+        try Self.writeScript(script, to: scriptURL, fileManager: fileManager)
+
+        let summary = "Relaunch \(update.version) (already installed by Homebrew)"
+        logger.log(.info, "Built brew finalize plan: \(summary) → \(scriptURL.path)")
+        return UpdateFinalizationPlan(
+            scriptPath: scriptURL.path,
+            summary: summary,
+            // Brew never needs admin for relaunch.
+            requiresAdminPrivileges: false
+        )
+    }
+
+    private static func writeScript(_ script: String, to url: URL, fileManager: FileManager) throws {
+        let data = Data(script.utf8)
+        do {
+            try data.write(to: url, options: .atomic)
+        } catch {
+            throw UpdateInstallerError.scriptWriteFailed(
+                path: url.path,
+                message: String(describing: error)
+            )
+        }
+        try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
     }
 
     /// True when the running user can move/replace the bundle without admin
@@ -144,47 +157,64 @@ public actor UpdateInstaller {
 
     // MARK: - Script templates
 
-    private static func brewUpgradeScript(
-        brewPath: String,
-        caskName: String,
+    private static func manualSwapScript(
+        stagedAppPath: String,
         bundlePath: String,
         parentPID: Int32,
         logPath: String
     ) -> String {
-        // Wait for parent to exit (max 30 s) so brew can swap the bundle
-        // without "in use" errors, then reinstall and relaunch.
-        let quotedBrew = shellQuote(brewPath)
-        let quotedCask = shellQuote(caskName)
-        let quotedLog = shellQuote(logPath)
+        let quotedStaged = shellQuote(stagedAppPath)
         let quotedBundle = shellQuote(bundlePath)
+        let quotedLog = shellQuote(logPath)
         return """
         #!/bin/bash
         set -u
         exec >> \(quotedLog) 2>&1
-        echo "[$(date)] update via brew starting (parent=\(parentPID))"
+        echo "[$(date)] manual finalize starting (parent=\(parentPID))"
         for i in $(seq 1 60); do
             if ! kill -0 \(parentPID) 2>/dev/null; then break; fi
             sleep 0.5
         done
-        \(quotedBrew) update >/dev/null || true
-        if ! \(quotedBrew) upgrade --cask \(quotedCask); then
-            echo "[$(date)] brew upgrade failed"
+        if [ ! -e \(quotedStaged) ]; then
+            echo "[$(date)] staged bundle missing at \(stagedAppPath)"
             exit 1
         fi
+        BACKUP=\(quotedBundle).old-$(date +%s)
+        if [ -e \(quotedBundle) ]; then
+            if ! /bin/mv \(quotedBundle) "$BACKUP"; then
+                echo "[$(date)] backup failed"; exit 2
+            fi
+        fi
+        if ! /bin/mv \(quotedStaged) \(quotedBundle); then
+            echo "[$(date)] swap failed; restoring backup"
+            /bin/mv "$BACKUP" \(quotedBundle) 2>/dev/null
+            exit 3
+        fi
+        rm -rf "$BACKUP"
+        /usr/bin/xattr -dr com.apple.quarantine \(quotedBundle) 2>/dev/null || true
         echo "[$(date)] relaunching"
-        \(Self.relaunchSnippet(quotedBundle: quotedBundle))
+        \(relaunchSnippet(quotedBundle: quotedBundle))
         """
     }
 
-    private static func shellQuote(_ value: String) -> String {
-        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
-    }
-
-    private static func safeScriptFileComponent(_ value: String) -> String {
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-"))
-        let scalars = value.unicodeScalars.map { allowed.contains($0) ? Character($0) : "_" }
-        let sanitized = String(scalars)
-        return sanitized.isEmpty ? "update" : sanitized
+    private static func relaunchOnlyScript(
+        bundlePath: String,
+        parentPID: Int32,
+        logPath: String
+    ) -> String {
+        let quotedBundle = shellQuote(bundlePath)
+        let quotedLog = shellQuote(logPath)
+        return """
+        #!/bin/bash
+        set -u
+        exec >> \(quotedLog) 2>&1
+        echo "[$(date)] brew finalize relaunch (parent=\(parentPID))"
+        for i in $(seq 1 60); do
+            if ! kill -0 \(parentPID) 2>/dev/null; then break; fi
+            sleep 0.5
+        done
+        \(relaunchSnippet(quotedBundle: quotedBundle))
+        """
     }
 
     /// Relaunch as the console user even when the script runs as root — when
@@ -202,67 +232,14 @@ public actor UpdateInstaller {
         """
     }
 
-    private static func manualUpgradeScript(
-        update: AvailableUpdate,
-        bundlePath: String,
-        workDir: String,
-        parentPID: Int32,
-        logPath: String
-    ) -> String {
-        let quotedBundle = shellQuote(bundlePath)
-        let quotedLog = shellQuote(logPath)
-        let quotedWorkDir = shellQuote("\(workDir)/staging-\(update.version.rawValue)")
-        let quotedZipURL = shellQuote(update.downloadURL.absoluteString)
-        let quotedShaURL = shellQuote(update.sha256URL?.absoluteString ?? "")
-        return """
-        #!/bin/bash
-        set -u
-        exec >> \(quotedLog) 2>&1
-        WORK=\(quotedWorkDir)
-        rm -rf "$WORK"
-        mkdir -p "$WORK"
-        cd "$WORK"
-        echo "[$(date)] manual update starting (parent=\(parentPID))"
-        for i in $(seq 1 60); do
-            if ! kill -0 \(parentPID) 2>/dev/null; then break; fi
-            sleep 0.5
-        done
-        if ! /usr/bin/curl --fail --silent --show-error --location -o release.zip \(quotedZipURL); then
-            echo "[$(date)] download failed"; exit 1
-        fi
-        SHA_URL=\(quotedShaURL)
-        if [ -n "$SHA_URL" ]; then
-            if ! /usr/bin/curl --fail --silent --show-error --location -o release.zip.sha256 "$SHA_URL"; then
-                echo "[$(date)] sha256 download failed"; exit 2
-            fi
-            EXPECTED=$(awk '{print $1}' release.zip.sha256)
-            ACTUAL=$(/usr/bin/shasum -a 256 release.zip | awk '{print $1}')
-            if [ "$EXPECTED" != "$ACTUAL" ]; then
-                echo "[$(date)] sha256 mismatch: expected=$EXPECTED actual=$ACTUAL"; exit 2
-            fi
-        fi
-        if ! /usr/bin/ditto -x -k release.zip extracted; then
-            echo "[$(date)] unzip failed"; exit 3
-        fi
-        NEW_APP=$(find extracted -maxdepth 2 -name "*.app" -type d | head -1)
-        if [ -z "$NEW_APP" ]; then
-            echo "[$(date)] no .app inside zip"; exit 4
-        fi
-        BACKUP=\(quotedBundle).old-$(date +%s)
-        if [ -e \(quotedBundle) ]; then
-            if ! /bin/mv \(quotedBundle) "$BACKUP"; then
-                echo "[$(date)] backup failed"; exit 5
-            fi
-        fi
-        if ! /bin/mv "$NEW_APP" \(quotedBundle); then
-            echo "[$(date)] move new bundle failed; restoring backup"
-            /bin/mv "$BACKUP" \(quotedBundle) 2>/dev/null
-            exit 6
-        fi
-        rm -rf "$BACKUP"
-        echo "[$(date)] relaunching"
-        /usr/bin/xattr -dr com.apple.quarantine \(quotedBundle) 2>/dev/null || true
-        \(Self.relaunchSnippet(quotedBundle: quotedBundle))
-        """
+    private static func shellQuote(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
+    }
+
+    private static func safeScriptFileComponent(_ value: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-"))
+        let scalars = value.unicodeScalars.map { allowed.contains($0) ? Character($0) : "_" }
+        let sanitized = String(scalars)
+        return sanitized.isEmpty ? "update" : sanitized
     }
 }

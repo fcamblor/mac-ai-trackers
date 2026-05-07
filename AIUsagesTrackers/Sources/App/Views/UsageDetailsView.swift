@@ -12,6 +12,7 @@ struct UsageDetailsView: View {
     let onOpenSettings: () -> Void
     let onQuit: () -> Void
     let onInstallUpdate: () -> Void
+    let onRestartUpdate: () -> Void
     let onSkipUpdate: () -> Void
     let onLaterUpdate: () -> Void
 
@@ -45,8 +46,9 @@ struct UsageDetailsView: View {
                 UpdateAvailableBanner(
                     update: pending,
                     installationKind: updateState.installationKind,
-                    isInstalling: updateState.phase == .installing,
+                    phase: updateState.phase,
                     onInstall: onInstallUpdate,
+                    onRestart: onRestartUpdate,
                     onSkip: onSkipUpdate,
                     onLater: onLaterUpdate
                 )

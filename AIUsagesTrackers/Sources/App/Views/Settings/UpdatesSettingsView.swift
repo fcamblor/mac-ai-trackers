@@ -90,25 +90,20 @@ struct UpdatesSettingsView: View {
 
             if let available = updateState.availableUpdate {
                 Section("Install update") {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Version \(available.version.rawValue) ready to install")
-                            Text(updateState.installationKind == .homebrewCask
-                                 ? "Will run `brew upgrade --cask`."
-                                 : "Will download and replace the app bundle.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Version \(available.version.rawValue) ready to install")
+                                Text(updateState.installationKind == .homebrewCask
+                                     ? "Will run `brew upgrade --cask`."
+                                     : "Will download and replace the app bundle.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            primaryActionButton
                         }
-                        Spacer()
-                        Button(updateState.installationKind == .homebrewCask
-                               ? "Install via Homebrew"
-                               : "Download and install") {
-                            AppDelegate.sharedTriggerUpdateInstall?()
-                        }
-                        .disabled(updateState.phase == .installing)
-                        if updateState.phase == .installing {
-                            ProgressView().controlSize(.small).scaleEffect(0.7)
-                        }
+                        installProgressView
                     }
                 }
             }
@@ -132,5 +127,87 @@ struct UpdatesSettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    @ViewBuilder
+    private var primaryActionButton: some View {
+        if updateState.isReadyToRestart {
+            Button("Restart now") {
+                AppDelegate.sharedTriggerRestart?()
+            }
+            .buttonStyle(.borderedProminent)
+        } else {
+            Button(updateState.installationKind == .homebrewCask
+                   ? "Install via Homebrew"
+                   : "Download and install") {
+                AppDelegate.sharedTriggerUpdateInstall?()
+            }
+            .disabled(updateState.isInstallInProgress)
+        }
+    }
+
+    @ViewBuilder
+    private var installProgressView: some View {
+        switch updateState.phase {
+        case .preparing:
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small).scaleEffect(0.7)
+                Text("Preparing…").font(.caption).foregroundStyle(.secondary)
+            }
+        case .downloading(let received, let total):
+            VStack(alignment: .leading, spacing: 4) {
+                if let total, total > 0 {
+                    ProgressView(value: Double(received), total: Double(total))
+                        .progressViewStyle(.linear)
+                } else {
+                    ProgressView().progressViewStyle(.linear)
+                }
+                Text(Self.formatBytes(received: received, total: total))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        case .verifying:
+            progressLabel("Verifying download…")
+        case .extracting:
+            progressLabel("Extracting…")
+        case .runningHomebrew(let line):
+            VStack(alignment: .leading, spacing: 4) {
+                progressLabel("Running brew upgrade…")
+                if let line, !line.isEmpty {
+                    Text(line)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+        case .restarting:
+            progressLabel("Restarting…")
+        case .failed(let message):
+            Text("Failed: \(message)")
+                .font(.caption)
+                .foregroundStyle(.red)
+                .lineLimit(3)
+        case .idle, .checking, .readyToRestart:
+            EmptyView()
+        }
+    }
+
+    private func progressLabel(_ text: String) -> some View {
+        HStack(spacing: 6) {
+            ProgressView().controlSize(.small).scaleEffect(0.7)
+            Text(text).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private static func formatBytes(received: Int64, total: Int64?) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useMB, .useKB, .useGB]
+        formatter.countStyle = .file
+        let receivedStr = formatter.string(fromByteCount: received)
+        if let total, total > 0 {
+            return "\(receivedStr) of \(formatter.string(fromByteCount: total))"
+        }
+        return receivedStr
     }
 }
