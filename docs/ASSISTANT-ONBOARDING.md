@@ -464,8 +464,8 @@ sanitization, build / validation gates, and per-issue-type addenda.
 
 ## 8. Repository labels
 
-Created once per repo (manually with `gh label create` or via the GitHub
-UI):
+Created once per repo. Run `./scripts/bootstrap-onboarding-labels.sh`
+to materialize them idempotently via `gh label create`:
 
 - Type labels: `type:new-assistant`, `type:vendor-evolution`.
 - Kind labels (vendor-evolution only): `kind:enrichment`, `kind:breaking`,

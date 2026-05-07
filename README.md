@@ -99,6 +99,8 @@ The history tab is driven by the chart list in **Settings > Charts**. A fresh in
 
 ## Supported Assistants
 
+Each assistant entry below corresponds to a vendor-specific connector and a dated API snapshot under `docs/vendors/`. Adding or evolving a vendor goes through the workflow described in [`docs/ASSISTANT-ONBOARDING.md`](docs/ASSISTANT-ONBOARDING.md): a GitHub issue, a tester DMG built by CI, ≥ 2 non-author tester confirmations, and finally a tagged release that re-attaches the new entry to this section.
+
 ### Claude Code
 
 AI Usages Tracker reads the active Claude Code account from `~/.claude.json` and retrieves OAuth credentials from the macOS Keychain service `Claude Code-credentials`.
