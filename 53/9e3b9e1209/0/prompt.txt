@@ -1,0 +1,69 @@
+je ne vois pas de commentaire affiché sur l'issue, est-ce bien normal ?
+
+La log du "post sticky comment on issue" :
+Run set -euo pipefail
+  set -euo pipefail
+  SENTINEL='<!-- assistant-build:sticky -->'
+  body_lines=(
+    "${SENTINEL}"
+    "🛠 Build for commit \`${SHORT}\` — vendor-debug enabled for \`${VENDOR}\`"
+    ""
+    "Full commit: \`${SHA}\`"
+    "PR: #${PR}"
+    ""
+    "- [Download ${DMG_NAME}](${DOWNLOAD_URL}) — SHA-256 \`${DMG_SHA}\`"
+    "- Alternative: build it yourself from the branch (~5 min) — see [\`docs/CHECKOUT-AND-BUILD.md\`](https://github.com/${REPO}/blob/main/docs/CHECKOUT-AND-BUILD.md)."
+    ""
+    "Builds are ad-hoc signed only. First launch: right-click → Open to bypass Gatekeeper."
+    ""
+    "### Submitting feedback"
+    ""
+    "**Recommended:** open the app, click the \"🧪 Tester feedback\" banner in the popover."
+    "The form pre-fills the build SHA, vendor, and macOS version, and on submit it"
+    "opens this issue in your browser with the comment pre-written + reveals the"
+    "connector log in Finder so you can drag-attach it."
+    ""
+    "**Manual fallback:** copy the sign-off template from \`docs/ASSISTANT-ONBOARDING.md\`,"
+    "fill it in, attach the log file from \`~/.cache/ai-usages-tracker/${VENDOR}-usages-connector.log\`."
+    ""
+    "The build sanitizes secrets (tokens, API keys, emails) before writing to the log;"
+    "if you spot anything that looks confidential, flag it in your comment without"
+    "quoting the value — it's a bug we want to fix before merge."
+  )
+  body=$(printf '%s\n' "${body_lines[@]}")
+  existing=$(gh api "repos/${REPO}/issues/${ISSUE}/comments" --paginate \
+    --jq ".[] | select(.body | startswith(\"${SENTINEL}\")) | .id" | head -n1 || true)
+  if [ -n "$existing" ]; then
+    gh api -X PATCH "repos/${REPO}/issues/comments/${existing}" -f body="$body" >/dev/null
+    echo "Updated sticky comment on issue #${ISSUE}"
+  else
+    gh issue comment "${ISSUE}" --body "$body"
+    echo "Posted sticky comment on issue #${ISSUE}"
+  fi
+  shell: /bin/bash -e {0}
+  env:
+    GH_TOKEN: ***
+    REPO: fcamblor/mac-ai-trackers
+    ISSUE: 33
+    PR: 34
+    VENDOR: copilot
+    SHA: d23411b84cac3cebdafb2c015cd838ffdd426068
+    SHORT: d23411b8
+    DMG_NAME: AI-Usages-Tracker-copilot-d23411b8.dmg
+    DMG_SHA: cad95a34f0c514dae8d43362d158912dbfdda0b495a4a91ecc299d9a67c5ee47
+    DOWNLOAD_URL: https://github.com/fcamblor/mac-ai-trackers/releases/download/assistant-build-pr34-copilot-d23411b8/AI-Usages-Tracker-copilot-d23411b8.dmg
+Updated sticky comment on issue #33
+
+---
+
+{
+  "html_url": "https://github.com/fcamblor/mac-ai-trackers/issues/33#issuecomment-4399003841",
+  "id": 4399003841,
+  "updated_at": "2026-05-07T22:52:35Z"
+}
+
+---
+
+ok, d'accord je comprends ... le commentaire est mis à jour !
+
+Pourrais-tu faire apparaître dans le corps du commentaire la date de derniere maj/génération du dmg ?
