@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "f62fca81618e",
+  "strategy": "manual-commit",
+  "branch": "vendor-plugin-framework",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "README.md",
+    "docs/ASSISTANT-ONBOARDING.md",
+    "roadmap/index.md",
+    "scripts/bootstrap-onboarding-labels.sh"
+  ],
+  "sessions": [
+    {
+      "metadata": "/f6/2fca81618e/0/metadata.json",
+      "transcript": "/f6/2fca81618e/0/full.jsonl",
+      "content_hash": "/f6/2fca81618e/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 12,
+    "cache_creation_tokens": 11182,
+    "cache_read_tokens": 3102084,
+    "output_tokens": 5241,
+    "api_call_count": 12
+  }
+}

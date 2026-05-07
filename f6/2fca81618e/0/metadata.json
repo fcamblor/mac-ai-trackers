@@ -1,0 +1,42 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "f62fca81618e",
+  "session_id": "0ac8aafa-6ee5-4262-9165-c613fca0d658",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-07T02:05:19.982588Z",
+  "branch": "vendor-plugin-framework",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "README.md",
+    "roadmap/index.md",
+    "scripts/bootstrap-onboarding-labels.sh",
+    "docs/ASSISTANT-ONBOARDING.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "16a6e57a3dc8",
+  "checkpoint_transcript_start": 349,
+  "transcript_lines_at_start": 349,
+  "token_usage": {
+    "input_tokens": 12,
+    "cache_creation_tokens": 11182,
+    "cache_read_tokens": 3102084,
+    "output_tokens": 5241,
+    "api_call_count": 12
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-07T02:05:19.160008Z",
+    "agent_lines": 52,
+    "agent_removed": 4,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 52,
+    "total_lines_changed": 1208,
+    "agent_percentage": 4.635761589403973,
+    "metric_version": 2
+  }
+}
