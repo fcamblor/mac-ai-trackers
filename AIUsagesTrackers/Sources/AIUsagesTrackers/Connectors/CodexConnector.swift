@@ -10,7 +10,7 @@ public actor CodexConnector: UsageConnector {
         case cache = "cache"
     }
 
-    private let auth: CodexAuthProviding
+    private let auth: any CodexCredentialLocating
     private let logger: FileLogger
     private let session: URLSession
 
@@ -36,7 +36,7 @@ public actor CodexConnector: UsageConnector {
     }()
 
     public init(
-        auth: CodexAuthProviding = CodexAuth(),
+        auth: any CodexCredentialLocating = CodexCredentialLocator(),
         logger: FileLogger = Loggers.codex,
         session: URLSession = .shared
     ) {
@@ -61,7 +61,7 @@ public actor CodexConnector: UsageConnector {
     public func fetchUsages() async throws -> [VendorUsageEntry] {
         let credentials: CodexCredentials
         do {
-            credentials = try await auth.load()
+            credentials = try await auth.locate()
         } catch {
             logger.log(.error, "Codex credentials load failed: \(error)")
             return errorEntries(type: "token_error")

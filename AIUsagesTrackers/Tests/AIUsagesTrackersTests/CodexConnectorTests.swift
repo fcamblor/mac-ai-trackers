@@ -34,24 +34,24 @@ final class CodexMockURLProtocol: URLProtocol, @unchecked Sendable {
 
 // MARK: - Auth mock
 
-private struct MockCodexAuth: CodexAuthProviding {
+private struct MockCodexAuth: CodexCredentialLocating {
     let credentials: CodexCredentials?
     let error: Error?
 
-    func load() async throws -> CodexCredentials {
+    func locate() async throws -> CodexCredentials {
         if let error { throw error }
         return credentials!
     }
 }
 
-private actor SequenceCodexAuth: CodexAuthProviding {
+private actor SequenceCodexAuth: CodexCredentialLocating {
     private var results: [Result<CodexCredentials, Error>]
 
     init(_ results: [Result<CodexCredentials, Error>]) {
         self.results = results
     }
 
-    func load() async throws -> CodexCredentials {
+    func locate() async throws -> CodexCredentials {
         guard !results.isEmpty else {
             fatalError("SequenceCodexAuth exhausted")
         }
@@ -312,7 +312,7 @@ struct CodexConnectorFetchTests {
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let auth = SequenceCodexAuth([
             .success(validCredentials()),
-            .failure(CodexAuthError.keychainEmpty),
+            .failure(CodexCredentialLocatorError.keychainEmpty),
         ])
         let connector = CodexConnector(auth: auth, logger: logger, session: mockSession())
 

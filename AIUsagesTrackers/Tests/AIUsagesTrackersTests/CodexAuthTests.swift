@@ -50,17 +50,17 @@ struct CodexAuthTests {
             .replacingOccurrences(of: "=", with: "")
     }
 
-    private func makeAuth(codexHomePath: String) throws -> CodexAuth {
+    private func makeAuth(codexHomePath: String) throws -> CodexCredentialLocator {
         let dir = NSTemporaryDirectory() + "ai-tracker-codex-auth-log-\(UUID().uuidString)"
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
-        return CodexAuth(codexHomePath: codexHomePath, logger: logger)
+        return CodexCredentialLocator(codexHomePath: codexHomePath, logger: logger)
     }
 
-    private func makeKeychainAuth(result: ProcessExecutionResult) throws -> CodexAuth {
+    private func makeKeychainAuth(result: ProcessExecutionResult) throws -> CodexCredentialLocator {
         let dir = try makeTempDir()
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
-        return CodexAuth(
+        return CodexCredentialLocator(
             codexHomePath: nil,
             fileManager: EmptyFileManager(home: URL(fileURLWithPath: dir)),
             logger: logger,
@@ -79,7 +79,7 @@ struct CodexAuthTests {
             in: dir
         )
         let auth = try makeAuth(codexHomePath: dir)
-        let credentials = try await auth.load()
+        let credentials = try await auth.locate()
 
         #expect(credentials.accessToken == "tok-abc")
         #expect(credentials.accountId == "acct-001")
@@ -95,7 +95,7 @@ struct CodexAuthTests {
             in: dir
         )
         let auth = try makeAuth(codexHomePath: dir)
-        let credentials = try await auth.load()
+        let credentials = try await auth.locate()
 
         #expect(credentials.lastRefreshedAt != nil)
         // Verify the date is roughly April 15, 2026
@@ -114,7 +114,7 @@ struct CodexAuthTests {
             in: dir
         )
         let auth = try makeAuth(codexHomePath: dir)
-        let credentials = try await auth.load()
+        let credentials = try await auth.locate()
 
         #expect(credentials.lastRefreshedAt == nil)
         #expect(credentials.accountEmail == nil)
@@ -126,8 +126,8 @@ struct CodexAuthTests {
         _ = try writeAuthJSON("not valid json {{{", in: dir)
         let auth = try makeAuth(codexHomePath: dir)
 
-        await #expect(throws: CodexAuthError.self) {
-            try await auth.load()
+        await #expect(throws: CodexCredentialLocatorError.self) {
+            try await auth.locate()
         }
     }
 
@@ -141,16 +141,16 @@ struct CodexAuthTests {
         let auth = try makeAuth(codexHomePath: dir)
 
         do {
-            _ = try await auth.load()
+            _ = try await auth.locate()
             Issue.record("Expected missingAccountId error, but load succeeded")
-        } catch let error as CodexAuthError {
+        } catch let error as CodexCredentialLocatorError {
             if case .missingAccountId = error {
                 // expected
             } else {
                 Issue.record("Expected missingAccountId, got \(error)")
             }
         } catch {
-            Issue.record("Expected CodexAuthError, got \(error)")
+            Issue.record("Expected CodexCredentialLocatorError, got \(error)")
         }
     }
 
@@ -163,8 +163,8 @@ struct CodexAuthTests {
         )
         let auth = try makeAuth(codexHomePath: dir)
 
-        await #expect(throws: CodexAuthError.self) {
-            try await auth.load()
+        await #expect(throws: CodexCredentialLocatorError.self) {
+            try await auth.locate()
         }
     }
 
@@ -176,7 +176,7 @@ struct CodexAuthTests {
             in: dir
         )
         let auth = try makeAuth(codexHomePath: dir)
-        let credentials = try await auth.load()
+        let credentials = try await auth.locate()
 
         #expect(credentials.accessToken == "tok")
         #expect(credentials.accountId == "acct-001")
@@ -192,7 +192,7 @@ struct CodexAuthTests {
         )
         let auth = try makeAuth(codexHomePath: dir)
 
-        let credentials = try await auth.load()
+        let credentials = try await auth.locate()
 
         #expect(credentials.accountEmail == "from-id-token@openai.com")
     }
@@ -208,7 +208,7 @@ struct CodexAuthTests {
         )
         let auth = try makeAuth(codexHomePath: dir)
 
-        let credentials = try await auth.load()
+        let credentials = try await auth.locate()
 
         #expect(credentials.accountEmail == "from-access-token@openai.com")
     }
@@ -222,7 +222,7 @@ struct CodexAuthTests {
         )
         let auth = try makeAuth(codexHomePath: dir)
 
-        let credentials = try await auth.load()
+        let credentials = try await auth.locate()
 
         #expect(credentials.accountId == "acct-001")
         #expect(credentials.accountEmail == nil)
@@ -233,7 +233,7 @@ struct CodexAuthTests {
         let stdout = #"{"tokens":{"access_token":"tok-keychain","account_id":"acct-keychain"}}"#.data(using: .utf8)!
         let auth = try makeKeychainAuth(result: ProcessExecutionResult(stdout: stdout, terminationStatus: 0, timedOut: false))
 
-        let credentials = try await auth.load()
+        let credentials = try await auth.locate()
 
         #expect(credentials.accessToken == "tok-keychain")
         #expect(credentials.accountId == "acct-keychain")
@@ -249,7 +249,7 @@ struct CodexAuthTests {
             timedOut: false
         ))
 
-        let credentials = try await auth.load()
+        let credentials = try await auth.locate()
 
         #expect(credentials.accessToken == "tok-hex")
         #expect(credentials.accountId == "acct-hex")
@@ -259,8 +259,8 @@ struct CodexAuthTests {
     func throwsKeychainTimeout() async throws {
         let auth = try makeKeychainAuth(result: ProcessExecutionResult(stdout: Data(), terminationStatus: 15, timedOut: true))
 
-        await #expect(throws: CodexAuthError.self) {
-            try await auth.load()
+        await #expect(throws: CodexCredentialLocatorError.self) {
+            try await auth.locate()
         }
     }
 }

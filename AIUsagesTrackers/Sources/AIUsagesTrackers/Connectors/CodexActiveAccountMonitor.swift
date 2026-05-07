@@ -1,6 +1,8 @@
 import Foundation
 
-public actor CodexActiveAccountMonitor {
+public actor CodexActiveAccountMonitor: ActiveAccountMonitoring {
+    nonisolated public let vendor: Vendor = .codex
+
     // 15 s: short enough to react to account switches without hammering the disk.
     public static let defaultInterval: Duration = .seconds(15)
 

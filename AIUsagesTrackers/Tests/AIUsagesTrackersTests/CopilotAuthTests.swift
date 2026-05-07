@@ -42,7 +42,7 @@ struct CopilotAuthTests {
         hostsPath: String? = nil,
         environment: [String: String] = [:],
         keychainResult: ProcessExecutionResult? = nil
-    ) throws -> CopilotAuth {
+    ) throws -> CopilotCredentialLocator {
         let dir = try makeTempDir()
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let runner = MockProcessRunner(result: keychainResult ?? ProcessExecutionResult(
@@ -51,7 +51,7 @@ struct CopilotAuthTests {
         // FileManager.default lets the auth read the override path written by tests;
         // we don't risk hitting the real ~/.config/gh/hosts.yml because the override
         // short-circuits the candidate-path cascade.
-        return CopilotAuth(
+        return CopilotCredentialLocator(
             environment: environment,
             hostsFilePathOverride: hostsPath,
             fileManager: .default,
@@ -71,7 +71,7 @@ struct CopilotAuthTests {
                 fcamblor:
             user: fcamblor
         """
-        let config = CopilotAuth.parseHostsYAML(yaml)
+        let config = CopilotCredentialLocator.parseHostsYAML(yaml)
         #expect(config.activeLogin == "fcamblor")
         #expect(config.hostLevelToken == nil)
         #expect(config.perUserTokens.isEmpty)
@@ -85,7 +85,7 @@ struct CopilotAuthTests {
             oauth_token: gho_legacy_token
             git_protocol: https
         """
-        let config = CopilotAuth.parseHostsYAML(yaml)
+        let config = CopilotCredentialLocator.parseHostsYAML(yaml)
         #expect(config.activeLogin == "alice")
         #expect(config.hostLevelToken == "gho_legacy_token")
         #expect(config.tokenForLogin("alice") == "gho_legacy_token")
@@ -104,7 +104,7 @@ struct CopilotAuthTests {
             user: bob
             oauth_token: gho_bob_token
         """
-        let config = CopilotAuth.parseHostsYAML(yaml)
+        let config = CopilotCredentialLocator.parseHostsYAML(yaml)
         #expect(config.activeLogin == "bob")
         #expect(config.perUserTokens["alice"] == "gho_alice_token")
         #expect(config.perUserTokens["bob"] == "gho_bob_token")
@@ -117,7 +117,7 @@ struct CopilotAuthTests {
         gitlab.com:
             user: someone
         """
-        let config = CopilotAuth.parseHostsYAML(yaml)
+        let config = CopilotCredentialLocator.parseHostsYAML(yaml)
         #expect(config.activeLogin == nil)
     }
 
@@ -130,7 +130,7 @@ struct CopilotAuthTests {
             user: bob
             oauth_token: enterprise_token
         """
-        let config = CopilotAuth.parseHostsYAML(yaml)
+        let config = CopilotCredentialLocator.parseHostsYAML(yaml)
         #expect(config.activeLogin == "alice")
         #expect(config.hostLevelToken == nil)
     }
@@ -151,7 +151,7 @@ struct CopilotAuthTests {
             keychainResult: ProcessExecutionResult(stdout: Data("kc_token".utf8), terminationStatus: 0, timedOut: false)
         )
 
-        let credentials = try await auth.load()
+        let credentials = try await auth.locate()
         #expect(credentials.accessToken == "env_token")
         #expect(credentials.tokenSource == .envVar)
         #expect(credentials.activeLogin.rawValue == "alice")
@@ -171,7 +171,7 @@ struct CopilotAuthTests {
             keychainResult: ProcessExecutionResult(stdout: Data("kc_token\n".utf8), terminationStatus: 0, timedOut: false)
         )
 
-        let credentials = try await auth.load()
+        let credentials = try await auth.locate()
         #expect(credentials.accessToken == "kc_token")
         #expect(credentials.tokenSource == .keychain)
         #expect(credentials.activeLogin.rawValue == "bob")
@@ -191,7 +191,7 @@ struct CopilotAuthTests {
             keychainResult: ProcessExecutionResult(stdout: Data(encoded.utf8), terminationStatus: 0, timedOut: false)
         )
 
-        let credentials = try await auth.load()
+        let credentials = try await auth.locate()
         #expect(credentials.accessToken == realToken)
         #expect(credentials.tokenSource == .keychain)
     }
@@ -211,7 +211,7 @@ struct CopilotAuthTests {
             keychainResult: ProcessExecutionResult(stdout: Data(), terminationStatus: 44, timedOut: false)
         )
 
-        let credentials = try await auth.load()
+        let credentials = try await auth.locate()
         #expect(credentials.accessToken == "hosts_only_token")
         #expect(credentials.tokenSource == .hostsFile)
     }
@@ -225,8 +225,8 @@ struct CopilotAuthTests {
         """, in: dir)
         let auth = try makeAuth(hostsPath: hostsPath)
 
-        await #expect(throws: CopilotAuthError.self) {
-            try await auth.load()
+        await #expect(throws: CopilotCredentialLocatorError.self) {
+            try await auth.locate()
         }
     }
 
@@ -243,9 +243,9 @@ struct CopilotAuthTests {
         )
 
         do {
-            _ = try await auth.load()
+            _ = try await auth.locate()
             Issue.record("Expected noTokenAvailable, but load succeeded")
-        } catch let error as CopilotAuthError {
+        } catch let error as CopilotCredentialLocatorError {
             if case .noTokenAvailable(let login) = error {
                 #expect(login == "eve")
             } else {
@@ -266,8 +266,8 @@ struct CopilotAuthTests {
             keychainResult: ProcessExecutionResult(stdout: Data(), terminationStatus: 15, timedOut: true)
         )
 
-        await #expect(throws: CopilotAuthError.self) {
-            try await auth.load()
+        await #expect(throws: CopilotCredentialLocatorError.self) {
+            try await auth.locate()
         }
     }
 }

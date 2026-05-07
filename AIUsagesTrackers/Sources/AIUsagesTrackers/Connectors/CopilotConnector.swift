@@ -4,7 +4,7 @@ import os
 public actor CopilotConnector: UsageConnector {
     nonisolated public let vendor: Vendor = .copilot
 
-    private let auth: CopilotAuthProviding
+    private let auth: CopilotCredentialLocating
     private let logger: FileLogger
     private let session: URLSession
 
@@ -21,7 +21,7 @@ public actor CopilotConnector: UsageConnector {
     private static let apiURL = URL(string: "https://api.github.com/copilot_internal/user")! // known-valid literal
 
     public init(
-        auth: CopilotAuthProviding = CopilotAuth(),
+        auth: CopilotCredentialLocating = CopilotCredentialLocator(),
         logger: FileLogger = Loggers.copilot,
         session: URLSession = .shared
     ) {
@@ -46,7 +46,7 @@ public actor CopilotConnector: UsageConnector {
     public func fetchUsages() async throws -> [VendorUsageEntry] {
         let credentials: CopilotCredentials
         do {
-            credentials = try await auth.load()
+            credentials = try await auth.locate()
         } catch {
             logger.log(.error, "Copilot credentials load failed: \(error)")
             return errorEntries(type: "token_error")

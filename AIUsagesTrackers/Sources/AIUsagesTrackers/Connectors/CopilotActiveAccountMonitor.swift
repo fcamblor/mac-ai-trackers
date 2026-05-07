@@ -1,6 +1,8 @@
 import Foundation
 
-public actor CopilotActiveAccountMonitor {
+public actor CopilotActiveAccountMonitor: ActiveAccountMonitoring {
+    nonisolated public let vendor: Vendor = .copilot
+
     // 15 s mirrors the Codex/Claude monitors — short enough to react to
     // `gh auth switch` without hammering the disk.
     public static let defaultInterval: Duration = .seconds(15)
@@ -80,7 +82,7 @@ public actor CopilotActiveAccountMonitor {
                 logger.log(.debug, "Failed to read gh hosts.yml at \(path)")
                 continue
             }
-            let config = CopilotAuth.parseHostsYAML(text)
+            let config = CopilotCredentialLocator.parseHostsYAML(text)
             if let login = config.activeLogin, !login.isEmpty {
                 return AccountEmail(rawValue: login)
             }

@@ -26,13 +26,11 @@ public enum TokenSource: String, Sendable, Equatable {
 
 // MARK: - Protocol
 
-public protocol CopilotAuthProviding: Sendable {
-    func load() async throws -> CopilotCredentials
-}
+public protocol CopilotCredentialLocating: CredentialLocator where Credentials == CopilotCredentials {}
 
 // MARK: - Errors
 
-public enum CopilotAuthError: Error, CustomStringConvertible {
+public enum CopilotCredentialLocatorError: Error, CustomStringConvertible {
     case notLoggedIn(searchedPaths: [String])
     case hostsFileReadFailed(path: String, underlying: Error)
     case hostsFileParseFailed(path: String, rawPreview: String)
@@ -63,7 +61,9 @@ public enum CopilotAuthError: Error, CustomStringConvertible {
 
 // MARK: - Implementation
 
-public actor CopilotAuth: CopilotAuthProviding {
+public actor CopilotCredentialLocator: CopilotCredentialLocating {
+    public typealias Credentials = CopilotCredentials
+
     private static let keychainService = "gh:github.com"
     private static let keychainTimeoutSeconds = 10
     private static let goKeyringBase64Prefix = "go-keyring-base64:"
@@ -89,11 +89,11 @@ public actor CopilotAuth: CopilotAuthProviding {
         self.processRunner = processRunner
     }
 
-    public func load() async throws -> CopilotCredentials {
+    public func locate() async throws -> CopilotCredentials {
         let parsed = try resolveHostsConfig()
 
         guard let activeLoginString = parsed.config.activeLogin, !activeLoginString.isEmpty else {
-            throw CopilotAuthError.notLoggedIn(searchedPaths: parsed.searchedPaths)
+            throw CopilotCredentialLocatorError.notLoggedIn(searchedPaths: parsed.searchedPaths)
         }
         let activeLogin = AccountEmail(rawValue: activeLoginString)
 
@@ -113,7 +113,7 @@ public actor CopilotAuth: CopilotAuthProviding {
             return CopilotCredentials(accessToken: hostsToken, activeLogin: activeLogin, tokenSource: .hostsFile)
         }
 
-        throw CopilotAuthError.noTokenAvailable(activeLogin: activeLoginString)
+        throw CopilotCredentialLocatorError.noTokenAvailable(activeLogin: activeLoginString)
     }
 
     // MARK: - hosts.yml resolution
@@ -140,11 +140,11 @@ public actor CopilotAuth: CopilotAuthProviding {
             do {
                 data = try Data(contentsOf: URL(fileURLWithPath: path))
             } catch {
-                throw CopilotAuthError.hostsFileReadFailed(path: path, underlying: error)
+                throw CopilotCredentialLocatorError.hostsFileReadFailed(path: path, underlying: error)
             }
             guard let text = String(data: data, encoding: .utf8) else {
                 let preview = String(data: data.prefix(80), encoding: .utf8) ?? "<binary>"
-                throw CopilotAuthError.hostsFileParseFailed(path: path, rawPreview: preview)
+                throw CopilotCredentialLocatorError.hostsFileParseFailed(path: path, rawPreview: preview)
             }
             logger.log(.debug, "Parsing gh hosts.yml at \(path)")
             return ResolvedHostsConfig(
@@ -291,7 +291,7 @@ public actor CopilotAuth: CopilotAuthProviding {
             timeoutSeconds: Self.keychainTimeoutSeconds
         )
         if result.timedOut {
-            throw CopilotAuthError.keychainTimeout(timeoutSeconds: Self.keychainTimeoutSeconds)
+            throw CopilotCredentialLocatorError.keychainTimeout(timeoutSeconds: Self.keychainTimeoutSeconds)
         }
 
         // Exit 44 = item not found — propagate as "no keychain token", let cascade continue.
@@ -299,7 +299,7 @@ public actor CopilotAuth: CopilotAuthProviding {
             return nil
         }
         if result.terminationStatus != 0 {
-            throw CopilotAuthError.keychainAccessDenied(exitCode: result.terminationStatus)
+            throw CopilotCredentialLocatorError.keychainAccessDenied(exitCode: result.terminationStatus)
         }
 
         var rawString = String(data: result.stdout, encoding: .utf8)?
@@ -317,7 +317,7 @@ public actor CopilotAuth: CopilotAuthProviding {
             let body = String(rawString.dropFirst(Self.goKeyringBase64Prefix.count))
             guard let data = Data(base64Encoded: body),
                   let decoded = String(data: data, encoding: .utf8) else {
-                throw CopilotAuthError.keychainParseFailed(rawPreview: rawString)
+                throw CopilotCredentialLocatorError.keychainParseFailed(rawPreview: rawString)
             }
             return decoded.trimmingCharacters(in: .whitespacesAndNewlines)
         }

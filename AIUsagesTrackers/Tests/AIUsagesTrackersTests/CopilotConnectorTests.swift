@@ -34,11 +34,11 @@ final class CopilotMockURLProtocol: URLProtocol, @unchecked Sendable {
 
 // MARK: - Auth mock
 
-private struct MockCopilotAuth: CopilotAuthProviding {
+private struct MockCopilotAuth: CopilotCredentialLocating {
     let credentials: CopilotCredentials?
     let error: Error?
 
-    func load() async throws -> CopilotCredentials {
+    func locate() async throws -> CopilotCredentials {
         if let error { throw error }
         return credentials!
     }
@@ -331,7 +331,7 @@ struct CopilotConnectorFetchTests {
         let dir = try makeTempDir()
         let connector = makeConnector(
             dir: dir,
-            authError: CopilotAuthError.notLoggedIn(searchedPaths: [])
+            authError: CopilotCredentialLocatorError.notLoggedIn(searchedPaths: [])
         )
 
         let entries = try await connector.fetchUsages()
