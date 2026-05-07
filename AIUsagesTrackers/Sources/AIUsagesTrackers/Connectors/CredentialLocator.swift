@@ -10,7 +10,7 @@ import Foundation
 /// without lossy generalization. The contract conformance test verifies the
 /// read-only invariant via the SwiftLint custom rule that flags writes
 /// inside any `*CredentialLocator.swift` file.
-public protocol CredentialLocator: Sendable {
+public protocol CredentialLocator<Credentials>: Sendable {
     associatedtype Credentials: Sendable
 
     /// Reads credentials from external sources owned by the vendor's CLI.

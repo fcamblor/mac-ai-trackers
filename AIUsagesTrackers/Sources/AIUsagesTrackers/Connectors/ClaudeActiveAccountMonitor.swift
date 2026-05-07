@@ -1,6 +1,8 @@
 import Foundation
 
-public actor ClaudeActiveAccountMonitor {
+public actor ClaudeActiveAccountMonitor: ActiveAccountMonitoring {
+    nonisolated public let vendor: Vendor = .claude
+
     // 15 s: short enough to react to account switches without hammering the disk.
     // Public so it can be referenced as a default argument value in callers' code.
     public static let defaultInterval: Duration = .seconds(15)

@@ -102,6 +102,39 @@ public struct JSONFieldSanitizer: Sendable {
     }
 }
 
+/// Strips substrings matching any provided regex pattern. Vendors
+/// compose this with their token shapes (e.g. `sk-ant-…`, `ghu_…`,
+/// `Bearer\s+\S+`) so error-message log lines that splice raw
+/// credentials into prose still get scrubbed at the logger boundary.
+public struct SecretPatternSanitizer: Sendable {
+    public static let placeholder = "<redacted>"
+
+    private let patterns: [NSRegularExpression]
+
+    public init(patterns: [String]) {
+        self.patterns = patterns.compactMap { source in
+            // Patterns are static configuration baked into per-vendor
+            // sanitizers — failing to compile one is a build-time bug
+            // that should surface, not be hidden as a silent skip.
+            // swiftlint:disable:next force_try
+            try! NSRegularExpression(pattern: source)
+        }
+    }
+
+    public func sanitize(_ message: String) -> String {
+        var current = message
+        for pattern in patterns {
+            let range = NSRange(current.startIndex..<current.endIndex, in: current)
+            current = pattern.stringByReplacingMatches(
+                in: current,
+                range: range,
+                withTemplate: Self.placeholder
+            )
+        }
+        return current
+    }
+}
+
 /// Replaces email-looking substrings with the literal `<email>`. Composed
 /// by per-vendor sanitizers in their `sanitize(_ message:)` and (after
 /// JSON masking) `sanitize(_ payload:)` paths so log lines that splice

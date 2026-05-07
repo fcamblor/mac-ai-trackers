@@ -1,0 +1,38 @@
+{
+  "five_hour": {
+    "utilization": 50.0,
+    "resets_at": "2026-05-07T00:29:59.571486+00:00"
+  },
+  "seven_day": {
+    "utilization": 13.0,
+    "resets_at": "2026-05-12T22:00:00.571503+00:00"
+  },
+  "seven_day_oauth_apps": null,
+  "seven_day_opus": {
+    "utilization": 7.5,
+    "resets_at": "2026-05-12T22:00:00.571510+00:00"
+  },
+  "seven_day_sonnet": {
+    "utilization": 2.0,
+    "resets_at": "2026-05-12T22:00:00.571510+00:00"
+  },
+  "extra_usage": {
+    "is_enabled": false,
+    "monthly_limit": null,
+    "used_credits": null,
+    "utilization": null,
+    "currency": null
+  },
+  "_seeded_secrets_for_leakage_test": {
+    "oauth_token": "sk-ant-oat01-DEADBEEFseededFakeToken",
+    "refresh_token": "sk-ant-ort01-AnotherFakeToken",
+    "account": {
+      "id": "acct_seededfakeid",
+      "email": "victim-seeded@example.com"
+    },
+    "api_key": "anth_apikey_seededfake",
+    "credential_blob": "seeded-credential-blob",
+    "secret_link": "https://example.com/secret/seededfake",
+    "comment_with_email": "Contact victim-seeded@example.com for help"
+  }
+}

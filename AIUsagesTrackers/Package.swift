@@ -35,6 +35,7 @@ let package = Package(
             name: "AIUsagesTrackersTests",
             dependencies: ["AIUsagesTrackersLib", "AIUsagesTrackers"],
             path: "Tests/AIUsagesTrackersTests",
+            resources: [.copy("Fixtures")],
             plugins: [.plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")]
         ),
     ]
