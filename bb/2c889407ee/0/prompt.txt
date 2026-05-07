@@ -1,0 +1,10 @@
+/commit
+
+---
+
+est-ce que dans le message qui publie le dmg, tu faire une référence à la doc qui permet de builder soi-même la branche ?
+Si ce n'est pas le cas, il faut le faire
+
+---
+
+option A
