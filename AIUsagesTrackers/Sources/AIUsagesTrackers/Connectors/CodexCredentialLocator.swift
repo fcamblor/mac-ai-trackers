@@ -38,13 +38,11 @@ public struct CodexCredentials: Sendable, Equatable {
 
 // MARK: - Protocol
 
-public protocol CodexAuthProviding: Sendable {
-    func load() async throws -> CodexCredentials
-}
+public protocol CodexCredentialLocating: CredentialLocator where Credentials == CodexCredentials {}
 
 // MARK: - Error
 
-public enum CodexAuthError: Error, CustomStringConvertible {
+public enum CodexCredentialLocatorError: Error, CustomStringConvertible {
     case noAuthFileFound(searchedPaths: [String])
     case readFailed(path: String, underlying: Error)
     case parseFailed(path: String, rawPreview: String)
@@ -78,7 +76,9 @@ public enum CodexAuthError: Error, CustomStringConvertible {
 
 // MARK: - Implementation
 
-public actor CodexAuth: CodexAuthProviding {
+public actor CodexCredentialLocator: CodexCredentialLocating {
+    public typealias Credentials = CodexCredentials
+
     private static let keychainService = "Codex Auth"
     private static let keychainTimeoutSeconds = 10
 
@@ -106,7 +106,7 @@ public actor CodexAuth: CodexAuthProviding {
         self.processRunner = processRunner
     }
 
-    public func load() async throws -> CodexCredentials {
+    public func locate() async throws -> CodexCredentials {
         let home = fileManager.homeDirectoryForCurrentUser.path
 
         // Build candidate paths in cascade order
@@ -135,7 +135,7 @@ public actor CodexAuth: CodexAuthProviding {
         do {
             data = try Data(contentsOf: URL(fileURLWithPath: path))
         } catch {
-            throw CodexAuthError.readFailed(path: path, underlying: error)
+            throw CodexCredentialLocatorError.readFailed(path: path, underlying: error)
         }
 
         let jsonObject: Any
@@ -143,22 +143,22 @@ public actor CodexAuth: CodexAuthProviding {
             jsonObject = try JSONSerialization.jsonObject(with: data)
         } catch {
             let preview = String(data: data.prefix(80), encoding: .utf8) ?? "<binary>"
-            throw CodexAuthError.parseFailed(path: path, rawPreview: preview)
+            throw CodexCredentialLocatorError.parseFailed(path: path, rawPreview: preview)
         }
         guard let json = jsonObject as? [String: Any] else {
             let preview = String(data: data.prefix(80), encoding: .utf8) ?? "<binary>"
-            throw CodexAuthError.parseFailed(path: path, rawPreview: preview)
+            throw CodexCredentialLocatorError.parseFailed(path: path, rawPreview: preview)
         }
 
         let tokens = json["tokens"] as? [String: Any]
         guard let accessToken = tokens?["access_token"] as? String, !accessToken.isEmpty else {
             // Tolerate OPENAI_API_KEY-only auth files: no tokens dict means no account_id either
             let preview = String(data: data.prefix(80), encoding: .utf8) ?? "<binary>"
-            throw CodexAuthError.parseFailed(path: path, rawPreview: preview)
+            throw CodexCredentialLocatorError.parseFailed(path: path, rawPreview: preview)
         }
 
         guard let accountId = tokens?["account_id"] as? String, !accountId.isEmpty else {
-            throw CodexAuthError.missingAccountId(path: path)
+            throw CodexCredentialLocatorError.missingAccountId(path: path)
         }
 
         let lastRefreshedAt: Date?
@@ -187,15 +187,15 @@ public actor CodexAuth: CodexAuthProviding {
             timeoutSeconds: timeoutSecs
         )
         if result.timedOut {
-            throw CodexAuthError.keychainTimeout(timeoutSeconds: timeoutSecs)
+            throw CodexCredentialLocatorError.keychainTimeout(timeoutSeconds: timeoutSecs)
         }
         guard result.terminationStatus == 0 else {
-            throw CodexAuthError.keychainAccessDenied(exitCode: result.terminationStatus)
+            throw CodexCredentialLocatorError.keychainAccessDenied(exitCode: result.terminationStatus)
         }
 
         var rawString = String(data: result.stdout, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if rawString.isEmpty {
-            throw CodexAuthError.keychainEmpty
+            throw CodexCredentialLocatorError.keychainEmpty
         }
 
         // Keychain may hex-encode the value with a leading "0x" prefix
@@ -204,19 +204,19 @@ public actor CodexAuth: CodexAuthProviding {
         }
 
         guard let jsonData = rawString.data(using: .utf8) else {
-            throw CodexAuthError.keychainParseFailed(rawPreview: rawString)
+            throw CodexCredentialLocatorError.keychainParseFailed(rawPreview: rawString)
         }
         let jsonObject: Any
         do {
             jsonObject = try JSONSerialization.jsonObject(with: jsonData)
         } catch {
-            throw CodexAuthError.keychainParseFailed(rawPreview: rawString)
+            throw CodexCredentialLocatorError.keychainParseFailed(rawPreview: rawString)
         }
         guard let json = jsonObject as? [String: Any],
               let tokens = json["tokens"] as? [String: Any],
               let accessToken = tokens["access_token"] as? String, !accessToken.isEmpty,
               let accountId = tokens["account_id"] as? String, !accountId.isEmpty else {
-            throw CodexAuthError.keychainParseFailed(rawPreview: rawString)
+            throw CodexCredentialLocatorError.keychainParseFailed(rawPreview: rawString)
         }
 
         let lastRefreshedAt: Date?

@@ -65,3 +65,32 @@ custom_rules:
       - comment
     message: "Comment embeds a bare `N unit` duration — lift to a named constant whose declaration site carries the rationale (SWIFT-TESTABILITY §Comment WHY)"
     severity: warning
+
+  e3_credential_locator_writes:
+    name: "credential locator writes"
+    regex: 'SecItemAdd|SecItemUpdate|SecItemDelete|SecKeychainItemCreate|SecKeychainItemModifyAttributesAndData'
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    included:
+      - "AIUsagesTrackers/Sources/.*CredentialLocator\\.swift"
+    excluded:
+      - "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CredentialLocator\\.swift"
+    message: "Credential locators are read-only by contract — see VENDOR-PLUGIN-CONTRACT.md §5"
+    severity: error
+
+  w6_payload_log_not_through_proxy:
+    name: "payload log not routed through LoggingProxy"
+    regex: 'logger\.log\([^)]*(payload|response|request body|API\s+payload)'
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    included:
+      - "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/.*Connector\\.swift"
+      - "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/.*CredentialLocator\\.swift"
+    excluded:
+      - "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/UsageConnector\\.swift"
+      - "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/StatusConnector\\.swift"
+      - "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CredentialLocator\\.swift"
+    message: "Payload-bearing log lines must go through LoggingProxy (VENDOR-PLUGIN-CONTRACT.md §6)"
+    severity: warning

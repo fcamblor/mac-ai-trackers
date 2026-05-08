@@ -22,6 +22,11 @@ struct UsageDetailsView: View {
     @State private var historyReferenceDate = Date()
     @State private var historyWindowOffset: Int = 0
     @State private var isLoadingHistory = false
+    @State private var showTesterFeedbackSheet = false
+
+    /// Resolved at app launch from the bundle's Info.plist trio. Non-nil
+    /// only on tester DMGs; absent on stable releases by construction.
+    private let testerFeedbackContext: TesterFeedbackContext? = TesterFeedbackContext.resolved
 
     private static let popoverWidth: CGFloat = 320
     private static let maxScreenHeightRatio: CGFloat = 0.9
@@ -57,6 +62,17 @@ struct UsageDetailsView: View {
                 Divider()
             }
 
+            if let context = testerFeedbackContext {
+                TesterFeedbackBanner(
+                    context: context,
+                    displayName: VendorBrandingResolver.displayName(for: context.vendor),
+                    onSubmit: { showTesterFeedbackSheet = true }
+                )
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                Divider()
+            }
+
             content
 
             Divider()
@@ -66,6 +82,17 @@ struct UsageDetailsView: View {
         .frame(width: Self.popoverWidth)
         .task(id: historyTaskID) {
             await runHistoryRefreshLoopIfNeeded()
+        }
+        .sheet(isPresented: $showTesterFeedbackSheet) {
+            if let context = testerFeedbackContext {
+                TesterFeedbackSheet(
+                    context: context,
+                    displayName: VendorBrandingResolver.displayName(for: context.vendor),
+                    macOSVersion: ProcessInfo.processInfo.operatingSystemVersionString,
+                    connectorLogURL: context.connectorLogURL(),
+                    onDismiss: { showTesterFeedbackSheet = false }
+                )
+            }
         }
     }
 

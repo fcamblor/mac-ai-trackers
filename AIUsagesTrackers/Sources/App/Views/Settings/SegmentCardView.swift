@@ -97,7 +97,7 @@ struct SegmentCardView: View {
     }
 
     private func hintText(for segment: MenuBarSegmentConfig) -> String {
-        "\(VendorBranding.displayName(for: segment.vendor)) · \(accountLabel(for: segment)) · \(segment.metricName)"
+        "\(VendorBrandingResolver.displayName(for: segment.vendor)) · \(accountLabel(for: segment)) · \(segment.metricName)"
     }
 
     private func accountLabel(for segment: MenuBarSegmentConfig) -> String {
@@ -115,7 +115,7 @@ struct SegmentCardView: View {
     private func warningText(for issue: MenuBarSegmentIssue) -> String {
         switch issue {
         case .noActiveAccount(let vendor):
-            return "No active \(VendorBranding.displayName(for: vendor)) account"
+            return "No active \(VendorBrandingResolver.displayName(for: vendor)) account"
         case .accountNotFound(_, let email):
             return "Account no longer available: \(email.rawValue)"
         case .metricNotFound(let name):

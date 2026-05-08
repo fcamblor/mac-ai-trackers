@@ -34,24 +34,24 @@ final class CodexMockURLProtocol: URLProtocol, @unchecked Sendable {
 
 // MARK: - Auth mock
 
-private struct MockCodexAuth: CodexAuthProviding {
+private struct MockCodexAuth: CodexCredentialLocating {
     let credentials: CodexCredentials?
     let error: Error?
 
-    func load() async throws -> CodexCredentials {
+    func locate() async throws -> CodexCredentials {
         if let error { throw error }
         return credentials!
     }
 }
 
-private actor SequenceCodexAuth: CodexAuthProviding {
+private actor SequenceCodexAuth: CodexCredentialLocating {
     private var results: [Result<CodexCredentials, Error>]
 
     init(_ results: [Result<CodexCredentials, Error>]) {
         self.results = results
     }
 
-    func load() async throws -> CodexCredentials {
+    func locate() async throws -> CodexCredentials {
         guard !results.isEmpty else {
             fatalError("SequenceCodexAuth exhausted")
         }
@@ -312,7 +312,7 @@ struct CodexConnectorFetchTests {
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let auth = SequenceCodexAuth([
             .success(validCredentials()),
-            .failure(CodexAuthError.keychainEmpty),
+            .failure(CodexCredentialLocatorError.keychainEmpty),
         ])
         let connector = CodexConnector(auth: auth, logger: logger, session: mockSession())
 
@@ -389,7 +389,7 @@ struct CodexConnectorFetchTests {
         #expect(entries[0].lastError == nil)
     }
 
-    @Test("malformed JSON payload returns parse_error entry")
+    @Test("malformed JSON payload returns parse_error entry, preserves isActive and metrics")
     func parseErrorOnMalformedJSON() async throws {
         let dir = try makeTempDir()
         let connector = makeConnector(dir: dir)
@@ -403,7 +403,7 @@ struct CodexConnectorFetchTests {
           }
         }
         """)
-        _ = try await connector.fetchUsages()
+        let firstEntries = try await connector.fetchUsages()
 
         CodexMockURLProtocol.handler = { _ in
             let data = "not-json".data(using: .utf8)!
@@ -415,9 +415,11 @@ struct CodexConnectorFetchTests {
         #expect(entries.count == 1)
         #expect(entries[0].account == "user@openai.com")
         #expect(entries[0].lastError?.type == "parse_error")
+        #expect(entries[0].isActive == true)
+        #expect(entries[0].metrics == firstEntries[0].metrics)
     }
 
-    @Test("URLError returns api_error entry")
+    @Test("URLError returns api_error entry, preserves isActive and metrics")
     func urlErrorReturnsApiError() async throws {
         let dir = try makeTempDir()
         let connector = makeConnector(dir: dir)
@@ -431,7 +433,7 @@ struct CodexConnectorFetchTests {
           }
         }
         """)
-        _ = try await connector.fetchUsages()
+        let firstEntries = try await connector.fetchUsages()
 
         CodexMockURLProtocol.errorToThrow = URLError(.notConnectedToInternet)
         CodexMockURLProtocol.handler = nil
@@ -441,6 +443,37 @@ struct CodexConnectorFetchTests {
         #expect(entries.count == 1)
         #expect(entries[0].account == "user@openai.com")
         #expect(entries[0].lastError?.type == "api_error")
+        #expect(entries[0].isActive == true)
+        #expect(entries[0].metrics == firstEntries[0].metrics)
+    }
+
+    @Test("HTTP 5xx preserves isActive and metrics across server hiccups")
+    func http500PreservesActiveAndMetrics() async throws {
+        let dir = try makeTempDir()
+        let connector = makeConnector(dir: dir)
+
+        mockHTTP200(json: """
+        {
+          "email": "user@openai.com",
+          "rate_limit": {
+            "primary_window": {"used_percent": 5.0, "reset_at": 1745000000, "limit_window_seconds": 18000},
+            "secondary_window": {"used_percent": 2.0, "reset_at": 1745500000, "limit_window_seconds": 604800}
+          }
+        }
+        """)
+        let firstEntries = try await connector.fetchUsages()
+
+        CodexMockURLProtocol.handler = { _ in
+            let resp = HTTPURLResponse(url: URL(string: "https://chatgpt.com")!, statusCode: 503, httpVersion: nil, headerFields: nil)!
+            return (Data(), resp)
+        }
+        let entries = try await connector.fetchUsages()
+
+        #expect(entries.count == 1)
+        #expect(entries[0].account == "user@openai.com")
+        #expect(entries[0].lastError?.type == "http_503")
+        #expect(entries[0].isActive == true)
+        #expect(entries[0].metrics == firstEntries[0].metrics)
     }
 
     // MARK: - limit_window_seconds vs fallback

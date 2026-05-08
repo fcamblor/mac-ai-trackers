@@ -191,6 +191,17 @@ public enum UsageMetric: Codable, Equatable, Sendable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
         case let .timeWindow(name, resetAt, windowDuration, usagePercent):
+            // Connector contract: a present `resetAt` must be a strict ISO 8601
+            // datetime. Enforced as a DEBUG assertion so that any new connector
+            // emitting a date-only or otherwise unparseable string fails its
+            // tests immediately — production stays permissive so that legacy
+            // payloads round-trip without crashing the app.
+            if let resetAt {
+                assert(
+                    resetAt.isStrictlyValid,
+                    "UsageMetric.timeWindow resetAt must be a strict ISO 8601 datetime, got: '\(resetAt.rawValue)'. Use ISODate.parsing(_:) or parsingFlexibleDate(_:) at the connector boundary."
+                )
+            }
             try container.encode(MetricKind.timeWindow, forKey: .type)
             try container.encode(name, forKey: .name)
             try container.encodeIfPresent(resetAt, forKey: .resetAt)

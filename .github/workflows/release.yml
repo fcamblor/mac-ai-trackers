@@ -67,6 +67,21 @@ jobs:
           ./scripts/build-app-bundle.sh
           echo "✅ Build completed"
 
+      - name: Assert tester-debug keys are absent
+        # Stable releases must never carry the tester-debug Info.plist trio
+        # — they activate verbose-vendor mode and the in-app feedback
+        # banner. See docs/ASSISTANT-ONBOARDING.md §6.3 / §6.4.
+        run: |
+          set -euo pipefail
+          PLIST="dist/AI Usages Tracker.app/Contents/Info.plist"
+          for key in AITrackerVendorDebug AITrackerBuildCommit AITrackerOnboardingIssueURL; do
+            if /usr/libexec/PlistBuddy -c "Print :$key" "$PLIST" >/dev/null 2>&1; then
+              echo "::error::$key must NOT be present in a tagged release bundle"
+              exit 1
+            fi
+          done
+          echo "✓ tester-debug keys absent from release bundle"
+
       - name: Create release artifact
         id: artifact
         run: |

@@ -1,0 +1,83 @@
+name: New AI assistant — request support
+description: Request that AI Usages Tracker adds support for a new AI assistant.
+title: "[new-assistant] <vendor display name>"
+labels: ["type:new-assistant", "phase:proposed"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing a new vendor. The lifecycle is documented in
+        [`docs/ASSISTANT-ONBOARDING.md`](../blob/main/docs/ASSISTANT-ONBOARDING.md);
+        merging requires ≥ 2 distinct tester confirmations on the latest
+        build SHA, with attached connector logs.
+  - type: input
+    id: vendor-slug
+    attributes:
+      label: Vendor slug (kebab-case, English)
+      description: Used as the file basename in `docs/vendors/<slug>.md` and as the `Vendor` identifier across persisted JSON.
+      placeholder: "cursor"
+    validations:
+      required: true
+  - type: input
+    id: display-name
+    attributes:
+      label: Display name
+      placeholder: "Cursor"
+    validations:
+      required: true
+  - type: input
+    id: tint-hex
+    attributes:
+      label: Brand tint (6-digit hex, no #)
+      description: Applied to the menu bar icon. Must be readable on both light and dark menu bars.
+      placeholder: "DA7756"
+    validations:
+      required: true
+  - type: textarea
+    id: credential-sources
+    attributes:
+      label: Known credential sources
+      description: Where does the vendor's CLI store credentials? The app reads these — it never writes them.
+      placeholder: |
+        - $CURSOR_TOKEN env var
+        - macOS keychain entry "cursor:auth"
+        - ~/.config/cursor/auth.json
+    validations:
+      required: true
+  - type: textarea
+    id: plan-variants
+    attributes:
+      label: Known plan variants
+      description: List every subscription tier we know about. Tester gate must cover every "verified" variant; "assumed" ones go in the doc's Known unknowns section.
+      placeholder: |
+        - Hobby (free) — verified
+        - Pro — verified
+        - Business — assumed
+    validations:
+      required: true
+  - type: textarea
+    id: api-references
+    attributes:
+      label: API references (with retrieval dates)
+      description: Links to vendor docs, community gists, GitHub issues that document the API. Each line dated.
+      placeholder: |
+        - https://example.com/docs/api/usage (retrieved 2026-05-06)
+        - https://gist.github.com/... (retrieved 2026-05-06)
+    validations:
+      required: true
+  - type: input
+    id: branding-asset
+    attributes:
+      label: Branding asset source
+      description: SVG/PDF source for the vendor mark — Octicons / Simple-Icons / vendor-provided. Must be license-compatible.
+    validations:
+      required: true
+  - type: checkboxes
+    id: contract-acknowledgement
+    attributes:
+      label: Contract acknowledgement
+      options:
+        - label: I understand the app reads credentials but never writes, refreshes, or rotates them.
+          required: true
+        - label: I understand merge requires ≥ 2 distinct testers ✅ on the latest build SHA, with attached sanitized connector logs.
+          required: true

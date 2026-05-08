@@ -6,14 +6,12 @@ public actor ClaudeCodeConnector: UsageConnector {
     private let claudeConfigPath: String
     private let logger: FileLogger
     private let session: URLSession
-    private let keychainServiceName: String
+    private let credentialLocator: any CredentialLocator<ClaudeCredentials>
     private let tokenProvider: (@Sendable () async throws -> String)?
     private let accountProvider: (@Sendable () -> AccountEmail?)?
 
     private var lastKnownMetrics: [UsageMetric] = []
 
-    // Long enough for a cached keychain lookup; short enough to avoid stalling the poller
-    private static let keychainTimeoutSeconds: Int = 10
     // Claude Pro/Max rate-limit policy — durations are fixed by Anthropic and not returned by the API
     private static let sessionWindowMinutes = DurationMinutes(rawValue: 300)
     private static let weeklyWindowMinutes  = DurationMinutes(rawValue: 10080)
@@ -31,7 +29,7 @@ public actor ClaudeCodeConnector: UsageConnector {
         claudeConfigPath: String? = nil,
         logger: FileLogger = Loggers.claude,
         session: URLSession = .shared,
-        keychainServiceName: String = "Claude Code-credentials",
+        credentialLocator: any CredentialLocator<ClaudeCredentials> = ClaudeCredentialLocator(),
         tokenProvider: (@Sendable () async throws -> String)? = nil,
         accountProvider: (@Sendable () -> AccountEmail?)? = nil
     ) {
@@ -39,9 +37,33 @@ public actor ClaudeCodeConnector: UsageConnector {
         self.claudeConfigPath = claudeConfigPath ?? "\(home)/.claude.json"
         self.logger = logger
         self.session = session
-        self.keychainServiceName = keychainServiceName
+        self.credentialLocator = credentialLocator
         self.tokenProvider = tokenProvider
         self.accountProvider = accountProvider
+    }
+
+    /// Legacy initializer preserved for tests that pre-date the credential
+    /// locator extraction. Routes the `keychainServiceName` override into a
+    /// freshly-built locator so the rest of the connector stays uniform.
+    public init(
+        claudeConfigPath: String? = nil,
+        logger: FileLogger = Loggers.claude,
+        session: URLSession = .shared,
+        keychainServiceName: String,
+        tokenProvider: (@Sendable () async throws -> String)? = nil,
+        accountProvider: (@Sendable () -> AccountEmail?)? = nil
+    ) {
+        self.init(
+            claudeConfigPath: claudeConfigPath,
+            logger: logger,
+            session: session,
+            credentialLocator: ClaudeCredentialLocator(
+                keychainServiceName: keychainServiceName,
+                logger: logger
+            ),
+            tokenProvider: tokenProvider,
+            accountProvider: accountProvider
+        )
     }
 
     // MARK: - UsageConnector
@@ -76,7 +98,7 @@ public actor ClaudeCodeConnector: UsageConnector {
             if let provider = tokenProvider {
                 token = try await provider()
             } else {
-                token = try await fetchOAuthToken()
+                token = try await credentialLocator.locate().accessToken
             }
         } catch {
             logger.log(.error, "Token retrieval failed: \(error)")
@@ -172,76 +194,6 @@ public actor ClaudeCodeConnector: UsageConnector {
             logger.log(.error, "Response parse failed: \(error)")
             logger.log(.warning, "Failed payload dump: \(Self.maskedPayload(data))")
             return [errorEntry(account: account, type: "parse_error")]
-        }
-    }
-
-    // MARK: - Token
-
-    private func fetchOAuthToken() async throws -> String {
-        let serviceName = keychainServiceName
-        return try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global().async {
-                let process = Process()
-                let pipe = Pipe()
-                process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
-                process.arguments = ["find-generic-password", "-s", serviceName, "-w"]
-                process.standardOutput = pipe
-                process.standardError = FileHandle.nullDevice
-
-                do {
-                    try process.run()
-                } catch {
-                    continuation.resume(throwing: error)
-                    return
-                }
-
-                // Keychain may prompt the user or hang if the login keychain is locked
-                let timedOut = DispatchSemaphore(value: 0)
-                DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(Self.keychainTimeoutSeconds)) {
-                    guard process.isRunning else { return }
-                    process.terminate()
-                    timedOut.signal()
-                }
-
-                let raw = pipe.fileHandleForReading.readDataToEndOfFile()
-                process.waitUntilExit()
-
-                // Check the flag rather than terminationReason, which may not
-                // reflect SIGTERM reliably if the process handles the signal
-                if timedOut.wait(timeout: .now()) == .success {
-                    continuation.resume(throwing: ConnectorError.keychainTimeout(serviceName: serviceName, timeoutSeconds: Self.keychainTimeoutSeconds))
-                    return
-                }
-                guard process.terminationStatus == 0 else {
-                    continuation.resume(throwing: ConnectorError.keychainAccessDenied(serviceName: serviceName, exitCode: process.terminationStatus))
-                    return
-                }
-                guard let jsonString = String(data: raw, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-                      !jsonString.isEmpty else {
-                    continuation.resume(throwing: ConnectorError.keychainEmpty(serviceName: serviceName))
-                    return
-                }
-
-                guard let jsonData = jsonString.data(using: .utf8) else {
-                    continuation.resume(throwing: ConnectorError.tokenParseError(rawValue: jsonString))
-                    return
-                }
-                let parsedJSON: [String: Any]
-                do {
-                    parsedJSON = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] ?? [:]
-                } catch {
-                    continuation.resume(throwing: ConnectorError.tokenParseError(rawValue: jsonString))
-                    return
-                }
-                guard let oauthDict = parsedJSON["claudeAiOauth"] as? [String: Any],
-                      let token = oauthDict["accessToken"] as? String,
-                      !token.isEmpty else {
-                    continuation.resume(throwing: ConnectorError.tokenParseError(rawValue: jsonString))
-                    return
-                }
-
-                continuation.resume(returning: token)
-            }
         }
     }
 

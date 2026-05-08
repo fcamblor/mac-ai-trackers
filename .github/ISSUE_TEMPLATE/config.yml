@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or general discussion
+    url: https://github.com/fcamblor/ai-usages-tracker/discussions
+    about: For questions, ideas, and conversations that are not requesting a vendor change.

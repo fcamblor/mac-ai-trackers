@@ -2,6 +2,117 @@ import Foundation
 import Testing
 @testable import AIUsagesTrackersLib
 
+// MARK: - ISODate validating factories
+
+@Suite("ISODate format validation")
+struct ISODateValidationTests {
+    @Test("parsing(_:) accepts strict ISO 8601 datetime")
+    func parsingAcceptsStrictDatetime() {
+        let parsed = ISODate.parsing("2026-06-06T12:34:56Z")
+        #expect(parsed != nil)
+        #expect(parsed?.rawValue == "2026-06-06T12:34:56Z")
+        #expect(parsed?.isStrictlyValid == true)
+    }
+
+    @Test("parsing(_:) rejects calendar-only date")
+    func parsingRejectsDateOnly() {
+        #expect(ISODate.parsing("2026-06-06") == nil)
+    }
+
+    @Test("parsing(_:) rejects gibberish")
+    func parsingRejectsGibberish() {
+        #expect(ISODate.parsing("not a date") == nil)
+        #expect(ISODate.parsing("") == nil)
+    }
+
+    @Test("parsingFlexibleDate(_:) accepts strict datetime as-is")
+    func flexibleAcceptsDatetime() {
+        let parsed = ISODate.parsingFlexibleDate("2026-06-06T12:34:56Z")
+        #expect(parsed?.rawValue == "2026-06-06T12:34:56Z")
+    }
+
+    @Test("parsingFlexibleDate(_:) promotes calendar date to UTC midnight datetime")
+    func flexiblePromotesDateOnly() throws {
+        let parsed = ISODate.parsingFlexibleDate("2026-06-06")
+        let resolved = try #require(parsed)
+        // Promoted form must be strictly valid for downstream encoders.
+        #expect(resolved.isStrictlyValid)
+        #expect(resolved.rawValue.contains("T"))
+        // UTC midnight — verify by re-parsing the Date.
+        let date = try #require(resolved.date)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+        #expect(components.year == 2026)
+        #expect(components.month == 6)
+        #expect(components.day == 6)
+        #expect(components.hour == 0)
+        #expect(components.minute == 0)
+    }
+
+    @Test("parsingFlexibleDate(_:) rejects non-date strings")
+    func flexibleRejectsGibberish() {
+        #expect(ISODate.parsingFlexibleDate("nonsense") == nil)
+        #expect(ISODate.parsingFlexibleDate("2026/06/06") == nil)
+    }
+
+    @Test("isStrictlyValid distinguishes parseable from raw-only values")
+    func isStrictlyValidSurfacesContract() {
+        #expect(ISODate(rawValue: "2026-06-06T12:34:56Z").isStrictlyValid)
+        #expect(!ISODate(rawValue: "2026-06-06").isStrictlyValid)
+        #expect(!ISODate(rawValue: "garbage").isStrictlyValid)
+    }
+
+    // GitHub Copilot's `quota_reset_date` / `limited_user_reset_date` are
+    // calendar dates (e.g. "2026-06-06"). Per multiple community sources the
+    // quota reset is documented to fire at 00:00 UTC at the *start* of that
+    // day (not end-of-day, not local time). Promoting via parsingFlexibleDate
+    // must therefore land exactly on `T00:00:00Z`. This test pins that
+    // semantic so that any future "fix" toward end-of-day or local-tz
+    // promotion fails loudly.
+    //
+    // References:
+    //   - openusage providers/copilot.md — documents the two upstream shapes
+    //     (paid: ISO datetime "Z"; free: bare yyyy-MM-dd treated as 00:00 UTC)
+    //     https://github.com/robinebers/openusage/blob/main/docs/providers/copilot.md
+    //   - GitHub Community #178384 — "Copilot Pro refreshes everyone's
+    //     premium quota at 00:00 UTC"
+    //     https://github.com/orgs/community/discussions/178384
+    //   - GitHub Community #164642 — confirms reset fires at the *beginning*
+    //     of the indicated day, midnight UTC
+    //     https://github.com/orgs/community/discussions/164642
+    //   - GitHub Community #171831 — calendar-date display, UTC reset
+    //     https://github.com/orgs/community/discussions/171831
+    @Test("Copilot date-only reset promotes to start-of-day UTC, not end-of-day or local")
+    func copilotResetDateSemanticIsStartOfDayUTC() throws {
+        let promoted = try #require(ISODate.parsingFlexibleDate("2026-06-06"))
+
+        // Exact ISO 8601 form expected: T00:00:00Z (no offset, no fractional s,
+        // no end-of-day variant).
+        #expect(promoted.rawValue == "2026-06-06T00:00:00Z")
+
+        // Cross-check against the parsed Date in UTC components — guards
+        // against any accidental ±N-hour drift in the formatter pipeline.
+        let date = try #require(promoted.date)
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        let parts = utc.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+        #expect(parts.year == 2026)
+        #expect(parts.month == 6)
+        #expect(parts.day == 6)
+        #expect(parts.hour == 0)
+        #expect(parts.minute == 0)
+        #expect(parts.second == 0)
+
+        // Negative cases: must NOT promote to common alternative semantics
+        // that other clients sometimes pick.
+        #expect(promoted.rawValue != "2026-06-06T23:59:59Z") // end-of-day
+        #expect(promoted.rawValue != "2026-06-07T00:00:00Z") // next-day rollover
+        #expect(!promoted.rawValue.contains("+"))            // no local offset
+        #expect(!promoted.rawValue.contains("-06:00"))       // no local offset
+    }
+}
+
 // MARK: - UsageMetric Codable round-trip
 
 @Suite("UsageMetric encoding/decoding")

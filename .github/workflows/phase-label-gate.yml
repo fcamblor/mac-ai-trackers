@@ -1,0 +1,102 @@
+name: Phase label gate
+
+# Enforce the rule from docs/ASSISTANT-ONBOARDING.md §5.3: only repo
+# admins/maintainers can change `phase:*` labels on issues carrying
+# `type:new-assistant` or `type:vendor-evolution`. Unauthorized changes
+# are reverted and called out publicly. The mutex invariant (at most one
+# `phase:*` label at a time) is enforced on label *additions*.
+
+on:
+  issues:
+    types: [labeled, unlabeled]
+
+permissions:
+  issues: write
+  contents: read
+
+# Serialize label events per issue so two near-simultaneous transitions
+# don't race against each other's permission check + revert.
+# `cancel-in-progress: false` means events queue and each one is validated.
+concurrency:
+  group: phase-label-gate-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    # Skip events triggered by the gate's own revert action — otherwise the
+    # `gh issue edit` below re-fires `labeled`/`unlabeled` with the bot as
+    # actor, the bot has no admin/maintain permission, and the gate would
+    # revert its own revert in a loop, posting a comment each iteration.
+    if: >
+      startsWith(github.event.label.name, 'phase:')
+      && github.event.sender.type != 'Bot'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip if issue is not type:new-assistant / type:vendor-evolution
+        id: scope
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          labels=$(gh api "repos/${REPO}/issues/${ISSUE}" --jq '[.labels[].name]')
+          in_scope=$(printf '%s' "$labels" \
+            | grep -E '"type:new-assistant"|"type:vendor-evolution"' || true)
+          if [ -z "$in_scope" ]; then
+            echo "Issue #${ISSUE} not in scope of the assistant workflow — skipping"
+            echo "in_scope=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "in_scope=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check actor permission
+        if: steps.scope.outputs.in_scope == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          LABEL: ${{ github.event.label.name }}
+          ACTION: ${{ github.event.action }}
+        run: |
+          set -euo pipefail
+          permission=$(gh api "repos/${REPO}/collaborators/${ACTOR}/permission" \
+            --jq '.permission' 2>/dev/null || echo "none")
+          case "$permission" in
+            admin|maintain)
+              echo "Actor ${ACTOR} has ${permission} permission — allowed"
+              ;;
+            *)
+              echo "::error::Actor ${ACTOR} (permission=${permission}) cannot change phase:* labels — reverting"
+              if [ "${ACTION}" = "labeled" ]; then
+                gh issue edit "${ISSUE}" --remove-label "${LABEL}"
+              else
+                gh issue edit "${ISSUE}" --add-label "${LABEL}"
+              fi
+              gh issue comment "${ISSUE}" --body \
+                "@${ACTOR} only repo maintainers can change \`phase:*\` labels. The change has been reverted."
+              exit 1
+              ;;
+          esac
+
+      - name: Enforce single phase:* label (mutex)
+        if: >
+          steps.scope.outputs.in_scope == 'true'
+          && github.event.action == 'labeled'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          NEW_LABEL: ${{ github.event.label.name }}
+        run: |
+          set -euo pipefail
+          phase_labels=$(gh api "repos/${REPO}/issues/${ISSUE}" \
+            --jq '[.labels[].name | select(startswith("phase:"))] | .[]')
+          while IFS= read -r label; do
+            [ -z "$label" ] && continue
+            if [ "$label" != "$NEW_LABEL" ]; then
+              echo "Removing stale phase label: ${label}"
+              gh issue edit "${ISSUE}" --remove-label "${label}"
+            fi
+          done <<< "$phase_labels"

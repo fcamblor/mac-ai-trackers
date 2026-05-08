@@ -82,6 +82,34 @@ PLIST
 done
 shopt -u nullglob
 
+# Tester-debug mode (see docs/ASSISTANT-ONBOARDING.md §6.3): three env
+# vars, all-or-nothing. The CI workflow assistant-build.yml sets the
+# trio together; the release workflow MUST NOT pass any of them.
+TESTER_DEBUG_KEYS=""
+if [ -n "${VENDOR_DEBUG:-}" ] || [ -n "${BUILD_COMMIT:-}" ] || [ -n "${ONBOARDING_ISSUE_URL:-}" ]; then
+  if [ -z "${VENDOR_DEBUG:-}" ] || [ -z "${BUILD_COMMIT:-}" ] || [ -z "${ONBOARDING_ISSUE_URL:-}" ]; then
+    echo "✗ Tester-debug mode requires VENDOR_DEBUG, BUILD_COMMIT, and ONBOARDING_ISSUE_URL to be all set or all unset" >&2
+    exit 1
+  fi
+  case "$ONBOARDING_ISSUE_URL" in
+    https://github.com/*/issues/*) ;;
+    *)
+      echo "✗ ONBOARDING_ISSUE_URL must look like https://github.com/<owner>/<repo>/issues/<n>" >&2
+      exit 1
+      ;;
+  esac
+  TESTER_DEBUG_KEYS=$(cat <<KEYS
+  <key>AITrackerVendorDebug</key>
+  <string>$VENDOR_DEBUG</string>
+  <key>AITrackerBuildCommit</key>
+  <string>$BUILD_COMMIT</string>
+  <key>AITrackerOnboardingIssueURL</key>
+  <string>$ONBOARDING_ISSUE_URL</string>
+KEYS
+)
+  echo "→ Tester-debug mode active (vendor=$VENDOR_DEBUG, commit=${BUILD_COMMIT:0:8})"
+fi
+
 echo "→ Writing Info.plist"
 cat > "$CONTENTS/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -114,12 +142,28 @@ cat > "$CONTENTS/Info.plist" <<PLIST
   <string>© $(date +%Y) Frédéric Camblor</string>
   <key>NSAppleEventsUsageDescription</key>
   <string>AI Usages Tracker checks System Events for legacy login items so toggling "Launch at login" stays consistent and avoids registering duplicate entries.</string>
+$TESTER_DEBUG_KEYS
 </dict>
 </plist>
 PLIST
 
 echo "→ Ad-hoc code-signing (required for Gatekeeper on unsigned binaries)"
 codesign --force --deep --sign - "$APP_BUNDLE"
+
+# Optional DMG packaging — used by the assistant-build CI workflow to
+# produce a tester-friendly artefact named after the vendor + short SHA.
+# Set DMG_OUTPUT to the desired path to opt in.
+if [ -n "${DMG_OUTPUT:-}" ]; then
+  echo "→ Packaging DMG: $DMG_OUTPUT"
+  rm -f "$DMG_OUTPUT"
+  hdiutil create \
+    -volname "$APP_DISPLAY_NAME" \
+    -srcfolder "$APP_BUNDLE" \
+    -ov -format UDZO \
+    "$DMG_OUTPUT" >/dev/null
+  shasum -a 256 "$DMG_OUTPUT" > "$DMG_OUTPUT.sha256"
+  echo "  $(cat "$DMG_OUTPUT.sha256")"
+fi
 
 echo
 echo "✓ Bundle ready: $APP_BUNDLE"

@@ -10,7 +10,7 @@ public actor CodexConnector: UsageConnector {
         case cache = "cache"
     }
 
-    private let auth: CodexAuthProviding
+    private let auth: any CodexCredentialLocating
     private let logger: FileLogger
     private let session: URLSession
 
@@ -36,7 +36,7 @@ public actor CodexConnector: UsageConnector {
     }()
 
     public init(
-        auth: CodexAuthProviding = CodexAuth(),
+        auth: any CodexCredentialLocating = CodexCredentialLocator(),
         logger: FileLogger = Loggers.codex,
         session: URLSession = .shared
     ) {
@@ -61,7 +61,7 @@ public actor CodexConnector: UsageConnector {
     public func fetchUsages() async throws -> [VendorUsageEntry] {
         let credentials: CodexCredentials
         do {
-            credentials = try await auth.load()
+            credentials = try await auth.locate()
         } catch {
             logger.log(.error, "Codex credentials load failed: \(error)")
             return errorEntries(type: "token_error")
@@ -81,8 +81,16 @@ public actor CodexConnector: UsageConnector {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
+            // Network/timeout errors are transient — the auth.json told us which
+            // account is logged in, so the active flag still holds. Wiping it would
+            // make the "active" badge flicker on every flaky tick.
             logger.log(.error, "Codex API request failed: \(error)")
-            return errorEntries(type: "api_error", credentials: credentials)
+            return errorEntries(
+                type: "api_error",
+                credentials: credentials,
+                isActive: true,
+                preservedMetrics: lastKnownMetrics
+            )
         }
 
         let httpResponse = response as? HTTPURLResponse
@@ -107,7 +115,15 @@ public actor CodexConnector: UsageConnector {
 
         guard let http = httpResponse, http.statusCode == 200 else {
             logger.log(.error, "Codex API returned HTTP \(httpCode)")
-            return errorEntries(type: "http_\(httpCode)", credentials: credentials)
+            // 5xx is transient (server-side); 4xx other than 401/429 is rarer but the
+            // account identity itself doesn't change — preserve the active flag so the
+            // UI doesn't blink between server hiccups.
+            return errorEntries(
+                type: "http_\(httpCode)",
+                credentials: credentials,
+                isActive: true,
+                preservedMetrics: lastKnownMetrics
+            )
         }
 
         logger.log(.debug, "Codex API payload: \(Self.maskedPayload(data))")
@@ -138,9 +154,16 @@ public actor CodexConnector: UsageConnector {
                 metrics: metrics
             )]
         } catch {
+            // Parse failures are transient (the API responded HTTP 200, just with an
+            // unrecognized shape) — the account is still the logged-in one.
             logger.log(.error, "Codex response parse failed: \(error)")
             logger.log(.warning, "Codex failed payload dump: \(Self.maskedPayload(data))")
-            return errorEntries(type: "parse_error", credentials: credentials)
+            return errorEntries(
+                type: "parse_error",
+                credentials: credentials,
+                isActive: true,
+                preservedMetrics: lastKnownMetrics
+            )
         }
     }
 

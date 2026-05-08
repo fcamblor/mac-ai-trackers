@@ -6,7 +6,7 @@ import AIUsagesTrackersLib
 struct VendorBrandingTests {
     @Test("maps Claude to its branded asset and label")
     func mapsClaude() {
-        let brand = VendorBranding.brand(for: .claude)
+        let brand = VendorBrandingResolver.brand(for: .claude)
 
         #expect(brand?.assetName == "claude-mark")
         #expect(brand?.displayName == "Claude Code")
@@ -15,7 +15,7 @@ struct VendorBrandingTests {
 
     @Test("maps Codex to its branded asset and label")
     func mapsCodex() {
-        let brand = VendorBranding.brand(for: .codex)
+        let brand = VendorBrandingResolver.brand(for: .codex)
 
         #expect(brand?.assetName == "codex-mark")
         #expect(brand?.displayName == "Codex")
@@ -26,8 +26,8 @@ struct VendorBrandingTests {
     func fallsBackForUnknownVendor() {
         let vendor = Vendor(rawValue: "unknown")
 
-        #expect(VendorBranding.brand(for: vendor) == nil)
-        #expect(VendorBranding.displayName(for: vendor) == "unknown")
+        #expect(VendorBrandingResolver.brand(for: vendor) == nil)
+        #expect(VendorBrandingResolver.displayName(for: vendor) == "unknown")
     }
 
     @Test("icon lookup returns nil instead of trapping for unknown vendors")
@@ -36,6 +36,6 @@ struct VendorBrandingTests {
         // before reaching loadTemplateImage. This covers the short-circuit path;
         // the bundle resolver itself is not exercised here.
         let vendor = Vendor(rawValue: "unknown")
-        #expect(VendorBranding.icon(for: vendor) == nil)
+        #expect(VendorBrandingResolver.icon(for: vendor) == nil)
     }
 }

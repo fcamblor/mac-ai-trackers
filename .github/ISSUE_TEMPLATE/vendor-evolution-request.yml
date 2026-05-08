@@ -1,0 +1,83 @@
+name: Vendor evolution — API drift, enrichment, or urgent fix
+description: Report or propose a change to an already-supported AI assistant when its API evolves.
+title: "[evolution] <vendor display name>: <one-line drift summary>"
+labels: ["type:vendor-evolution", "phase:proposed"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for flagging an evolution. The lifecycle is documented in
+        [`docs/ASSISTANT-ONBOARDING.md`](../blob/main/docs/ASSISTANT-ONBOARDING.md).
+        The maintainer will apply the matching `kind:*` label during triage
+        based on your dropdown choice below.
+  - type: dropdown
+    id: vendor-slug
+    attributes:
+      label: Vendor
+      description: Which already-supported assistant is this about?
+      options:
+        - claude
+        - codex
+        - copilot
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of change
+      description: Drives the merge threshold and release-notes treatment.
+      options:
+        - "kind:enrichment — backward-compatible additions (new metrics, new fields, new plan variant)"
+        - "kind:breaking — backward-incompatible API change requiring an app version bump"
+        - "kind:urgent-fix — the vendor unilaterally broke compat; the connector is currently broken in the field"
+    validations:
+      required: true
+  - type: textarea
+    id: drift-summary
+    attributes:
+      label: What changed (or appears to have changed) on the vendor's side
+      description: Be specific. Field renamed? New field appeared? Endpoint moved? Plan-variant payload restructured? Reset semantics flipped?
+      placeholder: |
+        - The `quota_remaining` field disappeared.
+        - A new `quota_window` object replaces it with `start`, `end`, `used`.
+        - First observed: 2026-04-30 by @somebody on Pro plan.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Sanitized payload samples, links to vendor changelog, community issues, your own log lines (with secrets stripped). Each item dated.
+      placeholder: |
+        - Captured payload (Pro, 2026-05-01): https://gist.github.com/... (retrieved 2026-05-06)
+        - Vendor changelog post: https://... (retrieved 2026-05-06)
+        - Open question: behavior on Free plan unverified
+    validations:
+      required: true
+  - type: dropdown
+    id: app-version-impact
+    attributes:
+      label: App version impact
+      description: For kind:breaking only — what happens to users running an older app version when this lands?
+      options:
+        - "Users on older versions will keep seeing live metrics (no impact)."
+        - "Users on older versions will see a `lastError` until they update; no crash."
+        - "Users on older versions will crash or hang (must be avoided — the implement skill enforces graceful degradation)."
+        - "Not applicable (kind:enrichment / kind:urgent-fix)."
+    validations:
+      required: true
+  - type: input
+    id: affected-since
+    attributes:
+      label: Affected since (kind:urgent-fix only)
+      description: When did the field start being affected by the broken vendor API?
+      placeholder: "2026-05-04 ~14:00 UTC"
+  - type: checkboxes
+    id: contract-acknowledgement
+    attributes:
+      label: Contract acknowledgement
+      options:
+        - label: I understand the existing `docs/vendors/<vendor>.md` will be re-dated and superseded samples kept (not deleted), with a Change log entry summarizing the drift.
+          required: true
+        - label: I understand merge requires ≥ 2 distinct testers ✅ for kind:enrichment / kind:breaking, and ≥ 1 for kind:urgent-fix (with follow-up confirmations expected post-release).
+          required: true

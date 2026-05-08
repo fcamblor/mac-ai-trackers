@@ -34,7 +34,7 @@ Before writing or modifying any Swift code, load and follow these docs:
 
 ## Automated check via SwiftLint
 
-`AIUsagesTrackers/.swiftlint.yml` declares six custom rules enforced by
+`AIUsagesTrackers/.swiftlint.yml` declares custom rules enforced by
 SwiftLint, wired as a SwiftPM build tool plugin on every target. The rules
 run on every `swift build` (and inside Xcode). Findings surface with these
 codes — resolve errors before committing and avoid reintroducing warnings.
@@ -43,10 +43,12 @@ codes — resolve errors before committing and avoid reintroducing warnings.
 |------|----------|---------|-------------|
 | E1   | error    | `try?` on `createDirectory` / `moveItem` / `copyItem` / `setAttributes` | SWIFT-ERROR-HANDLING §1 |
 | E2   | error    | `flock(..., LOCK_EX)` in production code without `LOCK_NB` | SWIFT-CONCURRENCY + SWIFT-IO-ROBUSTNESS |
+| E3   | error    | `SecItem*` / `SecKeychainItem*` write APIs in `*CredentialLocator.swift` | VENDOR-PLUGIN-CONTRACT §5 |
 | W1   | warning  | `nonisolated(unsafe)` in production sources | SWIFT-CONCURRENCY |
 | W3   | warning  | `Task.sleep(literal)` in tests — prefer an `eventually()` poll-helper | SWIFT-TESTABILITY |
 | W4   | warning  | `@unchecked Sendable` without an adjacent justification comment | SWIFT-CONCURRENCY |
 | W5   | warning  | Comment embeds a bare `N unit` duration — drift risk after constant extraction | SWIFT-TESTABILITY §Comment WHY |
+| W6   | warning  | Payload-bearing `logger.log(...)` call in a connector — must go through `LoggingProxy` | VENDOR-PLUGIN-CONTRACT §6 |
 
 All rules are now fully enforced with no baseline exceptions; every new
 violation fails the build.
