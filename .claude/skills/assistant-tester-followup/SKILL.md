@@ -1,6 +1,6 @@
 ---
 name: assistant-tester-followup
-description: Tally tester sign-off comments on a phase:testing issue, validate them against the latest build SHA, audit any attached connector logs for sanitization gaps, and draft follow-ups for incomplete confirmations. Use whenever a tester comments.
+description: Tally tester sign-off comments on a phase:testing issue, audit any attached connector logs for sanitization gaps, and draft follow-ups for incomplete confirmations. Use whenever a tester comments.
 model: sonnet
 ---
 
@@ -26,16 +26,17 @@ and (when present) `kind:*` labels — they drive the threshold.
 ### Phase B — Locate the latest build
 
 Find the most recent `<!-- assistant-build:sticky -->` comment on the
-issue. Extract the short SHA and the full SHA. This is the SHA every
-counted confirmation must match — older builds are invalidated.
+issue. Extract the short SHA and the full SHA. This is the build the
+tally references for newcomers; existing confirmations on prior builds
+remain valid (cf. `docs/ASSISTANT-ONBOARDING.md` Counting rules).
 
 ### Phase C — Scan for sign-offs
 
 Iterate through the issue's comments and pick the ones starting with the
 `✅ tester-confirm` sentinel. For each, validate:
 
-- the build SHA in the body matches the latest sticky's SHA (both
-  forms),
+- the build SHA is present in the body (both forms — recorded for
+  traceability, no longer required to match the latest sticky),
 - required Verified boxes are ticked,
 - a connector log file is attached (or the comment explicitly states
   verbose mode produced no output — that itself is a bug).
@@ -76,8 +77,10 @@ Update or create the sticky tally comment on the issue (sentinel
 <!-- assistant-tester-tally:sticky -->
 Tester confirmations: N/<threshold> ✅
 
-Valid confirmations on the latest build SHA `<short>`:
-- @<tester> — Plan: <plan>, macOS: <version>
+Latest build SHA: `<short>`
+
+Valid confirmations:
+- @<tester> — Plan: <plan>, macOS: <version>, build: `<short>`
 - ...
 
 Incomplete (please respond):

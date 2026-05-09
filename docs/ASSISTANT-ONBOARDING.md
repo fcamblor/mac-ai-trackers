@@ -232,8 +232,12 @@ copy them from the sticky build comment.
   comments by the same account collapse to the most recent valid one.
   The PR author is allowed to sign off as a tester (they exercise the
   same DMG against their own vendor account like any other tester).
-- The build SHA must match the latest sticky build comment (a rebase
-  invalidates older confirmations; testers re-confirm on the new build).
+- Confirmations remain valid across rebuilds. A confirmation posted on
+  an earlier build SHA still counts as long as the attached log audits
+  clean against the vendor doc's `Sanitized fields`. The build SHA is
+  still required in every sign-off for traceability — the follow-up
+  skill records which SHA each tester exercised so the maintainer can
+  reproduce the audit at any point.
 - A sign-off without an attached connector log is **incomplete** —
   follow-up is requested before counting. Exception: a tester explicitly
   states the verbose mode is producing no output (itself a bug to
