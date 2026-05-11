@@ -9,7 +9,9 @@ model: sonnet
 ## Prerequisite
 
 Read `docs/ASSISTANT-ONBOARDING.md` first; it owns the lifecycle and the
-phase ↔ skill map. If this skill and the spec disagree, the spec wins.
+phase ↔ skill map. Read `.claude/rules/skill-handoff.md` for the shared
+HITL execution pattern (mutex auto-correction, single Y/n
+confirmation). If this skill and the spec disagree, the spec wins.
 
 ## Argument
 
@@ -26,15 +28,25 @@ Read the issue. Refuse unless:
 
 If either condition fails, tell the user which skill should run instead.
 
-### Phase B — Cross-check
+### Phase B — Cross-check (same existence rule as `assistant-implement`)
+
+The doc-existence rule MUST match the one enforced by
+`assistant-implement` Phase C; otherwise the next skill stalls on a
+discrepancy the triage already saw.
 
 - Read `docs/vendors/` to detect duplicates of the requested vendor.
-- For `type:new-assistant`: confirm `docs/vendors/<slug>.md` does **not**
-  already exist; if it does, suggest the vendor-evolution form instead.
-- For `type:vendor-evolution`: confirm `docs/vendors/<slug>.md` exists
-  and that the vendor is registered in `VendorRegistry`; if not, suggest
-  the new-assistant form instead.
+- For `type:new-assistant`: `docs/vendors/<slug>.md` MUST NOT exist.
+  If it does, refuse and tell the maintainer to either (a) re-file as
+  `type:vendor-evolution`, or (b) explicitly close-and-reopen with a
+  decision recorded in the triage comment justifying why the existing
+  doc is being reused. Do not invent a third path silently.
+- For `type:vendor-evolution`: `docs/vendors/<slug>.md` MUST exist and
+  the vendor MUST be registered in `VendorRegistry`. If not, refuse and
+  point at the `type:new-assistant` form.
 - Read `roadmap/index.md` for any conflicting open epic.
+
+Record the existence-check outcome in the decision draft (Phase D) so
+`assistant-implement` does not re-litigate it.
 
 ### Phase C — Apply `kind:*` label (vendor-evolution only)
 
@@ -70,8 +82,25 @@ Draft (do not post) a comment summarizing:
   deprecation).
 - For `kind:breaking`, the expected min app version bump.
 
-Show the draft to the user. The **maintainer** posts the comment and
-applies `phase:approved` (or closes the issue).
+Show the draft to the user. The decision (approve vs close) belongs to
+the maintainer — do not pre-empt it. Once the maintainer confirms the
+verdict, propose to execute the resulting GitHub action yourself rather
+than asking them to copy-paste:
+
+- Approve → propose to post the comment and flip the phase in one go:
+  ```sh
+  gh issue comment <n> --body "<approved decision>"
+  gh issue edit <n> --remove-label "phase:proposed" --add-label "phase:approved"
+  ```
+- Close → propose to post the rejection comment and close:
+  ```sh
+  gh issue comment <n> --body "<rejection rationale>"
+  gh issue close <n>
+  ```
+
+Ask for a single Y/n confirmation before running. Do not execute these
+without explicit confirmation — the verdict itself remains a HITL
+decision.
 
 ### Phase E — Hand off
 

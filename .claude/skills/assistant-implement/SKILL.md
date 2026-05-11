@@ -8,12 +8,14 @@ model: opus
 
 ## Prerequisite
 
-Read `docs/ASSISTANT-ONBOARDING.md` (lifecycle) and
-`docs/VENDOR-PLUGIN-CONTRACT.md` (technical contract). The Swift quality
-docs listed in `CLAUDE.md` (`SWIFT-CONCURRENCY.md`,
-`SWIFT-ERROR-HANDLING.md`, `SWIFT-IO-ROBUSTNESS.md`,
-`SWIFT-TESTABILITY.md`, `SWIFT-VALUE-OBJECTS.md`,
-`SWIFT-MENUBAR.md`) are mandatory before writing any Swift.
+Read `docs/ASSISTANT-ONBOARDING.md` (lifecycle),
+`docs/VENDOR-PLUGIN-CONTRACT.md` (technical contract), and
+`.claude/rules/skill-handoff.md` (shared phase-A self-check pattern).
+The Swift quality docs listed in `CLAUDE.md`
+(`SWIFT-CONCURRENCY.md`, `SWIFT-ERROR-HANDLING.md`,
+`SWIFT-IO-ROBUSTNESS.md`, `SWIFT-TESTABILITY.md`,
+`SWIFT-VALUE-OBJECTS.md`, `SWIFT-MENUBAR.md`) are mandatory before
+writing any Swift.
 
 If this skill and the spec or the contract disagree, the spec/contract
 win; flag it to the user.
@@ -26,7 +28,12 @@ A GitHub issue number.
 
 ### Phase A — Verify scope and phase
 
-Read the issue. Refuse unless:
+Read the issue. Apply the Phase-A self-check from
+`.claude/rules/skill-handoff.md`: if more than one `phase:*` label is
+attached, propose to remove the stale one(s) and continue only after
+confirmation.
+
+Refuse unless:
 
 - `type:new-assistant` **or** `type:vendor-evolution` is set.
 - Current phase is `phase:approved` **or** `phase:implementing`.
@@ -45,13 +52,21 @@ Pull every fact from the issue body the contract needs. Ask the user
   evidence, app-version-impact (for `kind:breaking`), affected-since
   (for `kind:urgent-fix`).
 
-### Phase C — Existence check
+### Phase C — Existence check (mirror `assistant-triage` Phase B)
+
+The triage skill already enforced this rule and recorded the outcome
+in its decision comment. Re-verify (defensive check, do not trust the
+comment blindly):
 
 - `type:new-assistant` → `docs/vendors/<slug>.md` MUST NOT exist; refuse
   otherwise (point at the vendor-evolution form).
 - `type:vendor-evolution` → `docs/vendors/<slug>.md` MUST exist and the
   vendor MUST be registered in `VendorRegistry`; refuse otherwise (point
   at the new-assistant form).
+
+If a discrepancy slipped through (triage said "doc exists, reuse" but
+the type is `new-assistant`), flag it explicitly to the maintainer
+rather than improvising. The fix is at the triage level, not here.
 
 ### Phase D — Vendor doc (research / re-research)
 
