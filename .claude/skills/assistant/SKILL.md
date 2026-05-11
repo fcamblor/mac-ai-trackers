@@ -14,7 +14,9 @@ spec disagree, the spec wins; flag it to the user.
 
 ## Argument
 
-A GitHub issue number.
+A GitHub issue number, **or** no argument when the user has not yet
+opened an issue (intent phase). When invoked with no issue number, route
+to `assistant-propose` and stop.
 
 ## What this skill does
 
@@ -22,6 +24,20 @@ Identify which sub-skill to invoke. Do **not** perform any of the
 sub-skill's work yourself — just route.
 
 ## Phases
+
+### Phase 0 — Bootstrap check (first-time use)
+
+Verify the required GitHub labels exist on the repo:
+
+```sh
+gh label list --json name --jq '.[].name' \
+  | grep -E '^(type:new-assistant|type:vendor-evolution|phase:proposed)$' \
+  | wc -l
+```
+
+If the count is < 3, the labels were never bootstrapped. Propose to run
+`scripts/bootstrap-onboarding-labels.sh` with a single Y/n
+confirmation, then continue.
 
 ### Phase A — Read the issue
 
@@ -56,6 +72,7 @@ automatically; a missing phase label means manual editing happened).
 | `phase:merge-ready` | `assistant-merge` |
 | `phase:merged` | `assistant-release` (only after a tagged release ships the merge commit) |
 | `phase:released` | (terminal — no skill operates) |
+| _no issue yet_ | `assistant-propose` (open the issue from the user's intent) |
 
 For doc re-verification on a vendor whose onboarding issue is closed,
 the right skill is `assistant-reverify` and it takes a vendor slug, not
