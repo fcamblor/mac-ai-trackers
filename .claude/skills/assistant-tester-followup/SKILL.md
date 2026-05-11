@@ -9,8 +9,21 @@ model: sonnet
 ## Prerequisite
 
 Read `docs/ASSISTANT-ONBOARDING.md`; it owns the sign-off template, the
-counting rules, the threshold table, and the sanitization-audit
-discipline. If this skill and the spec disagree, the spec wins.
+counting rules (including cross-build validity — a sign-off on an
+earlier SHA still counts as long as the attached log audits clean),
+the threshold table, and the sanitization-audit discipline. Read
+`.claude/rules/skill-handoff.md` for the shared Phase-A self-check and
+the HITL execution pattern. If this skill and the spec disagree, the
+spec wins.
+
+## Re-run cadence
+
+This skill is meant to run every time a tester comments on the issue.
+To avoid manually re-invoking it after each comment, wrap it with
+`/loop /assistant-tester-followup <n>` — the loop helper re-runs the
+skill on its own cadence until the threshold is met. A pure CI-side
+auto-tally is not viable because the sanitization audit of attached
+logs requires Claude reading the file content.
 
 ## Argument
 
@@ -20,8 +33,10 @@ A GitHub issue number.
 
 ### Phase A — Verify scope and phase
 
-Refuse unless the issue is at `phase:testing`. Read the issue's `type:*`
-and (when present) `kind:*` labels — they drive the threshold.
+Apply the Phase-A self-check from `.claude/rules/skill-handoff.md`.
+Refuse unless the issue is at `phase:testing`. Read the issue's
+`type:*` and (when present) `kind:*` labels — they drive the
+threshold.
 
 ### Phase B — Locate the latest build
 
@@ -95,8 +110,11 @@ Sanitization gaps (block merge):
 
 ### Phase G — Verdict
 
-- If `N >= threshold` and **no** sanitization gap is open → recommend
-  the maintainer apply `phase:merge-ready` and name `assistant-merge`
-  as the next skill.
+- If `N >= threshold` and **no** sanitization gap is open → propose to
+  flip the phase label yourself, asking for a single Y/n confirmation:
+  ```sh
+  gh issue edit <n> --remove-label "phase:testing" --add-label "phase:merge-ready"
+  ```
+  Then name `assistant-merge` as the next skill.
 - Otherwise → list what is missing and ask the maintainer to wait /
   unblock. Do **not** apply any phase label yourself.
