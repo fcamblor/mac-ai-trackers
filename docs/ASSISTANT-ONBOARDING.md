@@ -86,10 +86,17 @@ read (always from durable state), outputs, exit condition.
 
 #### 3.1.1 Proposed
 
-- **Trigger**: anyone opens an issue using one of the two issue forms.
+- **Trigger**: anyone opens an issue using one of the two issue forms,
+  **or** invokes `assistant-propose` with a free-form intent (Claude
+  pre-fills the form, the maintainer confirms, the issue is filed via
+  `gh issue create` with the same labels).
 - **Transition**: none → `phase:proposed`.
-- **Skill**: none. The issue form sets the labels (`type:*` +
-  `phase:proposed`).
+- **Skill**: `assistant-propose` (optional). When the user describes
+  what they want in plain text rather than opening the issue manually,
+  this skill classifies the intent (new-assistant vs vendor-evolution),
+  pre-fills every field it can extract from existing context
+  (`docs/vendors/<slug>.md`, the user's message), and creates the issue.
+  Same outcome as the form, but without copy-paste.
 - **Outputs**: structured issue body — vendor identity, proposer, links,
   evidence (vendor-evolution: kind dropdown, drift summary).
 - **Exit**: maintainer triages.
@@ -259,8 +266,28 @@ copy them from the sticky build comment.
 - **Trigger**: tester threshold reached + reviewer checklist green.
 - **Transition**: `phase:testing` → `phase:merge-ready`.
 - **Skill**: `assistant-merge` — re-verifies gates before acting.
-- **Outputs**: PR squash-merged with the standard commit convention; for
-  `kind:breaking`, the title carries the `!` Conventional Commits marker.
+- **Outputs**:
+  - User-facing artefacts updated **on the PR before squash-merging**, so
+    they ship in the same commit as the code:
+    - **`type:new-assistant`** — append the new vendor to README's
+      "Supported assistants" section; add a row to
+      `docs/vendors/index.md` if it exists.
+    - **`type:vendor-evolution`** — no README change. For
+      `kind:breaking`, ensure the README's compatibility note (or the
+      `Min app version` annotation in the vendor doc) is reflected.
+  - Release-notes text drafted and embedded in the squash-merge commit
+    **body** (not the title). This text is the single source of truth
+    that `assistant-release` will copy into the GitHub release once a
+    tag ships. Required content:
+    - All types — credit testers by handle.
+    - `kind:breaking` — prefix with
+      `BREAKING: <vendor> connector requires <next-version>+` and
+      explain what users on older versions will see.
+    - `kind:urgent-fix` — affected subset, since when, what the fix
+      does.
+  - PR squash-merged with the standard commit convention; for
+    `kind:breaking`, the title carries the `!` Conventional Commits
+    marker.
 - **Exit**: PR merged.
 
 #### 3.1.7 Merged
@@ -276,24 +303,19 @@ copy them from the sticky build comment.
 
 - **Trigger**: a tagged release ships including the merge commit.
 - **Transition**: `phase:merged` → `phase:released`.
-- **Skill**: `assistant-release`. Branches on `type:*` and `kind:*`.
+- **Skill**: `assistant-release`. Officializes the merged work against
+  a tagged release.
 - **Outputs**:
-  - **`type:new-assistant`** — append the new vendor to README's
-    "Supported assistants" section; add a row to `docs/vendors/index.md`
-    if it exists.
-  - **`type:vendor-evolution`** — no README change. For `kind:breaking`,
-    ensure the README's compatibility note (or the `Min app version`
-    annotation in the vendor doc) is reflected wherever users decide
-    which version to install.
-  - All types — credit testers in the GitHub release notes by handle.
-  - `kind:breaking` — prefix release notes with
-    `BREAKING: <vendor> connector requires <next-version>+` and explain
-    what users on older versions will see.
-  - `kind:urgent-fix` — call out the urgent context: which subset of users
-    was affected, since when, what the fix does. The issue may stay open
-    a few days at `phase:released` for follow-up confirmations before the
-    maintainer closes it manually.
+  - The release-notes text was already drafted in the squash-merge
+    commit body during `phase:merge-ready`. `assistant-release` copies
+    it into the GitHub release via `gh release edit <tag> --notes`.
+  - For `kind:urgent-fix`, the issue may stay open a few days at
+    `phase:released` for follow-up confirmations before the maintainer
+    closes it manually.
 - **Exit**: issue closed; serves as the historical record.
+
+User-facing README and `docs/vendors/index.md` updates are NOT part of
+this phase — they ship in the merge commit (see 3.1.6).
 
 #### 3.1.9 Re-verify (long after, on demand)
 
@@ -323,31 +345,38 @@ reference specs rather than duplicating them. Every skill below points at
 this spec and at `docs/VENDOR-PLUGIN-CONTRACT.md`, and includes the
 conflict-resolution clause.
 
-Common shape every skill follows:
+Common shape every skill follows (also see
+`.claude/rules/skill-handoff.md` for the shared execution pattern):
 
-1. Argument: an issue number (or `--vendor <slug>` for `reverify`).
-2. Read durable state: `gh issue view`, `gh pr view` (when a PR is linked),
-   the contract spec, the vendor doc.
-3. Verify the current `phase:*` label matches what the skill expects. If
-   it doesn't, refuse and tell the user which skill should run instead.
+1. Argument: an issue number (or `--vendor <slug>` for `reverify`, or
+   a free-form intent for `propose`).
+2. Read durable state: `gh issue view`, `gh pr view` (when a PR is
+   linked), the contract spec, the vendor doc. Apply the Phase-A
+   self-check (mutex auto-correction).
+3. Verify the current `phase:*` label matches what the skill expects.
+   If it doesn't, refuse and tell the user which skill should run
+   instead.
 4. Perform the work.
-5. Apply the next `phase:*` label (or, for skills that don't transition,
-   post a tally / report comment).
-6. Hand off explicitly: name the next skill the user should invoke when
-   the next event happens.
+5. Propose the next `phase:*` transition (or the relevant `gh`
+   command) and execute it after a single Y/n confirmation. The
+   maintainer owns the decision; the skill owns the mechanical
+   execution.
+6. Hand off explicitly: name the next skill the user should invoke
+   when the next event happens.
 
 Skills never poll, never run in the background. They run when the
 maintainer invokes them in response to an event.
 
 | Skill | Phases owned | Notes |
 |---|---|---|
-| `assistant` | (router) | Reads `type:*` + `phase:*`; routes to the matching sub-skill. Stops; does not perform work itself. |
-| `assistant-triage` | 3.1.2 | Optional helper. Applies `kind:*` for vendor-evolution. Drafts decision comment. |
+| `assistant` | (router) | Reads `type:*` + `phase:*`; routes to the matching sub-skill. Phase 0 bootstrap-labels check. Stops; does not perform work itself. |
+| `assistant-propose` | 3.1.1 (intent → issue) | Optional. Classifies a free-form intent, pre-fills the issue body, files via `gh issue create`. |
+| `assistant-triage` | 3.1.2 | Optional helper. Applies `kind:*` for vendor-evolution. Enforces the same existence check as `assistant-implement`. Drafts decision comment. |
 | `assistant-implement` | 3.1.3 → 3.1.4 readiness | Branches on `type:*`. Scaffolds (new-assistant) or refactors (vendor-evolution). |
-| `assistant-review` | 3.1.4 | Documentation-first review. Refuses to apply `phase:testing` itself. |
-| `assistant-tester-followup` | 3.1.5 | Tally + log audit. Knows the `kind:urgent-fix` threshold escape. Does not transition. |
-| `assistant-merge` | 3.1.6 → 3.1.7 | Re-verifies gates. Squash-merges. Applies `phase:merged`. |
-| `assistant-release` | 3.1.8 | Branches on `type:*` and `kind:*` for README / release-notes treatment. |
+| `assistant-review` | 3.1.4 | Documentation-first review. PR pre-flight (draft, mergeable, author-vs-reviewer). Proposes the `phase:testing` transition for a single Y/n confirmation. |
+| `assistant-tester-followup` | 3.1.5 | Tally + log audit. Knows the `kind:urgent-fix` threshold escape. Proposes `phase:merge-ready` for a single Y/n confirmation once the gate is green. |
+| `assistant-merge` | 3.1.6 → 3.1.7 | Re-verifies gates. Commits README / index updates to the PR branch and embeds the release-notes draft in the squash-merge commit body. Applies `phase:merged`. |
+| `assistant-release` | 3.1.8 | Copies the squash-merge commit body into the GitHub release notes once a tag ships. |
 | `assistant-reverify` | (decoupled) | Doc-only refresh PR or files a `type:vendor-evolution` issue. |
 
 ## 5. Issue forms, PR template, gating action
