@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "305526e66985",
+  "session_id": "e197ca3a-91fa-43c5-9c82-8f0b47cb91f8",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-11T11:46:50.882029Z",
+  "branch": "new-vendor-assistant-improvements",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".claude/skills/assistant-implement/SKILL.md",
+    ".claude/skills/assistant-triage/SKILL.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-4-6",
+  "turn_id": "243854dd2cab",
+  "token_usage": {
+    "input_tokens": 79,
+    "cache_creation_tokens": 319736,
+    "cache_read_tokens": 3990825,
+    "output_tokens": 35844,
+    "api_call_count": 55
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-11T11:46:50.457596Z",
+    "agent_lines": 61,
+    "agent_removed": 17,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 61,
+    "total_lines_changed": 78,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}

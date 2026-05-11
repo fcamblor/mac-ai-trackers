@@ -1,0 +1,16 @@
+Je viens de derouler le workflow complet se reposant sur les skills /assistant-*
+
+J'ai un certain nombre d'ameliorations que j'aimerais d'ores et deja te faire faire:
+- il y a beaucoup d'etapes ou tu me demandes de rajouter un label github moi-meme ... meme si c'est pas tres complique à faire, ce serait bien que tu me proposes de le faire via la cli gh une fois que l'etape HITL est realisee
+- suite au merge, tu me dis qu'il faudra invoquer /assistant-release pour mettre a jour le readme et la release note. Je suis pas d'accord: il faudrait faire ca en amont du merge (pendant le /assistant-merge, injecter ces infos dans un commit sur la PR juste avant de la merger)
+
+En complement, est-ce que tu pourrais analyser les historiques de conversations claude du ~/.claude/projects/-Users-fcamblor-conductor-workspaces-mac-ai-trackers-boston/ qui representent le worktree conductor dans lequel j'ai deroule l'entierete du workflow (sous differentes sessions)
+Dans ces historiques, il faudrait identifier des axes d'amelioration pour fluidifier le process
+
+---
+
+traite tout
+
+---
+
+/commit avec des commits les plus atomiques possible
