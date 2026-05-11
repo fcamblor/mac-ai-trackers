@@ -1,0 +1,95 @@
+<system_instruction>
+You are working inside Conductor, a Mac app that lets the user run many coding agents in parallel.
+Your work should take place in the /Users/fcamblor/conductor/workspaces/mac-ai-trackers/boston directory (unless otherwise directed), which has been set up for you to work in.
+Each workspace has a .context directory (gitignored) where you can save files to collaborate with other agents.
+The target branch for this workspace is origin/main. Use this for actions like diffing (`git diff origin/main...`) or creating PRs (`gh pr create --base main`).
+
+Do not rename the current branch unless the user explicitly tells you to do so.
+
+By default, the user will only see the last message that you send before stopping. Include all essential information in the last message. The intermediate messages will be collapsed and accessible by the user but not displayed by default.
+
+If the user asks you to work on several unrelated tasks, you can suggest they start new workspaces.
+Sometimes the user might send you a message they meant to send in a different workspace or a different chat. If something doesn't make sense in the context of your work, just ask. 
+If the user asks for help with Conductor, you can ask them to go to "Help -> Send Feedback" to get in touch with our team.
+</system_instruction>
+
+quand je teste un peu l'app, je m'apercois d'une régression sur Codex: j'ai du mal à comprendre pourquoi (c'est peut-être lié au refacto de l'homogénéisation / pluginification des vendors)
+
+Le problème : je n'ai pas fait de message avec codex depuis plusieurs jours
+Pour autant, la popover m'indique que la fenêtre se termine dans 5h (alors que je n'ai pas encore entamé cette dernière) et que même pire, j'ai "consommé" 1% de la fenêtre (alors que pas du tout !)
+
+---
+
+les logs montrent des erreurs 404, si jamais ca te parle...
+[2026-05-11T10:31:09Z] [INFO] Codex fetched 2 metric(s) for account=fcamblor@gmail.com via response_body
+[2026-05-11T10:31:09Z] [WARN] Codex status endpoint returned HTTP 404
+[2026-05-11T10:34:09Z] [INFO] Fetching Codex usages for accountId=4d374539-6d8f-498e-ac45-d54803124254
+[2026-05-11T10:34:10Z] [INFO] Codex API response: HTTP 200
+[2026-05-11T10:34:10Z] [INFO] Codex fetched 2 metric(s) for account=fcamblor@gmail.com via response_body
+[2026-05-11T10:34:10Z] [WARN] Codex status endpoint returned HTTP 404
+[2026-05-11T10:37:11Z] [INFO] Fetching Codex usages for accountId=4d374539-6d8f-498e-ac45-d54803124254
+[2026-05-11T10:37:11Z] [INFO] Codex API response: HTTP 200
+[2026-05-11T10:37:11Z] [INFO] Codex fetched 2 metric(s) for account=fcamblor@gmail.com via response_body
+[2026-05-11T10:37:11Z] [WARN] Codex status endpoint returned HTTP 404
+[2026-05-11T10:40:12Z] [INFO] Fetching Codex usages for accountId=4d374539-6d8f-498e-ac45-d54803124254
+[2026-05-11T10:40:12Z] [INFO] Codex API response: HTTP 200
+[2026-05-11T10:40:12Z] [INFO] Codex fetched 2 metric(s) for account=fcamblor@gmail.com via response_body
+[2026-05-11T10:40:12Z] [WARN] Codex status endpoint returned HTTP 404
+[2026-05-11T10:43:13Z] [INFO] Fetching Codex usages for accountId=4d374539-6d8f-498e-ac45-d54803124254
+[2026-05-11T10:43:13Z] [INFO] Codex API response: HTTP 200
+[2026-05-11T10:43:13Z] [INFO] Codex fetched 2 metric(s) for account=fcamblor@gmail.com via response_body
+[2026-05-11T10:43:14Z] [WARN] Codex status endpoint returned HTTP 404
+[2026-05-11T10:46:14Z] [INFO] Fetching Codex usages for accountId=4d374539-6d8f-498e-ac45-d54803124254
+[2026-05-11T10:46:15Z] [INFO] Codex API response: HTTP 200
+[2026-05-11T10:46:15Z] [INFO] Codex fetched 2 metric(s) for account=fcamblor@gmail.com via response_body
+[2026-05-11T10:46:15Z] [WARN] Codex status endpoint returned HTTP 404
+[2026-05-11T10:49:15Z] [INFO] Fetching Codex usages for accountId=4d374539-6d8f-498e-ac45-d54803124254
+[2026-05-11T10:49:16Z] [INFO] Codex API response: HTTP 200
+[2026-05-11T10:49:16Z] [INFO] Codex fetched 2 metric(s) for account=fcamblor@gmail.com via response_body
+[2026-05-11T10:49:16Z] [WARN] Codex status endpoint returned HTTP 404
+[2026-05-11T10:52:16Z] [INFO] Fetching Codex usages for accountId=4d374539-6d8f-498e-ac45-d54803124254
+[2026-05-11T10:52:17Z] [INFO] Codex API response: HTTP 200
+[2026-05-11T10:52:17Z] [INFO] Codex fetched 2 metric(s) for account=fcamblor@gmail.com via response_body
+[2026-05-11T10:52:17Z] [WARN] Codex status endpoint returned HTTP 404
+[2026-05-11T10:55:18Z] [INFO] Fetching Codex usages for accountId=4d374539-6d8f-498e-ac45-d54803124254
+[2026-05-11T10:55:18Z] [INFO] Codex API response: HTTP 200
+[2026-05-11T10:55:18Z] [INFO] Codex fetched 2 metric(s) for account=fcamblor@gmail.com via response_body
+[2026-05-11T10:55:18Z] [WARN] Codex status endpoint returned HTTP 404
+
+---
+
+peux-tu simuler la requête curl utilisée par l'app pour récupérer les stats afin de valider les hypothèses ?
+
+---
+
+oui, implémente cette logique, mais blinde bien ca avec un test reproductible et un commentaire explicite dans ce test pour expliquer qu'on pense contourner une fragilité de l'api openai en faisant cela (car il y a toutes les chances pour que cette fragilité disparaisse à plus moins court terme)
+
+---
+
+J'ai une incohérence entre ce qui est affiché dans la popover (Session: ??? / Week: 0%) et dans la menubar (S 1% ???)
+/Users/fcamblor/conductor/workspaces/mac-ai-trackers/boston/.context/attachments/Cursor_and_Item-0_and_ScreenMirroring.png 
+
+ca ne me parait pas normal
+
+---
+
+ce n'est pas bon d'afficher "??? / ???" au lieu de "??? / 0%" car j'ai bien commencé à consommer des tokens sur ma weekly limit il y a 5 jours ... c'est juste que le tout représente moins d'1% de la fenêtre weekly donc c'est OK de laisser 0%
+
+Un 0% de la popover ne devrait pas se transformer en "???" de la menubar, c'est bizarre ta règle là, et ca me fait douter du fait que tu as bien factorisé les données entre popover et menubar
+
+---
+
+pardon je me suis trompé précédemment ... je croyais que dans la menubar, j'affichait la session + la weekly mais en fait c'est le pourcentage de session + le remaining de session
+
+Donc "??? ???" était cohérent (même si, dans ce cas de figure particulier, il faudrait simplifier l'affichage pour n'afficher qu'une seule fois "???")
+
+---
+
+non, pour moi il faut :
+- détecter quand la date de reset n'est pas bonne
+- lorsque c'est le cas, afficher un "???" (c'est déjà ce que tu fais je pense)
+- SURTOUT: ne pas afficher de pourcentage car il n'est pas possible de calculer un pourcentage d'utilisation sur une période inconnue
+
+---
+
+oui il faut y aller
