@@ -679,6 +679,66 @@ struct CodexConnectorFetchTests {
         }
     }
 
+    @Test("idle account: reset_after_seconds == limit_window_seconds is treated as window-not-opened (resetAt: nil)")
+    func idleAccountFreshWindowSignatureEmitsNilResetAt() async throws {
+        // Captured from a live `GET /backend-api/wham/usage` call on 2026-05-11
+        // for an account that had not sent any message in several days.
+        // OpenAI returned `used_percent: 1` (likely an internal baseline) and
+        // `reset_at = now + 5h`. The smoking gun is `reset_after_seconds`
+        // matching `limit_window_seconds` exactly (18000 == 18000): a genuine
+        // rolling window in progress would have `reset_after_seconds < limit_window_seconds`
+        // because time has elapsed since the first request opened it.
+        //
+        // We treat that signature as "window not actually opened" and emit the
+        // metric with `resetAt: nil` so the popover renders "???" instead of a
+        // misleading "ends in 5h". This compensates for an OpenAI API quirk —
+        // not a bug in our side. If OpenAI changes the API to either return
+        // `reset_at: null` or stop emitting this idle-default response, this
+        // workaround becomes dead weight; remove it then. Update or delete
+        // this test the day the live capture below stops reproducing.
+        let dir = try makeTempDir()
+        mockHTTP200(json: """
+        {
+          "email": "user@openai.com",
+          "rate_limit": {
+            "primary_window": {
+              "used_percent": 1,
+              "limit_window_seconds": 18000,
+              "reset_after_seconds": 18000,
+              "reset_at": 1778515227
+            },
+            "secondary_window": {
+              "used_percent": 0,
+              "limit_window_seconds": 604800,
+              "reset_after_seconds": 223950,
+              "reset_at": 1778721177
+            }
+          }
+        }
+        """)
+        let connector = makeConnector(dir: dir)
+        let entries = try await connector.fetchUsages()
+
+        #expect(entries[0].metrics.count == 2)
+
+        // Primary window: idle-account signature → resetAt must be nil
+        if case .timeWindow(let name, let resetAt, _, _) = entries[0].metrics[0] {
+            #expect(name == "Session (5h)")
+            #expect(resetAt == nil, "Fresh-untouched-window signature must surface as resetAt: nil so the UI renders ???")
+        } else {
+            Issue.record("Expected timeWindow for Session (5h)")
+        }
+
+        // Secondary window: reset_after_seconds (223950) < limit_window_seconds (604800)
+        // → genuine in-progress window, resetAt must be preserved
+        if case .timeWindow(let name, let resetAt, _, _) = entries[0].metrics[1] {
+            #expect(name == "Weekly (7d)")
+            #expect(resetAt != nil, "In-progress window (reset_after_seconds < limit_window_seconds) must keep its resetAt")
+        } else {
+            Issue.record("Expected timeWindow for Weekly (7d)")
+        }
+    }
+
     // MARK: - Debug logging
 
     @Test("debug log is emitted on HTTP 200 with masked payload")

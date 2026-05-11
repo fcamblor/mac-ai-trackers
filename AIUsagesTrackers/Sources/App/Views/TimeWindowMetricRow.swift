@@ -9,10 +9,6 @@ struct TimeWindowMetricRow: View {
     let windowDuration: DurationMinutes
     let usagePercent: UsagePercent
 
-    private var actualFraction: Double {
-        Double(usagePercent.rawValue) / 100.0
-    }
-
     var body: some View {
         // TimelineView re-renders every minute so remaining time and theoretical
         // consumption stay accurate even when no network refresh occurs.
@@ -23,11 +19,14 @@ struct TimeWindowMetricRow: View {
 
     @ViewBuilder
     private func content(now: Date) -> some View {
-        // nil resetAt (no active window yet) is treated identically to an expired window
-        let isUnknown = resetAt.flatMap { $0.date.map { now > $0 } } ?? true
-        let theoretical = isUnknown ? 0.0 : theoreticalFraction(resetAt: resetAt!, windowDuration: windowDuration, now: now)
-        let tier = consumptionRatio(actualPercent: usagePercent, theoreticalFraction: theoretical)
-            .map(consumptionTier(ratio:))
+        // Single source of truth shared with MenuBarSegmentResolver — see
+        // TimeWindowVisualState. Do NOT recompute isUnknown / tier locally.
+        let state = TimeWindowVisualState(
+            resetAt: resetAt,
+            windowDuration: windowDuration,
+            usagePercent: usagePercent,
+            now: now
+        )
 
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -35,22 +34,22 @@ struct TimeWindowMetricRow: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text(isUnknown ? "???" : "\(usagePercent.rawValue)%")
+                Text(state.isUnknown ? "???" : "\(usagePercent.rawValue)%")
                     .font(.system(size: 11, weight: .semibold).monospacedDigit())
             }
 
             GaugeBar(
-                actual: isUnknown ? 0.0 : actualFraction,
-                theoretical: theoretical,
-                tier: tier
+                actual: state.actualFraction,
+                theoretical: state.elapsedFraction,
+                tier: state.tier
             )
 
             HStack {
-                Text(isUnknown ? "???" : formatRemainingTime(resetAt: resetAt!, now: now))
+                Text(state.isUnknown ? "???" : formatRemainingTime(resetAt: resetAt!, now: now))
                     .font(.system(size: 10).monospacedDigit())
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text(isUnknown ? "resets ???" : "resets \(formatResetDate(resetAt!, now: now))")
+                Text(state.isUnknown ? "resets ???" : "resets \(formatResetDate(resetAt!, now: now))")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
             }

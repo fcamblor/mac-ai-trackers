@@ -243,14 +243,34 @@ public actor CodexConnector: UsageConnector {
             logger.log(.debug, "Window block missing used_percent — skipped")
             return nil
         }
+        let limitWindowSeconds = (window["limit_window_seconds"] as? Double).flatMap { $0 > 0 ? $0 : nil }
+        let resetAfterSeconds = (window["reset_after_seconds"] as? Double).flatMap { $0 > 0 ? $0 : nil }
+
+        // OpenAI ships an idle-account quirk: when no quota has actually been
+        // consumed in the rolling window, the API still returns a `reset_at`
+        // equal to `now + limit_window_seconds` (detectable via
+        // `reset_after_seconds >= limit_window_seconds`). Trusting that value
+        // would surface a misleading "ends in 5h" in the popover for users
+        // who haven't sent anything. Treat that signature as "window not
+        // actually open" → emit the metric with `resetAt: nil` so the row
+        // renders "???". See CodexConnectorTests.idleAccountFreshWindowSignatureEmitsNilResetAt.
+        let isFreshUntouchedWindow: Bool
+        if let limit = limitWindowSeconds, let resetAfter = resetAfterSeconds, resetAfter >= limit {
+            isFreshUntouchedWindow = true
+        } else {
+            isFreshUntouchedWindow = false
+        }
+
         let resetAt: ISODate?
-        if let epochSecs = window["reset_at"] as? Double, epochSecs > 0 {
+        if isFreshUntouchedWindow {
+            resetAt = nil
+        } else if let epochSecs = window["reset_at"] as? Double, epochSecs > 0 {
             resetAt = ISODate(date: Date(timeIntervalSince1970: epochSecs))
         } else {
             resetAt = nil
         }
         let duration: DurationMinutes
-        if let secs = window["limit_window_seconds"] as? Double, secs > 0 {
+        if let secs = limitWindowSeconds {
             duration = DurationMinutes(rawValue: Int(secs) / 60)
         } else {
             duration = fallbackDuration

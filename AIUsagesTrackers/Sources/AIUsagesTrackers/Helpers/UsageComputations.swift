@@ -128,6 +128,55 @@ public func consumptionRatio(actualPercent: UsagePercent, theoreticalFraction: D
     return Double(actualPercent.rawValue) / (theoreticalFraction * 100.0)
 }
 
+// MARK: - Time-window visual state
+
+/// Single source of truth for "what does this time-window metric look like
+/// right now". Both the popover row and the menubar segment derive their
+/// rendering from an instance of this struct, so the two views can never
+/// disagree on whether a window is unknown. Any new surface that shows a
+/// time-window metric must go through this type as well.
+///
+/// IMPORTANT semantic: a usage percent is intrinsically tied to its window.
+/// "48% of the last 5 hours" means something; "48% of an unknown timeframe"
+/// does not. When `resetAt` is missing, unparseable, or already elapsed, the
+/// percent cannot be interpreted either — so it MUST be rendered as "???"
+/// along with the remaining time. This is enforced at the struct boundary:
+/// `actualFraction` collapses to 0 and `isUnknown` is exposed for the views
+/// to mask both numbers behind "???".
+public struct TimeWindowVisualState: Sendable, Equatable {
+    /// True when `resetAt` is absent, unparseable, or already elapsed.
+    /// In that state both the percent and the remaining time must surface
+    /// as "???" — without a known window, the percent has no denominator
+    /// the user can reason about.
+    public let isUnknown: Bool
+    /// Usage fraction in 0...1. Zero when `isUnknown` is true so callers
+    /// can paint an empty gauge without re-checking the flag.
+    public let actualFraction: Double
+    /// Elapsed-time fraction of the window in 0...1. Zero when `isUnknown`.
+    /// Named `elapsedFraction` to avoid shadowing the free function
+    /// `theoreticalFraction(resetAt:windowDuration:now:)`.
+    public let elapsedFraction: Double
+    /// Severity tier when comparable, `nil` when the window is unknown or
+    /// hasn't accumulated enough elapsed time for a ratio.
+    public let tier: ConsumptionTier?
+
+    public init(resetAt: ISODate?, windowDuration: DurationMinutes, usagePercent: UsagePercent, now: Date) {
+        if let resetAt, let resetDate = resetAt.date, now <= resetDate {
+            self.isUnknown = false
+            self.actualFraction = Double(usagePercent.rawValue) / 100.0
+            let elapsed = theoreticalFraction(resetAt: resetAt, windowDuration: windowDuration, now: now)
+            self.elapsedFraction = elapsed
+            self.tier = consumptionRatio(actualPercent: usagePercent, theoreticalFraction: elapsed)
+                .map(consumptionTier(ratio:))
+        } else {
+            self.isUnknown = true
+            self.actualFraction = 0
+            self.elapsedFraction = 0
+            self.tier = nil
+        }
+    }
+}
+
 // MARK: - Entry sorting
 
 extension Array where Element == VendorUsageEntry {

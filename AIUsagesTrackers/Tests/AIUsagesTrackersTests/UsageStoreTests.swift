@@ -233,8 +233,11 @@ struct UsageStoreFormattingTests {
     }
 
     @MainActor
-    @Test("resetAt in the past shows 0m")
+    @Test("resetAt in the past: both percent and remaining render as ??? (TimeWindowVisualState)")
     func resetAtInPast() async throws {
+        // An elapsed resetAt means we don't know what window the percent
+        // refers to anymore — a percent without an interpretable window has
+        // no meaning. Both numbers degrade together via TimeWindowVisualState.
         let watcher = MockFileWatcher()
         let clock = FixedClock(Self.referenceDate)
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
@@ -245,7 +248,7 @@ struct UsageStoreFormattingTests {
         ])
         watcher.send(data)
         try await eventually { store.menuBarText != "--" }
-        #expect(store.menuBarText == "S 100% 0m")
+        #expect(store.menuBarText == "S ???")
         store.stop()
     }
 
@@ -482,8 +485,11 @@ struct UsageStoreRemainingTimeTests {
     }
 
     @MainActor
-    @Test("invalid ISO8601 resetAt shows -- for remaining time")
+    @Test("invalid ISO8601 resetAt: both percent and remaining render as ??? (TimeWindowVisualState)")
     func invalidResetAt() async throws {
+        // An unparseable resetAt is treated identically to nil/elapsed by
+        // TimeWindowVisualState: without an interpretable window, neither
+        // the percent nor the remaining time can be displayed.
         let watcher = MockFileWatcher()
         let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
         store.start()
@@ -492,9 +498,8 @@ struct UsageStoreRemainingTimeTests {
             timeWindowMetric(name: "5h sessions (all models)", resetAt: "not-a-date", usagePercent: 50),
         ])
         watcher.send(data)
-        // Store's formatRemainingTime returns "--" for unparseable dates (with a warning log)
         try await eventually { store.menuBarText != "--" }
-        #expect(store.menuBarText == "S 50% --")
+        #expect(store.menuBarText == "S ???")
         store.stop()
     }
 

@@ -406,3 +406,107 @@ struct GaugeBarClampTests {
         #expect(result.isNaN)
     }
 }
+
+// MARK: - TimeWindowVisualState
+
+@Suite("TimeWindowVisualState — single source of truth for popover and menubar")
+struct TimeWindowVisualStateTests {
+    // This struct is the ONE place where the "is this window unknown" rule
+    // lives. Both TimeWindowMetricRow (popover) and MenuBarSegmentResolver
+    // (menubar) instantiate it and read its flag — any divergence between
+    // the two views would have to start by breaking the contract verified
+    // here. Keep these tests strict.
+    //
+    // Semantic invariant: a percent is intrinsically tied to its window
+    // ("X% of the last 5 hours"). When the reset is unknown, the percent
+    // loses its denominator and is no longer interpretable — actualFraction
+    // collapses to 0 and callers must render the percent text as "???"
+    // alongside the remaining time. Both numbers degrade together.
+
+    private static let now: Date = ISO8601DateFormatter().date(from: "2026-04-17T12:47:00Z")!
+
+    @Test("nil resetAt → isUnknown, actualFraction collapses to 0, tier nil")
+    func nilResetAt() {
+        let state = TimeWindowVisualState(
+            resetAt: nil,
+            windowDuration: DurationMinutes(rawValue: 300),
+            usagePercent: UsagePercent(rawValue: 42),
+            now: Self.now
+        )
+        #expect(state.isUnknown == true)
+        #expect(state.actualFraction == 0, "Percent without a known window has no denominator → render as ???")
+        #expect(state.elapsedFraction == 0)
+        #expect(state.tier == nil)
+    }
+
+    @Test("unparseable resetAt → isUnknown")
+    func unparseableResetAt() {
+        let state = TimeWindowVisualState(
+            resetAt: ISODate(rawValue: "not-a-date"),
+            windowDuration: DurationMinutes(rawValue: 300),
+            usagePercent: UsagePercent(rawValue: 42),
+            now: Self.now
+        )
+        #expect(state.isUnknown == true)
+        #expect(state.actualFraction == 0)
+        #expect(state.tier == nil)
+    }
+
+    @Test("elapsed resetAt (now > resetDate) → isUnknown")
+    func elapsedResetAt() {
+        let state = TimeWindowVisualState(
+            resetAt: ISODate(rawValue: "2026-04-17T10:00:00Z"),
+            windowDuration: DurationMinutes(rawValue: 300),
+            usagePercent: UsagePercent(rawValue: 99),
+            now: Self.now
+        )
+        #expect(state.isUnknown == true)
+        #expect(state.actualFraction == 0)
+        #expect(state.elapsedFraction == 0)
+        #expect(state.tier == nil)
+    }
+
+    @Test("resetAt exactly now → NOT isUnknown (boundary included)")
+    func resetAtExactlyNow() {
+        let state = TimeWindowVisualState(
+            resetAt: ISODate(rawValue: "2026-04-17T12:47:00Z"),
+            windowDuration: DurationMinutes(rawValue: 300),
+            usagePercent: UsagePercent(rawValue: 50),
+            now: Self.now
+        )
+        #expect(state.isUnknown == false)
+        #expect(state.actualFraction == 0.5)
+    }
+
+    @Test("in-progress resetAt → not isUnknown, fractions populated, tier computed")
+    func inProgressResetAt() {
+        // Window of 300 min ending at 15:00 → started at 10:00.
+        // At 12:47, elapsed = 2h47 / 5h = 167/300 ≈ 0.5567.
+        let state = TimeWindowVisualState(
+            resetAt: ISODate(rawValue: "2026-04-17T15:00:00Z"),
+            windowDuration: DurationMinutes(rawValue: 300),
+            usagePercent: UsagePercent(rawValue: 48),
+            now: Self.now
+        )
+        #expect(state.isUnknown == false)
+        #expect(state.actualFraction == 0.48)
+        #expect(state.elapsedFraction > 0.55 && state.elapsedFraction < 0.56)
+        #expect(state.tier != nil)
+    }
+
+    @Test("0% with known reset → not isUnknown, 0% is meaningful and renders verbatim")
+    func zeroPercentWithKnownResetStaysVisible() {
+        // User scenario: weekly window legitimately at 0% with a known reset
+        // a few days away. The 0% is real information and must be displayed
+        // as 0% — NOT collapsed into ??? — because we know what window the
+        // 0% refers to.
+        let state = TimeWindowVisualState(
+            resetAt: ISODate(rawValue: "2026-04-22T12:00:00Z"),
+            windowDuration: DurationMinutes(rawValue: 10080),
+            usagePercent: UsagePercent(rawValue: 0),
+            now: Self.now
+        )
+        #expect(state.isUnknown == false)
+        #expect(state.actualFraction == 0)
+    }
+}

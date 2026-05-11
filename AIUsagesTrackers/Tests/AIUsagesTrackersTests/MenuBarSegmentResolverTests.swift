@@ -358,3 +358,96 @@ struct ResolverVendorIconTests {
         #expect(result.rendered?.vendorIcon == nil)
     }
 }
+
+@Suite("MenuBarSegmentResolver — unknown window (popover/menubar consistency)")
+struct ResolverUnknownWindowTests {
+    // When the reset is unknown the percent has no interpretable window,
+    // so both the percent and the remaining time degrade to "???". Popover
+    // and menubar must agree on that — see TimeWindowVisualStateTests for
+    // the rule itself, these tests guard the parity at the resolver
+    // boundary.
+
+    private static func segment(
+        resetAt: ISODate?,
+        usagePercent: Int = 1,
+        display: TimeWindowDisplay = TimeWindowDisplay(letter: "S")
+    ) -> MenuBarSegment? {
+        let entry = VendorUsageEntry(
+            vendor: .codex,
+            account: "user@openai.com",
+            isActive: true,
+            metrics: [.timeWindow(
+                name: "Session (5h)",
+                resetAt: resetAt,
+                windowDuration: 300,
+                usagePercent: UsagePercent(rawValue: usagePercent)
+            )]
+        )
+        let config = MenuBarSegmentConfig(
+            vendor: .codex,
+            account: .currentlyActive,
+            metricName: "Session (5h)",
+            display: .timeWindow(display)
+        )
+        return MenuBarSegmentResolver.resolve(
+            config: config,
+            entries: [entry],
+            now: referenceDate
+        ).rendered
+    }
+
+    @Test("nil resetAt → single ??? placeholder (not duplicated for percent + remaining)")
+    func nilResetAtCollapsesToSinglePlaceholder() {
+        // When both percent and remaining would render as "???", the menubar
+        // collapses them into one placeholder. "S ??? ???" reads as noise;
+        // "S ???" carries the same information without the awkward duplicate.
+        let result = ResolverUnknownWindowTests.segment(resetAt: nil, usagePercent: 1)
+        #expect(result?.text == "S ???")
+        #expect(result?.tier == nil)
+    }
+
+    @Test("elapsed resetAt → single ??? placeholder")
+    func elapsedResetAtCollapsesToSinglePlaceholder() {
+        // referenceDate is 2026-04-17T12:47:00Z — pick a resetAt well before that.
+        let elapsed = ISODate(rawValue: "2026-04-17T10:00:00Z")
+        let result = ResolverUnknownWindowTests.segment(resetAt: elapsed, usagePercent: 42)
+        #expect(result?.text == "S ???")
+        #expect(result?.tier == nil)
+    }
+
+    @Test("unknown window with only percent shown → still renders single ???")
+    func unknownWithOnlyPercentDisplayed() {
+        let result = ResolverUnknownWindowTests.segment(
+            resetAt: nil,
+            usagePercent: 1,
+            display: TimeWindowDisplay(letter: "S", showReset: false)
+        )
+        #expect(result?.text == "S ???")
+    }
+
+    @Test("unknown window with only reset shown → still renders single ???")
+    func unknownWithOnlyResetDisplayed() {
+        let result = ResolverUnknownWindowTests.segment(
+            resetAt: nil,
+            usagePercent: 1,
+            display: TimeWindowDisplay(letter: "S", showPercent: false)
+        )
+        #expect(result?.text == "S ???")
+    }
+
+    @Test("known reset with 0% → percent stays visible (0% is meaningful when window is known)")
+    func knownResetWithZeroPercentStaysVisible() {
+        // 0% of a known 5h window is real, interpretable information.
+        let active = ISODate(rawValue: "2026-04-17T15:00:00Z")
+        let result = ResolverUnknownWindowTests.segment(resetAt: active, usagePercent: 0)
+        #expect(result?.text == "S 0% 2h 13m")
+    }
+
+    @Test("in-progress resetAt → menubar renders the percent and remaining time")
+    func inProgressResetAtRendersValues() {
+        // resetAt 2h 13m after referenceDate
+        let active = ISODate(rawValue: "2026-04-17T15:00:00Z")
+        let result = ResolverUnknownWindowTests.segment(resetAt: active, usagePercent: 48)
+        #expect(result?.text == "S 48% 2h 13m")
+    }
+}

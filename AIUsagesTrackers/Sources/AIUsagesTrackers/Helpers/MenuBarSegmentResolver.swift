@@ -118,33 +118,41 @@ public enum MenuBarSegmentResolver {
         usagePercent: UsagePercent,
         now: Date
     ) -> MenuBarSegment? {
+        // Single source of truth shared with TimeWindowMetricRow — see
+        // TimeWindowVisualState. Do NOT recompute isUnknown / tier locally.
+        let state = TimeWindowVisualState(
+            resetAt: resetAt,
+            windowDuration: windowDuration,
+            usagePercent: usagePercent,
+            now: now
+        )
+
         var parts: [String] = []
         if display.showLetter, !display.letter.isEmpty {
             parts.append(display.letter)
         }
-        if display.showPercent {
-            parts.append(formatUsagePercent(usagePercent, mode: display.percentDisplayMode))
-        }
-        if display.showReset {
-            let remaining = resetAt.map {
-                formatRemainingTime(
-                    resetAt: $0,
+        if state.isUnknown {
+            // Both percent and remaining would otherwise be "???" — collapse
+            // them into a single placeholder when at least one is shown, to
+            // avoid the awkward "S ??? ???" double placeholder.
+            if display.showPercent || display.showReset {
+                parts.append("???")
+            }
+        } else {
+            if display.showPercent {
+                parts.append(formatUsagePercent(usagePercent, mode: display.percentDisplayMode))
+            }
+            if display.showReset, let resetAt {
+                parts.append(formatRemainingTime(
+                    resetAt: resetAt,
                     now: now,
                     hideMinutesWhenOverOneDay: display.hideResetMinutesWhenOverOneDay
-                )
-            } ?? "???"
-            parts.append(remaining)
+                ))
+            }
         }
         let text = parts.joined(separator: " ")
 
-        let tier: ConsumptionTier?
-        if display.showDot {
-            let theoretical = resetAt.map { theoreticalFraction(resetAt: $0, windowDuration: windowDuration, now: now) } ?? 0.0
-            tier = consumptionRatio(actualPercent: usagePercent, theoreticalFraction: theoretical)
-                .map { consumptionTier(ratio: $0) }
-        } else {
-            tier = nil
-        }
+        let tier: ConsumptionTier? = display.showDot ? state.tier : nil
 
         // If the user turned every visible element off, there's nothing to render
         if text.isEmpty, !display.showDot, !display.showVendorIcon {
