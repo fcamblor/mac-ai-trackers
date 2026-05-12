@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "5ac20ad7eb00",
+  "strategy": "manual-commit",
+  "branch": "new-vendor-assistant-improvements",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".claude/skills/assistant-merge/SKILL.md",
+    ".claude/skills/assistant-release/SKILL.md",
+    ".claude/skills/assistant/SKILL.md",
+    "docs/ASSISTANT-ONBOARDING.md",
+    "docs/REVIEW-CHECKLIST-ASSISTANT-CHANGE.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/5a/c20ad7eb00/0/metadata.json",
+      "transcript": "/5a/c20ad7eb00/0/full.jsonl",
+      "content_hash": "/5a/c20ad7eb00/0/content_hash.txt",
+      "prompt": "/5a/c20ad7eb00/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 89,
+    "cache_creation_tokens": 291745,
+    "cache_read_tokens": 3403845,
+    "output_tokens": 21691,
+    "api_call_count": 44
+  }
+}

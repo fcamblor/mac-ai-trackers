@@ -1,0 +1,63 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "5ac20ad7eb00",
+  "session_id": "017461e1-d4fa-407f-8244-670562ec7fd5",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-12T07:13:20.581158Z",
+  "branch": "new-vendor-assistant-improvements",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".claude/skills/assistant-merge/SKILL.md",
+    ".claude/skills/assistant-release/SKILL.md",
+    ".claude/skills/assistant/SKILL.md",
+    "docs/ASSISTANT-ONBOARDING.md",
+    "docs/REVIEW-CHECKLIST-ASSISTANT-CHANGE.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "fff703f24df1",
+  "token_usage": {
+    "input_tokens": 89,
+    "cache_creation_tokens": 291745,
+    "cache_read_tokens": 3403845,
+    "output_tokens": 21691,
+    "api_call_count": 44
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-12T07:13:20.180666Z",
+    "agent_lines": 181,
+    "agent_removed": 127,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 181,
+    "total_lines_changed": 308,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 6,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/pull-requests/36.md": 6
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 6,
+      "user_lines_removed": 0,
+      "agent_lines_added": 47,
+      "agent_lines_removed": 91,
+      "user_added_per_file": {
+        ".context/pull-requests/36.md": 6
+      }
+    }
+  ]
+}
