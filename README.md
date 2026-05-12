@@ -114,6 +114,16 @@ AI Usages Tracker reads Codex auth from the first available source:
 - `~/.codex/auth.json`
 - macOS Keychain service `Codex Auth`
 
+### GitHub Copilot CLI
+
+AI Usages Tracker reads GitHub Copilot auth from the first available source:
+
+- `GITHUB_TOKEN` environment variable
+- macOS Keychain entry `gh:github.com` (written by the `gh` CLI)
+- `gh` `hosts.yml`, searched as `$GH_CONFIG_DIR/hosts.yml`, then `$XDG_CONFIG_HOME/gh/hosts.yml`, then `~/.config/gh/hosts.yml`
+
+The active GitHub login is read from `hosts.yml` (`github.com.user`).
+
 ## Data Locations
 
 AI Usages Tracker keeps its runtime data under the current user's home directory.
@@ -134,6 +144,7 @@ It contains:
 - `app.log`: app lifecycle, polling, persistence, and UI-adjacent logs.
 - `claude-usages-connector.log`: Claude Code connector and status-fetch logs.
 - `codex-usages-connector.log`: Codex connector and status-fetch logs.
+- `copilot-usages-connector.log`: GitHub Copilot CLI connector logs.
 - `*.log.1`: rotated log backups. Each managed log rotates after 5 MB.
 
 Deleting the cache directory resets local usage snapshots, history, and logs. It does not remove assistant credentials or macOS user preferences.
