@@ -50,34 +50,50 @@ they post a sign-off comment as a tester.
 ### Phase C — Pre-merge artefacts (commit on the PR branch)
 
 Before merging, push the user-facing updates onto the PR branch so they
-ship in the same commit as the code:
+ship in the same commit as the code. Branch on `type:*`:
 
-- `type:new-assistant` → update every README touchpoint that
-  enumerates supported vendors (see `docs/ASSISTANT-ONBOARDING.md`
-  §3.1.6 for the full list — at minimum "Supported Assistants" and
-  "Cache and Logs"; scan for any other Claude/Codex enumeration the
-  README has grown since). Also add a row to `docs/vendors/index.md`
-  if it exists. After editing, re-grep the README for the previously
-  supported vendor slugs to confirm no enumeration was missed.
-- `type:vendor-evolution` →
-  - No README change (the vendor is already listed).
-  - For `kind:breaking`, ensure the README's compatibility note (or the
-    `Min app version` annotation in the vendor doc) is reflected
-    wherever users decide which version to install.
+#### `type:new-assistant`
 
-Show the diff to the user, then propose to commit & push:
+Update every README touchpoint that enumerates supported vendors (see
+`docs/ASSISTANT-ONBOARDING.md` §3.1.6 for the full list — at minimum
+"Supported Assistants" and "Cache and Logs"; scan for any other
+Claude/Codex enumeration the README has grown since). Also add a row
+to `docs/vendors/index.md` if it exists.
+
+Before staging, re-grep the README for the previously supported vendor
+slugs to confirm no enumeration was missed:
+
+```sh
+grep -nE 'Claude Code|Codex|claude-usages|codex-usages' README.md
+```
+
+Inspect the output, fix any missed touchpoint, then show the diff to
+the user and propose to commit & push:
 
 ```sh
 git checkout <pr-branch>
 git add README.md docs/vendors/index.md
 git commit -m "docs(<slug>): announce <Display Name> in README and vendor index"
-# Re-grep the README to confirm no Claude/Codex enumeration was missed:
-# `grep -nE 'Claude Code|Codex|claude-usages|codex-usages' README.md`
 git push
 ```
 
-(Skip the commit entirely when no artefact change is needed —
-`vendor-evolution` non-breaking.)
+#### `type:vendor-evolution`
+
+- Non-breaking → **no commit in this phase**. Skip straight to Phase D.
+- `kind:breaking` → ensure the README's compatibility note (or the
+  `Min app version` annotation in the vendor doc) is reflected
+  wherever users decide which version to install. If an edit is
+  needed, show the diff and propose:
+
+  ```sh
+  git checkout <pr-branch>
+  git add <edited files>
+  git commit -m "docs(<slug>): note <next-version>+ requirement"
+  git push
+  ```
+
+  If no edit is needed (the compatibility note is already accurate),
+  skip the commit and move to Phase D.
 
 ### Phase D — Draft release notes for the merge commit body
 
