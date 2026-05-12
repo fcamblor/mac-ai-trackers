@@ -216,7 +216,15 @@ public final class FileLogger: Sendable {
 // MARK: - Shared loggers
 
 public enum Loggers {
-    private static let cacheDir: String = {
+    /// Root directory for app cache files (logs, pid file, usages snapshot).
+    /// Respects `AI_TRACKER_CACHE_DIR` so integration tests can sandbox the
+    /// running binary without touching the user's `~/.cache`.
+    public static let cacheDir: String = {
+        if let override = ProcessInfo.processInfo.environment["AI_TRACKER_CACHE_DIR"],
+           !override.isEmpty
+        {
+            return override
+        }
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return "\(home)/.cache/ai-usages-tracker"
     }()
