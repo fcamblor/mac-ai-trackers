@@ -269,9 +269,18 @@ copy them from the sticky build comment.
 - **Outputs**:
   - User-facing artefacts updated **on the PR before squash-merging**, so
     they ship in the same commit as the code:
-    - **`type:new-assistant`** — append the new vendor to README's
-      "Supported assistants" section; add a row to
-      `docs/vendors/index.md` if it exists.
+    - **`type:new-assistant`** — every README touchpoint that
+      enumerates supported vendors must list the new one. At minimum:
+      - append a vendor subsection to README's "Supported Assistants"
+        section, summarizing the credential cascade;
+      - add the connector's log file to README's "Cache and Logs"
+        bullet list (matches the `Loggers.<vendor>` entry in code);
+      - add a row to `docs/vendors/index.md` if it exists.
+      Scan the README for any other place that lists Claude Code and
+      Codex side by side and add the new vendor there too — the
+      "Supported Assistants" and "Cache and Logs" sections are the
+      known fixed touchpoints, but the README may grow others over
+      time.
     - **`type:vendor-evolution`** — no README change. For
       `kind:breaking`, ensure the README's compatibility note (or the
       `Min app version` annotation in the vendor doc) is reflected.

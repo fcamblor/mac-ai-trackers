@@ -52,9 +52,13 @@ they post a sign-off comment as a tester.
 Before merging, push the user-facing updates onto the PR branch so they
 ship in the same commit as the code:
 
-- `type:new-assistant` →
-  - Append the new vendor to README's "Supported assistants" section.
-  - Add a row to `docs/vendors/index.md` if it exists.
+- `type:new-assistant` → update every README touchpoint that
+  enumerates supported vendors (see `docs/ASSISTANT-ONBOARDING.md`
+  §3.1.6 for the full list — at minimum "Supported Assistants" and
+  "Cache and Logs"; scan for any other Claude/Codex enumeration the
+  README has grown since). Also add a row to `docs/vendors/index.md`
+  if it exists. After editing, re-grep the README for the previously
+  supported vendor slugs to confirm no enumeration was missed.
 - `type:vendor-evolution` →
   - No README change (the vendor is already listed).
   - For `kind:breaking`, ensure the README's compatibility note (or the
@@ -67,6 +71,8 @@ Show the diff to the user, then propose to commit & push:
 git checkout <pr-branch>
 git add README.md docs/vendors/index.md
 git commit -m "docs(<slug>): announce <Display Name> in README and vendor index"
+# Re-grep the README to confirm no Claude/Codex enumeration was missed:
+# `grep -nE 'Claude Code|Codex|claude-usages|codex-usages' README.md`
 git push
 ```
 
