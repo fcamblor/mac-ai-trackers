@@ -61,17 +61,22 @@ struct CodexStatusConnectorTests {
         }
     }
 
-    @Test("one major incident maps to a single Outage with all fields")
-    func singleMajorIncident() async throws {
+    @Test("active investigating incident maps to a single Outage with severity from worst component")
+    func activeInvestigatingIncident() async throws {
         let dir = try makeTempDir()
         mockHTTP(status: 200, body: """
         {
           "incidents": [
             {
-              "name": "ChatGPT API degraded performance",
-              "impact": "major",
-              "created_at": "2026-04-22T10:15:00.000Z",
-              "shortlink": "https://stspg.io/xyz789"
+              "id": "01ABC",
+              "name": "Elevated error rates with GPT 5.5",
+              "status": "investigating",
+              "type": "incident",
+              "published_at": "2026-05-11T16:11:00Z",
+              "affected_components": [
+                {"status": "degraded_performance", "current_status": "degraded_performance"},
+                {"status": "partial_outage", "current_status": "partial_outage"}
+              ]
             }
           ]
         }
@@ -80,10 +85,114 @@ struct CodexStatusConnectorTests {
 
         #expect(outages.count == 1)
         #expect(outages[0].vendor == .codex)
-        #expect(outages[0].errorMessage == "ChatGPT API degraded performance")
-        #expect(outages[0].severity == .major)
-        #expect(outages[0].since.rawValue == "2026-04-22T10:15:00.000Z")
-        #expect(outages[0].href?.absoluteString == "https://stspg.io/xyz789")
+        #expect(outages[0].errorMessage == "Elevated error rates with GPT 5.5")
+        #expect(outages[0].severity == .major) // partial_outage is worse than degraded_performance
+        #expect(outages[0].since.rawValue == "2026-05-11T16:11:00Z")
+        #expect(outages[0].href?.absoluteString == "https://status.openai.com/incidents/01ABC")
+    }
+
+    @Test("resolved incidents are filtered out")
+    func resolvedFiltered() async throws {
+        let dir = try makeTempDir()
+        mockHTTP(status: 200, body: """
+        {
+          "incidents": [
+            {
+              "id": "01OLD",
+              "name": "Yesterday's incident",
+              "status": "resolved",
+              "type": "incident",
+              "published_at": "2026-05-10T10:00:00Z",
+              "affected_components": [{"status": "full_outage", "current_status": "operational"}]
+            },
+            {
+              "id": "01NEW",
+              "name": "Current monitoring",
+              "status": "monitoring",
+              "type": "incident",
+              "published_at": "2026-05-11T11:00:00Z",
+              "affected_components": [{"status": "degraded_performance", "current_status": "degraded_performance"}]
+            }
+          ]
+        }
+        """)
+        let outages = try await makeConnector(dir: dir).fetchOutages()
+        #expect(outages.count == 1)
+        #expect(outages[0].errorMessage == "Current monitoring")
+        #expect(outages[0].severity == .minor)
+    }
+
+    @Test("full_outage on any component yields critical severity")
+    func fullOutageCritical() async throws {
+        let dir = try makeTempDir()
+        mockHTTP(status: 200, body: """
+        {
+          "incidents": [
+            {
+              "id": "01CRIT",
+              "name": "Major outage",
+              "status": "identified",
+              "type": "incident",
+              "published_at": "2026-05-11T16:11:00Z",
+              "affected_components": [
+                {"status": "degraded_performance", "current_status": "degraded_performance"},
+                {"status": "full_outage", "current_status": "full_outage"}
+              ]
+            }
+          ]
+        }
+        """)
+        let outages = try await makeConnector(dir: dir).fetchOutages()
+        #expect(outages.count == 1)
+        #expect(outages[0].severity == .critical)
+    }
+
+    @Test("maintenance type maps to maintenance severity regardless of component status")
+    func maintenanceType() async throws {
+        let dir = try makeTempDir()
+        mockHTTP(status: 200, body: """
+        {
+          "incidents": [
+            {
+              "id": "01MAINT",
+              "name": "Scheduled DB upgrade",
+              "status": "in_progress",
+              "type": "maintenance",
+              "published_at": "2026-05-11T16:11:00Z",
+              "affected_components": [
+                {"status": "full_outage", "current_status": "full_outage"}
+              ]
+            }
+          ]
+        }
+        """)
+        let outages = try await makeConnector(dir: dir).fetchOutages()
+        #expect(outages.count == 1)
+        #expect(outages[0].severity == .maintenance)
+    }
+
+    @Test("incident with empty affected_components still surfaces with passthrough severity")
+    func emptyAffectedComponents() async throws {
+        let dir = try makeTempDir()
+        mockHTTP(status: 200, body: """
+        {
+          "incidents": [
+            {
+              "id": "01EMPTY",
+              "name": "Unscoped notice",
+              "status": "investigating",
+              "type": "incident",
+              "published_at": "2026-05-11T16:11:00Z",
+              "affected_components": []
+            }
+          ]
+        }
+        """)
+        let outages = try await makeConnector(dir: dir).fetchOutages()
+        #expect(outages.count == 1)
+        #expect(outages[0].errorMessage == "Unscoped notice")
+        // No component status to map → passthrough preserves "unknown" string
+        #expect(outages[0].severity.rawValue == "unknown")
     }
 
     @Test("empty incidents array returns empty list")
@@ -94,51 +203,25 @@ struct CodexStatusConnectorTests {
         #expect(outages.isEmpty)
     }
 
-    @Test("incident with impact=none is filtered out")
-    func noneImpactFiltered() async throws {
+    @Test("missing type field defaults to incident")
+    func missingTypeDefaults() async throws {
         let dir = try makeTempDir()
         mockHTTP(status: 200, body: """
         {
           "incidents": [
-            {"name":"minor notice","impact":"none","created_at":"2026-04-22T10:00:00Z","shortlink":"https://x.com"},
-            {"name":"real issue","impact":"critical","created_at":"2026-04-22T11:00:00Z","shortlink":"https://y.com"}
+            {
+              "id": "01NOTYPE",
+              "name": "No type field",
+              "status": "investigating",
+              "published_at": "2026-05-11T16:11:00Z",
+              "affected_components": [{"status": "partial_outage", "current_status": "partial_outage"}]
+            }
           ]
         }
         """)
         let outages = try await makeConnector(dir: dir).fetchOutages()
         #expect(outages.count == 1)
-        #expect(outages[0].errorMessage == "real issue")
-        #expect(outages[0].severity == .critical)
-    }
-
-    @Test("missing shortlink results in href=nil without throwing")
-    func missingShortlink() async throws {
-        let dir = try makeTempDir()
-        mockHTTP(status: 200, body: """
-        {
-          "incidents": [
-            {"name":"x","impact":"major","created_at":"2026-04-22T10:00:00Z"}
-          ]
-        }
-        """)
-        let outages = try await makeConnector(dir: dir).fetchOutages()
-        #expect(outages.count == 1)
-        #expect(outages[0].href == nil)
-    }
-
-    @Test("unknown impact value passes through via OutageSeverity(rawValue:)")
-    func unknownImpactPassthrough() async throws {
-        let dir = try makeTempDir()
-        mockHTTP(status: 200, body: """
-        {
-          "incidents": [
-            {"name":"x","impact":"catastrophic","created_at":"2026-04-22T10:00:00Z","shortlink":"https://x.com"}
-          ]
-        }
-        """)
-        let outages = try await makeConnector(dir: dir).fetchOutages()
-        #expect(outages.count == 1)
-        #expect(outages[0].severity.rawValue == "catastrophic")
+        #expect(outages[0].severity == .major)
     }
 
     @Test("HTTP 500 throws unexpectedResponse")

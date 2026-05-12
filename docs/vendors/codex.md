@@ -177,6 +177,51 @@ _verified: 2026-05-07_
 response email and the cached email are missing — exceptional state where
 the active account cannot be attributed.
 
+## Status page
+
+_verified: 2026-05-12_
+
+| URL | Format | Component filter |
+|-----|--------|-----------------|
+| `https://status.openai.com/proxy/status.openai.com/incidents` | incident.io public-page proxy (JSON) | none — all incidents on this page are OpenAI-specific |
+
+OpenAI moved off statuspage.io to incident.io; the legacy
+`status.openai.com/api/v2/incidents/unresolved.json` path now returns
+HTTP 404. The page itself fetches the JSON document above (it lists
+every incident, resolved + active).
+
+`CodexStatusConnector` retains incidents whose `status` is anything
+other than `"resolved"` (i.e. `investigating`, `identified`,
+`monitoring`, scheduled or in-progress maintenance). Severity is
+derived from the worst entry in `affected_components[].status`:
+
+| incident.io component status | `OutageSeverity` |
+|------------------------------|------------------|
+| `full_outage`, `major_outage` | `critical`       |
+| `partial_outage`              | `major`          |
+| `degraded_performance`        | `minor`          |
+| `under_maintenance`           | `maintenance`    |
+
+Maintenance windows (`type: "maintenance"` at the incident level) are
+mapped to `maintenance` regardless of component status. The clickable
+href is built from the incident `id` against
+`https://status.openai.com/incidents/<id>`.
+
+Schema reference of an incident entry (fields the connector consumes):
+
+```jsonc
+{
+  "id": "01KRBZTV511HR7SWVFZJ0438D6",
+  "name": "Elevated error rates with GPT 5.5",
+  "status": "resolved",                 // "investigating" | "identified" | "monitoring" | "resolved" | scheduled / in-progress for maintenance
+  "type": "incident",                   // or "maintenance"
+  "published_at": "2026-05-11T16:11:00Z",
+  "affected_components": [
+    { "status": "degraded_performance", "current_status": "operational" }
+  ]
+}
+```
+
 ## Known unknowns
 
 - Pro plan response shape on a Pro-only account.

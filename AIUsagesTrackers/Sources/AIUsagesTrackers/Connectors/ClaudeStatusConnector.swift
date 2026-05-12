@@ -8,7 +8,9 @@ public actor ClaudeStatusConnector: StatusConnector {
     private let endpointURLString: String
 
     private static let requestTimeoutSeconds: TimeInterval = 5
-    public static let defaultEndpoint = "https://status.anthropic.com/api/v2/incidents/unresolved.json"
+    /// `status.anthropic.com` 302-redirects to `status.claude.com`; we point at the canonical
+    /// destination so the connector does not depend on `URLSession` following redirects.
+    public static let defaultEndpoint = "https://status.claude.com/api/v2/incidents/unresolved.json"
 
     public init(
         logger: FileLogger = Loggers.claude,
