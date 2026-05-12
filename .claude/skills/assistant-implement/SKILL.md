@@ -90,7 +90,9 @@ phase E.
 Branch on issue type.
 
 - `type:new-assistant` → scaffold inline (Write/Edit), no shell script:
-  connector, credential locator, status connector (if applicable),
+  connector, credential locator, status connector (required when the
+  vendor has a public status page documented in `docs/vendors/<slug>.md`;
+  `nil` only when the doc explicitly states no public page exists),
   active-account monitor (if applicable), branding (with vector PDF
   mark `<slug>-mark.pdf`), `VendorRegistry` entry, test fixtures.
 - `type:vendor-evolution` → locate the existing files for `<slug>` and

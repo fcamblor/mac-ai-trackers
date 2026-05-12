@@ -30,13 +30,15 @@ reads.
 | Payload sanitizer        | `any PayloadSanitizing`     | yes       |
 | Logger                   | `FileLogger`                | yes       |
 | Logging proxy            | `LoggingProxy`              | yes (composed from logger + sanitizer) |
-| Status / outages         | `any StatusConnector`       | optional  |
+| Status / outages         | `any StatusConnector`       | required when vendor has a public status page; otherwise `nil` |
 | Active-account monitor   | `any ActiveAccountMonitoring` | optional |
 | Documentation pointer    | `VendorDocumentation`       | yes       |
 
-`status` and `activeAccountMonitor` are optional because a vendor may not
-expose either — the framework treats `nil` as "feature disabled for this
-vendor", not "partial implementation".
+`status` and `activeAccountMonitor` are conditional because a vendor may
+not expose either — the framework treats `nil` as "feature disabled for
+this vendor", not "partial implementation". For `status` specifically,
+`nil` is only acceptable when the dated vendor doc explicitly states that
+no public status page exists; see §7.
 
 ## 2. Vendor identity
 
@@ -226,9 +228,17 @@ public protocol StatusConnector: Sendable {
 }
 ```
 
-Optional. A vendor without a public statuspage simply omits this slot —
-the registry threads `nil` through to the poller, which skips status calls
-for that vendor.
+Required when the vendor has a public status page documented in its
+`docs/vendors/<slug>.md` Status page section. A vendor without a public
+status page omits this slot — the registry threads `nil` through to the
+poller, which skips status calls for that vendor — and the dated vendor
+doc must explicitly state "No public status page" so future contributors
+can tell the difference between "missing" and "intentionally absent".
+
+If the status page is shared across multiple products (e.g. GitHub's
+status page covers Copilot alongside Actions, Pages, etc.), the connector
+must filter incidents down to the components that actually affect this
+vendor; the filter rule belongs in the dated vendor doc.
 
 ## 8. Active-account monitor
 

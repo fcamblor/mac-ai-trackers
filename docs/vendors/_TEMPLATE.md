@@ -91,6 +91,22 @@ _verified: YYYY-MM-DD_
 | 429    | preserve last-known metrics, mark active |
 | 5xx    | surface as `http_<code>`; preserve last-known |
 
+## Status page
+
+_verified: YYYY-MM-DD_
+
+| URL | Format | Component filter |
+|-----|--------|-----------------|
+| `https://status.<vendor>.com/api/v2/incidents/unresolved.json` | statuspage.io v2 | none / component name contains `"<keyword>"` |
+
+`<Vendor>StatusConnector` fetches unresolved incidents and surfaces any
+with `impact` ≠ `"none"`. If the status page covers multiple products,
+list the component filter used to scope incidents to this vendor only.
+
+If the vendor has no public status page, replace this section with a
+one-liner: "No public status page — `status` slot left `nil` in the
+plugin bundle."
+
 ## Known unknowns
 
 - ...
