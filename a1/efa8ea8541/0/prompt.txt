@@ -1,0 +1,81 @@
+<system_instruction>
+You are working inside Conductor, a Mac app that lets the user run many coding agents in parallel.
+Your work should take place in the /Users/fcamblor/conductor/workspaces/mac-ai-trackers/hong-kong directory (unless otherwise directed), which has been set up for you to work in.
+Each workspace has a .context directory (gitignored) where you can save files to collaborate with other agents.
+The target branch for this workspace is origin/main. Use this for actions like diffing (`git diff origin/main...`) or creating PRs (`gh pr create --base main`).
+
+Do not rename the current branch unless the user explicitly tells you to do so.
+
+By default, the user will only see the last message that you send before stopping. Include all essential information in the last message. The intermediate messages will be collapsed and accessible by the user but not displayed by default.
+
+If the user asks you to work on several unrelated tasks, you can suggest they start new workspaces.
+Sometimes the user might send you a message they meant to send in a different workspace or a different chat. If something doesn't make sense in the context of your work, just ask. 
+If the user asks for help with Conductor, you can ask them to go to "Help -> Send Feedback" to get in touch with our team.
+</system_instruction>
+
+# Ajouter un workflow CI Swift + qualifier le smoke test en GHA
+
+## Contexte
+
+Sur ce repo (`mac-ai-trackers`, app macOS Swift Package), un commit `46c3c02` sur `main` a corrigé une boucle de feedback `NSStatusItem` ↔ KVO `effectiveAppearance` qui pinait le CPU à ~96% (≈600 renders/s du status item). Le fix introduit un `MenuBarRefreshController` couvert par 9 tests unitaires, et un **smoke test d'intégration opt-in** qui :
+
+- s'active via `RUN_SMOKE_TESTS=1`,
+- lance le binaire compilé dans une sandbox (`AI_TRACKER_CACHE_DIR`),
+- lit un compteur exporté toutes les 2 s par l'app (`AI_TRACKER_EXPORT_RENDER_COUNT`),
+- localise le binaire via `AIUT_BINARY_PATH` ou `.build/<triple>/{debug,release}/AIUsagesTrackers`,
+- échoue si le compteur dépasse 100 sur 8 s (mutation locale vérifiée : count=4299 quand les verrous sont retirés).
+
+Voir le commit `46c3c02` (squash-merge de la PR #39) pour le détail.
+
+**Problème actuel** : aucun workflow CI ne lance `swift test` sur ce repo. Les workflows présents (`.github/workflows/`) couvrent uniquement la build des PR `assistant-onboarding`, le label gating et les releases.
+
+## Objectif
+
+Faire deux PR séparées.
+
+### PR 1 — Workflow CI général (fondation)
+
+Ajouter `.github/workflows/ci.yml` qui sur chaque `push` et `pull_request` vers `main` :
+
+- tourne sur `macos-15`,
+- sélectionne Xcode 26 comme le fait déjà `release.yml` / `assistant-build.yml` (réutiliser le snippet `ls -d /Applications/Xcode_26*.app | sort -V | tail -1`),
+- **strippe le plugin SwiftLint du `Package.swift`** comme le fait `assistant-build.yml` (le plugin échoue sur runner GHA avec "prebuild command cannot use executables built from source"),
+- lance `swift build` puis `swift test` (la suite courante = 570 tests, durée ~3 s),
+- échoue le job si l'un échoue.
+
+Pas de smoke dans cette PR — c'est juste la fondation. Vérifier que le job passe vert avant de merger.
+
+### PR 2 — Qualifier puis intégrer le smoke test
+
+La qualification se fait en **deux PR distinctes**, dans cet ordre :
+
+**PR 2a — Qualification (jetable)** :
+
+1. Crée une branche, ajoute le job `smoke-tests` qui :
+   - dépend du job de build,
+   - set `RUN_SMOKE_TESTS=1`,
+   - lance `swift test --filter StatusItemRenderSmoke`,
+   - **est en mode bloquant normal** (pas de `continue-on-error`, on veut le signal franc).
+2. Sur la même branche, fais `git revert 46c3c02` pour restaurer l'état pré-fix.
+3. Pousse, observe le run CI :
+   - **Si le smoke job échoue avec `count >> 100`** → le test discrimine en GHA. Ferme la PR sans merger (elle ne sert qu'à valider).
+   - **Si le smoke job passe quand même** → GHA headless ne reproduit pas la boucle (cause connue : `NSStatusItemReplicantShadowView` est instancié par `controlcenter` / `SystemUIServer` côté système, peut ne pas être actif sans utilisateur GUI). Ferme la PR. Le smoke n'a pas sa place en CI cloud — soit l'abandonner, soit le passer en `workflow_dispatch` (déclenchement manuel uniquement).
+
+**PR 2b — Intégration (si la qualification est concluante)** :
+
+Une nouvelle branche, qui contient **uniquement** le job `smoke-tests` (sans le revert). Le job doit passer vert, prouvant que sur main intact le smoke est silencieux. Merge.
+
+## Contraintes du repo à respecter
+
+- Markdown en anglais (voir `.claude/rules/markdown-authoring.md`).
+- Pour tout code Swift : charger d'abord les guides `docs/SWIFT-*.md` (concurrency, error handling, etc.) — pas applicable ici puisqu'on touche du YAML, mais vérifier que les éventuelles modifs Swift les respectent.
+- Conventional commits comme `ci:` ou `chore(ci):` (voir `docs/GIT-CONVENTIONS.md`).
+- Ne pas committer sans demande explicite ; faire d'abord lire le diff par l'utilisateur.
+
+## Livrables attendus
+
+- PR 1 : un seul commit `ci: add Swift build + test workflow on macos-15`, branche `add-ci-workflow`, base `main`.
+- PR 2a : branche `qualify-smoke-test-in-gha`, contient `revert "fix(menubar): …"` + ajout du smoke job. Ne pas merger — c'est de la validation, on lit le résultat du run et on ferme.
+- PR 2b : ouverte uniquement si PR 2a a démontré que le smoke discrimine. Branche `add-smoke-test-job`, contient uniquement le job. Mergeable.
+
+Démarre par PR 1.
