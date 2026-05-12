@@ -1,0 +1,46 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "7e589a11e3e7",
+  "session_id": "e9af779e-e123-47a7-bee9-bb1e002f6520",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-12T11:20:42.850043Z",
+  "branch": "release-0.50",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".github/workflows/assistant-build.yml"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "96c0625eefc7",
+  "token_usage": {
+    "input_tokens": 16,
+    "cache_creation_tokens": 19034,
+    "cache_read_tokens": 186202,
+    "output_tokens": 1472,
+    "api_call_count": 6
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-12T11:20:42.776493Z",
+    "agent_lines": 1,
+    "agent_removed": 1,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1,
+    "total_lines_changed": 2,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
