@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "0dd8c27eea8e",
+  "strategy": "manual-commit",
+  "branch": "qualify-smoke-test-in-gha",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/MenuBar/MenuBarRefreshController.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0d/d8c27eea8e/0/metadata.json",
+      "transcript": "/0d/d8c27eea8e/0/full.jsonl",
+      "content_hash": "/0d/d8c27eea8e/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 10,
+    "cache_creation_tokens": 10250,
+    "cache_read_tokens": 674247,
+    "output_tokens": 7157,
+    "api_call_count": 10
+  }
+}
