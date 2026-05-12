@@ -27,6 +27,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var activeInstallKind: InstallationKind?
     private var activeInstallBundlePath: String?
 
+    // Setting `button.image = ...` with a non-template NSImage causes AppKit
+    // to recompose the status item replicant view, which in turn flips
+    // `button.effectiveAppearance` — re-firing the KVO that drove the render.
+    // That feedback loop pegged the main thread at ~600 renders/s. The two
+    // dedup keys below break it: `lastRenderedKey` skips re-assigning an
+    // identical image, and `lastResolvedIsDark` filters spurious appearance
+    // KVO fires.
+    private struct MenuBarRenderKey: Equatable {
+        let segments: [MenuBarSegment]
+        let text: String
+        let separator: String
+        let isDark: Bool
+        let isUnconfigured: Bool
+    }
+    private var lastRenderedKey: MenuBarRenderKey?
+    private var lastResolvedIsDark: Bool?
+
     /// Shared preferences store — exposed as static so the SwiftUI Settings scene
     /// (constructed before applicationDidFinishLaunching) can access it.
     static let sharedPreferences: UserDefaultsAppPreferences = UserDefaultsAppPreferences()
@@ -267,7 +284,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // The menu bar appearance can change (wallpaper-driven tinting) without
             // the app's effectiveAppearance changing, so we observe the button itself.
             appearanceObserver = button.observe(\.effectiveAppearance, options: [.new]) { [weak self] _, _ in
-                Task { @MainActor in self?.refreshStatusItemImage() }
+                Task { @MainActor in
+                    guard let self, let button = self.statusItem?.button else { return }
+                    let isDark = button.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                    guard isDark != self.lastResolvedIsDark else { return }
+                    self.lastResolvedIsDark = isDark
+                    self.refreshStatusItemImage()
+                }
             }
         }
 
@@ -277,15 +300,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func refreshStatusItemImage() {
         guard let store = usageStore, let button = statusItem?.button else { return }
         let isDark = button.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        let isUnconfigured = Self.sharedPreferences.menuBarSegments.isEmpty
-        let image = MenuBarLabelRenderer.render(
+        let key = MenuBarRenderKey(
             segments: store.menuBarSegments,
+            text: store.menuBarText,
             separator: Self.sharedPreferences.menuBarSeparator,
-            fallbackText: store.menuBarText,
-            isDarkMenuBar: isDark,
-            isUnconfigured: isUnconfigured
+            isDark: isDark,
+            isUnconfigured: Self.sharedPreferences.menuBarSegments.isEmpty
         )
-        button.image = image
+        guard key != lastRenderedKey else { return }
+        lastRenderedKey = key
+        lastResolvedIsDark = isDark
+        button.image = MenuBarLabelRenderer.render(
+            segments: key.segments,
+            separator: key.separator,
+            fallbackText: key.text,
+            isDarkMenuBar: key.isDark,
+            isUnconfigured: key.isUnconfigured
+        )
     }
 
     @objc private func togglePopover(_ sender: Any?) {
