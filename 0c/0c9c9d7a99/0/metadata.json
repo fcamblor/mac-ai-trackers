@@ -1,0 +1,37 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "0c0c9c9d7a99",
+  "session_id": "b5e8883e-ae72-4041-9026-09beff7f7fa0",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-12T07:31:23.943127Z",
+  "branch": "new-vendor-assistant-improvements",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "docs/ASSISTANT-ONBOARDING.md",
+    ".claude/skills/assistant-merge/SKILL.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "ca4bc347d532",
+  "checkpoint_transcript_start": 90,
+  "transcript_lines_at_start": 90,
+  "token_usage": {
+    "input_tokens": 6,
+    "cache_creation_tokens": 18183,
+    "cache_read_tokens": 429483,
+    "output_tokens": 2066,
+    "api_call_count": 6
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-12T07:31:23.5016Z",
+    "agent_lines": 21,
+    "agent_removed": 6,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 21,
+    "total_lines_changed": 27,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}
