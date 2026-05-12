@@ -1196,6 +1196,74 @@ struct UsageStoreOutagesTests {
     }
 
     @MainActor
+    @Test("segment with showOutageWarning surfaces warning text only when its vendor has an outage")
+    func segmentOutageWarningCoupledToVendor() async throws {
+        let watcher = MockFileWatcher()
+        let prefs = InMemoryAppPreferences(
+            menuBarSegments: [
+                MenuBarSegmentConfig(
+                    vendor: .claude,
+                    account: .currentlyActive,
+                    metricName: "5h sessions (all models)",
+                    display: .timeWindow(TimeWindowDisplay(letter: "S")),
+                    showOutageWarning: true,
+                    outageWarningText: "⚠️"
+                ),
+            ],
+            menuBarSegmentsInitialized: true
+        )
+        let store = UsageStore(fileWatcher: watcher, preferences: prefs, countdownRefreshSeconds: 999)
+        store.start()
+
+        // No outage yet — segment is rendered without warning.
+        let withoutOutage = try makeUsagesJSON(metrics: [timeWindowMetric()])
+        watcher.send(withoutOutage)
+        try await eventually { !store.menuBarSegments.isEmpty }
+        #expect(store.menuBarSegments.first?.outageWarningText == nil)
+
+        // Outage on the same vendor — warning surfaces on the segment.
+        let withOutage = try makeUsagesWithOutagesJSON(
+            metrics: [timeWindowMetric()],
+            outages: [outageJSON()]
+        )
+        watcher.send(withOutage)
+        try await eventually { store.menuBarSegments.first?.outageWarningText != nil }
+        #expect(store.menuBarSegments.first?.outageWarningText == "⚠️")
+
+        store.stop()
+    }
+
+    @MainActor
+    @Test("segment without showOutageWarning never surfaces warning even during an outage")
+    func segmentWithoutOptInIgnoresOutage() async throws {
+        let watcher = MockFileWatcher()
+        let prefs = InMemoryAppPreferences(
+            menuBarSegments: [
+                MenuBarSegmentConfig(
+                    vendor: .claude,
+                    account: .currentlyActive,
+                    metricName: "5h sessions (all models)",
+                    display: .timeWindow(TimeWindowDisplay(letter: "S")),
+                    showOutageWarning: false
+                ),
+            ],
+            menuBarSegmentsInitialized: true
+        )
+        let store = UsageStore(fileWatcher: watcher, preferences: prefs, countdownRefreshSeconds: 999)
+        store.start()
+
+        let withOutage = try makeUsagesWithOutagesJSON(
+            metrics: [timeWindowMetric()],
+            outages: [outageJSON()]
+        )
+        watcher.send(withOutage)
+        try await eventually { !store.menuBarSegments.isEmpty }
+        #expect(store.menuBarSegments.first?.outageWarningText == nil)
+
+        store.stop()
+    }
+
+    @MainActor
     @Test("clearing outages resets outagesByVendor")
     func clearingOutagesResetsMap() async throws {
         let watcher = MockFileWatcher()

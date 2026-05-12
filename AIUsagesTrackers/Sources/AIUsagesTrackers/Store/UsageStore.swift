@@ -23,12 +23,34 @@ public struct MenuBarSegment: Sendable, Equatable {
     public let tier: ConsumptionTier?
     public let showDot: Bool
     public let vendorIcon: Vendor?
+    /// When non-nil, the renderer inserts this text immediately after the
+    /// vendor icon (or at the segment's start when no icon is shown). Set by
+    /// `UsageStore.applyFormat` when the segment's config opts in and the
+    /// vendor currently has an active outage.
+    public let outageWarningText: String?
 
-    public init(text: String, tier: ConsumptionTier?, showDot: Bool, vendorIcon: Vendor? = nil) {
+    public init(
+        text: String,
+        tier: ConsumptionTier?,
+        showDot: Bool,
+        vendorIcon: Vendor? = nil,
+        outageWarningText: String? = nil
+    ) {
         self.text = text
         self.tier = tier
         self.showDot = showDot
         self.vendorIcon = vendorIcon
+        self.outageWarningText = outageWarningText
+    }
+
+    public func withOutageWarning(_ text: String?) -> MenuBarSegment {
+        MenuBarSegment(
+            text: self.text,
+            tier: tier,
+            showDot: showDot,
+            vendorIcon: vendorIcon,
+            outageWarningText: text
+        )
     }
 }
 
@@ -210,7 +232,8 @@ public final class UsageStore {
         for config in configs {
             let resolution = MenuBarSegmentResolver.resolve(config: config, entries: entries, now: now)
             if let segment = resolution.rendered {
-                rendered.append(segment)
+                let warning = outageWarningText(for: config)
+                rendered.append(warning != nil ? segment.withOutageWarning(warning) : segment)
             } else if let issue = resolution.issue {
                 logger.log(.debug, "UsageStore: skipping segment \(config.metricName) — \(issue)")
             }
@@ -218,5 +241,14 @@ public final class UsageStore {
         menuBarSegments = rendered
         menuBarText = rendered.isEmpty ? Self.fallbackText : rendered.map(\.text).joined(separator: preferences.menuBarSeparator)
         menuBarTier = rendered.compactMap(\.tier).max()
+    }
+
+    /// Returns the per-segment warning text when the config opts in and the
+    /// segment's vendor currently has at least one active outage. Nil otherwise.
+    private func outageWarningText(for config: MenuBarSegmentConfig) -> String? {
+        guard config.showOutageWarning else { return nil }
+        guard !config.outageWarningText.isEmpty else { return nil }
+        guard let vendorOutages = outagesByVendor[config.vendor], !vendorOutages.isEmpty else { return nil }
+        return config.outageWarningText
     }
 }
