@@ -317,7 +317,7 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          tags=$(gh release list --limit 100 --json tagName \
+          tags=$(gh release list --repo "${REPO}" --limit 100 --json tagName \
             --jq ".[] | select(.tagName | startswith(\"assistant-build-pr${PR}-\")) | .tagName")
           while IFS= read -r tag; do
             [ -z "$tag" ] && continue
