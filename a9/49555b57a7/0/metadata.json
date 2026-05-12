@@ -1,0 +1,95 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "a949555b57a7",
+  "session_id": "97432cb3-d081-41db-aa26-d9ec1cc53b32",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-12T09:00:35.107647Z",
+  "branch": "new-vendor-assistant-improvements",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/ClaudeStatusConnector.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexStatusConnector.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CodexStatusConnectorTests.swift",
+    "docs/vendors/claude.md",
+    "docs/vendors/codex.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "74250c9b5b7b",
+  "token_usage": {
+    "input_tokens": 136,
+    "cache_creation_tokens": 258548,
+    "cache_read_tokens": 5686079,
+    "output_tokens": 35095,
+    "api_call_count": 83
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-12T09:00:34.765175Z",
+    "agent_lines": 233,
+    "agent_removed": 51,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 233,
+    "total_lines_changed": 284,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 183,
+      "user_lines_removed": 5,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/skills/assistant-implement/SKILL.md": 3,
+        ".context/pull-requests/36.md": 6,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CopilotStatusConnector.swift": 108,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Plugins/CopilotCLIPlugin.swift": 2,
+        "docs/REVIEW-CHECKLIST-ASSISTANT-CHANGE.md": 3,
+        "docs/vendors/_TEMPLATE.md": 16,
+        "docs/vendors/claude.md": 13,
+        "docs/vendors/codex.md": 13,
+        "docs/vendors/copilot.md": 19
+      },
+      "user_removed_per_file": {
+        ".claude/skills/assistant-implement/SKILL.md": 1,
+        "AIUsagesTrackers/Sources/AIUsagesTrackers/Plugins/CopilotCLIPlugin.swift": 4
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 6,
+      "user_lines_removed": 0,
+      "agent_lines_added": 409,
+      "agent_lines_removed": 5,
+      "user_added_per_file": {
+        ".context/pull-requests/36.md": 6
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 6,
+      "user_lines_removed": 0,
+      "agent_lines_added": 426,
+      "agent_lines_removed": 12,
+      "user_added_per_file": {
+        ".context/pull-requests/36.md": 6
+      }
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 6,
+      "user_lines_removed": 0,
+      "agent_lines_added": 659,
+      "agent_lines_removed": 63,
+      "user_added_per_file": {
+        ".context/pull-requests/36.md": 6
+      }
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "a949555b57a7",
+  "strategy": "manual-commit",
+  "branch": "new-vendor-assistant-improvements",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/ClaudeStatusConnector.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexStatusConnector.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CodexStatusConnectorTests.swift",
+    "docs/vendors/claude.md",
+    "docs/vendors/codex.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/a9/49555b57a7/0/metadata.json",
+      "transcript": "/a9/49555b57a7/0/full.jsonl",
+      "content_hash": "/a9/49555b57a7/0/content_hash.txt",
+      "prompt": "/a9/49555b57a7/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 136,
+    "cache_creation_tokens": 258548,
+    "cache_read_tokens": 5686079,
+    "output_tokens": 35095,
+    "api_call_count": 83
+  }
+}
