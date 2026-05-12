@@ -1,27 +1,30 @@
 import Testing
 @testable import AIUsagesTrackers
+@testable import AIUsagesTrackersLib
 
 @Suite("MenuBarLabelRenderer")
 @MainActor
 struct MenuBarLabelRendererTests {
-    @Test("outage warning prefixes the unconfigured menu bar label")
-    func outageWarningPrefixesUnconfiguredLabel() {
+    @Test("segment outage warning widens the rendered label")
+    func outageWarningWidensSegment() {
         let base = MenuBarLabelRenderer.render(
-            segments: [],
+            segments: [MenuBarSegment(text: "100%", tier: nil, showDot: false)],
             separator: " | ",
             fallbackText: "--",
-            isDarkMenuBar: false,
-            isUnconfigured: true
+            isDarkMenuBar: false
         )
-        let prefixed = MenuBarLabelRenderer.render(
-            segments: [],
+        let warned = MenuBarLabelRenderer.render(
+            segments: [MenuBarSegment(
+                text: "100%",
+                tier: nil,
+                showDot: false,
+                outageWarningText: "⚠️"
+            )],
             separator: " | ",
             fallbackText: "--",
-            isDarkMenuBar: false,
-            isUnconfigured: true,
-            outageWarningPrefix: "WARN"
+            isDarkMenuBar: false
         )
 
-        #expect(prefixed.size.width > base.size.width)
+        #expect(warned.size.width > base.size.width)
     }
 }

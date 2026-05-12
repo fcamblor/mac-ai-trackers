@@ -20,22 +20,20 @@ enum MenuBarLabelRenderer {
         separator: String,
         fallbackText: String,
         isDarkMenuBar: Bool,
-        isUnconfigured: Bool = false,
-        outageWarningPrefix: String? = nil
+        isUnconfigured: Bool = false
     ) -> NSImage {
         let textColor: NSColor = isDarkMenuBar ? .white : .black
-        let main: NSAttributedString
+        let attributed: NSAttributedString
         if isUnconfigured && segments.isEmpty {
-            main = unconfiguredAttributedString(textColor: textColor)
+            attributed = unconfiguredAttributedString(textColor: textColor)
         } else {
-            main = attributedString(
+            attributed = attributedString(
                 segments: segments,
                 separator: separator,
                 fallbackText: fallbackText,
                 textColor: textColor
             )
         }
-        let attributed = prefixed(main, prefix: outageWarningPrefix, textColor: textColor)
         let textSize = attributed.size()
         let width = ceil(textSize.width) + horizontalPadding * 2
         let size = NSSize(width: max(width, 1), height: height)
@@ -46,21 +44,6 @@ enum MenuBarLabelRenderer {
         image.unlockFocus()
         image.isTemplate = false
         return image
-    }
-
-    private static func prefixed(
-        _ main: NSAttributedString,
-        prefix: String?,
-        textColor: NSColor
-    ) -> NSAttributedString {
-        guard let prefix, !prefix.isEmpty else { return main }
-        let combined = NSMutableAttributedString()
-        combined.append(NSAttributedString(
-            string: prefix + " ",
-            attributes: [.font: font, .foregroundColor: textColor]
-        ))
-        combined.append(main)
-        return combined
     }
 
     private static func unconfiguredAttributedString(textColor: NSColor) -> NSAttributedString {
@@ -133,6 +116,12 @@ enum MenuBarLabelRenderer {
                 result.append(NSAttributedString(attachment: attachment))
                 result.append(NSAttributedString(
                     string: "\u{2009}",
+                    attributes: [.font: font, .foregroundColor: textColor]
+                ))
+            }
+            if let warning = segment.outageWarningText, !warning.isEmpty {
+                result.append(NSAttributedString(
+                    string: warning + "\u{2009}",
                     attributes: [.font: font, .foregroundColor: textColor]
                 ))
             }

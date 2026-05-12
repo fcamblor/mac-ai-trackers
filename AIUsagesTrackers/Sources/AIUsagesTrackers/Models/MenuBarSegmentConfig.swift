@@ -152,19 +152,60 @@ public struct MenuBarSegmentConfig: Codable, Equatable, Hashable, Sendable, Iden
     public var account: AccountSelection
     public var metricName: String
     public var display: SegmentDisplay
+    /// When true and the segment's vendor currently has an active outage,
+    /// `outageWarningText` is rendered in the menu bar immediately after the
+    /// vendor icon (or at the segment's start when no icon is shown).
+    public var showOutageWarning: Bool
+    /// Short label rendered while the segment's vendor has an active outage.
+    /// Defaults to "⚠️". Ignored when `showOutageWarning` is false.
+    public var outageWarningText: String
+
+    public static let defaultOutageWarningText: String = "⚠️"
 
     public init(
         id: UUID = UUID(),
         vendor: Vendor,
         account: AccountSelection,
         metricName: String,
-        display: SegmentDisplay
+        display: SegmentDisplay,
+        showOutageWarning: Bool = false,
+        outageWarningText: String = MenuBarSegmentConfig.defaultOutageWarningText
     ) {
         self.id = id
         self.vendor = vendor
         self.account = account
         self.metricName = metricName
         self.display = display
+        self.showOutageWarning = showOutageWarning
+        self.outageWarningText = outageWarningText
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, vendor, account, metricName, display
+        case showOutageWarning, outageWarningText
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        vendor = try c.decode(Vendor.self, forKey: .vendor)
+        account = try c.decode(AccountSelection.self, forKey: .account)
+        metricName = try c.decode(String.self, forKey: .metricName)
+        display = try c.decode(SegmentDisplay.self, forKey: .display)
+        showOutageWarning = try c.decodeIfPresent(Bool.self, forKey: .showOutageWarning) ?? false
+        outageWarningText = try c.decodeIfPresent(String.self, forKey: .outageWarningText)
+            ?? MenuBarSegmentConfig.defaultOutageWarningText
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(vendor, forKey: .vendor)
+        try c.encode(account, forKey: .account)
+        try c.encode(metricName, forKey: .metricName)
+        try c.encode(display, forKey: .display)
+        try c.encode(showOutageWarning, forKey: .showOutageWarning)
+        try c.encode(outageWarningText, forKey: .outageWarningText)
     }
 }
 

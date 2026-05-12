@@ -1,21 +1,18 @@
 import Foundation
 
-public actor ClaudeStatusConnector: StatusConnector {
-    nonisolated public let vendor: Vendor = .claude
+public actor CopilotStatusConnector: StatusConnector {
+    nonisolated public let vendor: Vendor = .copilot
 
     private let logger: FileLogger
     private let session: URLSession
     private let endpointURLString: String
 
-    private static let requestTimeoutSeconds: TimeInterval = 5
-    /// `status.anthropic.com` 302-redirects to `status.claude.com`; we point at the canonical
-    /// destination so the connector does not depend on `URLSession` following redirects.
-    public static let defaultEndpoint = "https://status.claude.com/api/v2/incidents/unresolved.json"
+    public static let defaultEndpoint = "https://www.githubstatus.com/api/v2/incidents/unresolved.json"
 
     public init(
-        logger: FileLogger = Loggers.claude,
+        logger: FileLogger = Loggers.copilot,
         session: URLSession = .shared,
-        endpointURLString: String = ClaudeStatusConnector.defaultEndpoint
+        endpointURLString: String = CopilotStatusConnector.defaultEndpoint
     ) {
         self.logger = logger
         self.session = session
@@ -27,23 +24,23 @@ public actor ClaudeStatusConnector: StatusConnector {
             throw StatusConnectorError.invalidURL(rawValue: endpointURLString)
         }
         var request = URLRequest(url: url)
-        request.timeoutInterval = Self.requestTimeoutSeconds
+        request.timeoutInterval = CopilotConstants.requestTimeoutSeconds
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        logger.log(.debug, "Fetching Claude status from \(endpointURLString)")
+        logger.log(.debug, "Fetching Copilot status from \(endpointURLString)")
 
         let data: Data
         let response: URLResponse
         do {
             (data, response) = try await session.data(for: request)
         } catch {
-            logger.log(.warning, "Status endpoint network error: \(error)")
+            logger.log(.warning, "Copilot status endpoint network error: \(error)")
             throw StatusConnectorError.networkError(underlying: error, url: endpointURLString)
         }
 
         let httpCode = (response as? HTTPURLResponse)?.statusCode ?? -1
         guard httpCode == 200 else {
-            logger.log(.warning, "Status endpoint returned HTTP \(httpCode)")
+            logger.log(.warning, "Copilot status endpoint returned HTTP \(httpCode)")
             throw StatusConnectorError.unexpectedResponse(statusCode: httpCode, url: endpointURLString)
         }
 
@@ -51,16 +48,20 @@ public actor ClaudeStatusConnector: StatusConnector {
         do {
             decoded = try JSONDecoder().decode(StatuspageIncidentsResponse.self, from: data)
         } catch {
-            logger.log(.error, "Status endpoint parse error: \(error)")
+            logger.log(.error, "Copilot status endpoint parse error: \(error)")
             throw StatusConnectorError.parseError(underlying: error, url: endpointURLString)
         }
 
         let outages: [Outage] = decoded.incidents.compactMap { incident in
-            // "none" impact means the incident is informational with no user-facing effect —
-            // don't surface it as an outage in the UI.
+            // githubstatus.com covers all GitHub services — only surface incidents
+            // that explicitly affect a Copilot component.
+            let affectsCopilot = incident.components.contains {
+                $0.name.localizedCaseInsensitiveContains("copilot")
+            }
+            guard affectsCopilot else { return nil }
+            // "none" impact means informational only — no user-facing effect.
             guard incident.impact != "none" else { return nil }
             let severity = OutageSeverity(rawValue: incident.impact)
-            // Invalid shortlink must not drop the incident itself — surface it without href.
             let href: URL?
             if let raw = incident.shortlink {
                 href = URL(string: raw)
@@ -71,11 +72,11 @@ public actor ClaudeStatusConnector: StatusConnector {
                 vendor: vendor,
                 errorMessage: incident.name,
                 severity: severity,
-                since: ISODate(rawValue: incident.created_at),
+                since: incident.createdAt,
                 href: href
             )
         }
-        logger.log(.info, "Claude status: \(outages.count) active outage(s)")
+        logger.log(.info, "Copilot status: \(outages.count) active outage(s)")
         return outages
     }
 
@@ -88,7 +89,20 @@ public actor ClaudeStatusConnector: StatusConnector {
     private struct StatuspageIncident: Decodable {
         let name: String
         let impact: String
-        let created_at: String
+        let createdAt: ISODate
         let shortlink: String?
+        let components: [StatuspageComponent]
+
+        private enum CodingKeys: String, CodingKey {
+            case name
+            case impact
+            case createdAt = "created_at"
+            case shortlink
+            case components
+        }
+    }
+
+    private struct StatuspageComponent: Decodable {
+        let name: String
     }
 }

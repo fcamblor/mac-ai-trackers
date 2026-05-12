@@ -30,6 +30,9 @@ If this checklist disagrees with `docs/ASSISTANT-ONBOARDING.md` or
       holds).
 - [ ] Active-account monitor implements `ActiveAccountMonitoring.start/stop`
       idempotently when a monitor is provided.
+- [ ] Status connector present when `docs/vendors/<vendor>.md` documents a
+      public status page; `nil` only when the doc explicitly states no
+      public page exists.
 
 ## Documentation (dated snapshot)
 

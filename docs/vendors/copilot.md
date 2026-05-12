@@ -179,6 +179,25 @@ _verified: 2026-05-07_
 `identity_unresolved` is logged (no entry written) when the active login
 cannot be determined from any source.
 
+## Status page
+
+_verified: 2026-05-07_
+
+| URL | Format | Component filter |
+|-----|--------|-----------------|
+| `https://www.githubstatus.com/api/v2/incidents/unresolved.json` | statuspage.io v2 | component name contains `"copilot"` (case-insensitive) |
+
+`CopilotStatusConnector` fetches unresolved incidents from the GitHub
+status page and retains only those affecting a component whose name
+contains `"copilot"` — this covers both the `"Copilot"` component and
+`"Copilot AI Model Providers"`. Incidents that do not touch any
+Copilot component are silently skipped so that unrelated GitHub
+outages do not surface in the Copilot vendor pane.
+
+Impact maps directly to `OutageSeverity` (`critical`, `major`, `minor`,
+`maintenance`); the incident `shortlink` becomes the clickable href in
+the UI.
+
 ## Known unknowns
 
 - Copilot Pro response shape with active `quota_snapshots`.

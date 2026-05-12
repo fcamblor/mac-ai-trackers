@@ -149,6 +149,23 @@ _verified: 2026-05-07_
 A `parse_error` is surfaced if the response cannot be decoded as JSON or
 contains no known window block.
 
+## Status page
+
+_verified: 2026-05-12_
+
+| URL | Format | Component filter |
+|-----|--------|-----------------|
+| `https://status.claude.com/api/v2/incidents/unresolved.json` | statuspage.io v2 | none — all incidents on this page are Anthropic-specific |
+
+`status.anthropic.com` 302-redirects to `status.claude.com`; the
+connector points at the canonical destination so it does not depend on
+`URLSession` following redirects.
+
+`ClaudeStatusConnector` fetches unresolved incidents and surfaces any
+incident whose `impact` is not `"none"`. Impact maps directly to
+`OutageSeverity` (`critical`, `major`, `minor`, `maintenance`); the
+incident `shortlink` becomes the clickable href in the UI.
+
 ## Known unknowns
 
 - Max plan shape with active `seven_day_opus` quota — assumed identical

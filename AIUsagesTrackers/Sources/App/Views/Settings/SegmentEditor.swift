@@ -37,6 +37,36 @@ struct SegmentEditor: View {
         }
     }
 
+    // MARK: Outage warning row
+
+    private func outageWarningRow(_ binding: Binding<MenuBarSegmentConfig>) -> some View {
+        let enabledBinding = Binding<Bool>(
+            get: { binding.wrappedValue.showOutageWarning },
+            set: { newValue in
+                var seg = binding.wrappedValue
+                seg.showOutageWarning = newValue
+                binding.wrappedValue = seg
+            }
+        )
+        let textBinding = Binding<String>(
+            get: { binding.wrappedValue.outageWarningText },
+            set: { newValue in
+                var seg = binding.wrappedValue
+                seg.outageWarningText = newValue
+                binding.wrappedValue = seg
+            }
+        )
+
+        return HStack {
+            Toggle("Outage warning", isOn: enabledBinding)
+                .fixedSize()
+            TextField("", text: textBinding)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 48)
+                .disabled(!enabledBinding.wrappedValue)
+        }
+    }
+
     // MARK: Time-window editor
 
     private func timeWindowEditor(_ binding: Binding<MenuBarSegmentConfig>) -> some View {
@@ -61,6 +91,7 @@ struct SegmentEditor: View {
                 .textCase(.uppercase)
 
             Toggle("Show vendor icon", isOn: displayBinding.showVendorIcon)
+            outageWarningRow(binding)
             Toggle("Colored status dot", isOn: displayBinding.showDot)
             HStack {
                 Toggle("Metric short label", isOn: displayBinding.showLetter)
@@ -87,12 +118,15 @@ struct SegmentEditor: View {
 
     private func payAsYouGoInfo(_ binding: Binding<MenuBarSegmentConfig>) -> some View {
         let preview = previewPayAsYouGo(for: binding.wrappedValue) ?? "—"
-        return HStack(spacing: 6) {
-            Image(systemName: "info.circle")
-                .foregroundStyle(.secondary)
-            Text("This metric displays \"\(preview)\" — no additional options.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "info.circle")
+                    .foregroundStyle(.secondary)
+                Text("This metric displays \"\(preview)\" — no additional options.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            outageWarningRow(binding)
         }
     }
 

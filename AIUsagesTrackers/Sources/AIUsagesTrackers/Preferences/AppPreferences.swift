@@ -16,12 +16,6 @@ public protocol AppPreferences: AnyObject, Observable, Sendable {
     var menuBarSegmentsInitialized: Bool { get set }
     /// String inserted between adjacent segments in the menu bar label. Defaults to " | ".
     var menuBarSeparator: String { get set }
-    /// When true, the menu bar prepends `menuBarOutageWarningText` while at least
-    /// one vendor has an active outage. Defaults to true (opt-out).
-    var menuBarOutageWarningEnabled: Bool { get set }
-    /// Short label rendered before segments while any vendor has an active outage.
-    /// Defaults to "⚠️".
-    var menuBarOutageWarningText: String { get set }
     var chartConfigurations: [ChartConfiguration] { get set }
     /// Tracks whether chart seeding has already run so an intentionally empty
     /// configuration list is preserved after first initialization.
@@ -131,39 +125,6 @@ public final class UserDefaultsAppPreferences: AppPreferences {
         }
     }
 
-    public var menuBarOutageWarningEnabled: Bool {
-        get {
-            access(keyPath: \.menuBarOutageWarningEnabled)
-            // Default to enabled on a fresh install — but only if we've never persisted
-            // an explicit value. UserDefaults.bool returns false for missing keys, so we
-            // gate on a separate "initialized" flag to distinguish "never set" from
-            // "explicitly disabled".
-            if !defaults.bool(forKey: AppPreferenceKeys.menuBarOutageWarningEnabledInitialized.rawValue) {
-                return true
-            }
-            return defaults.bool(forKey: AppPreferenceKeys.menuBarOutageWarningEnabled.rawValue)
-        }
-        set {
-            withMutation(keyPath: \.menuBarOutageWarningEnabled) {
-                defaults.set(newValue, forKey: AppPreferenceKeys.menuBarOutageWarningEnabled.rawValue)
-                defaults.set(true, forKey: AppPreferenceKeys.menuBarOutageWarningEnabledInitialized.rawValue)
-            }
-        }
-    }
-
-    public var menuBarOutageWarningText: String {
-        get {
-            access(keyPath: \.menuBarOutageWarningText)
-            let stored = defaults.string(forKey: AppPreferenceKeys.menuBarOutageWarningText.rawValue)
-            return stored ?? "⚠️"
-        }
-        set {
-            withMutation(keyPath: \.menuBarOutageWarningText) {
-                defaults.set(newValue, forKey: AppPreferenceKeys.menuBarOutageWarningText.rawValue)
-            }
-        }
-    }
-
     public var chartConfigurations: [ChartConfiguration] {
         get {
             access(keyPath: \.chartConfigurations)
@@ -261,8 +222,6 @@ public final class InMemoryAppPreferences: AppPreferences {
     public var menuBarSegments: [MenuBarSegmentConfig]
     public var menuBarSegmentsInitialized: Bool
     public var menuBarSeparator: String
-    public var menuBarOutageWarningEnabled: Bool
-    public var menuBarOutageWarningText: String
     public var chartConfigurations: [ChartConfiguration]
     public var chartConfigurationsInitialized: Bool
     public var ignoredAccounts: [IgnoredAccount]
@@ -276,8 +235,6 @@ public final class InMemoryAppPreferences: AppPreferences {
         menuBarSegments: [MenuBarSegmentConfig] = [],
         menuBarSegmentsInitialized: Bool = false,
         menuBarSeparator: String = " | ",
-        menuBarOutageWarningEnabled: Bool = true,
-        menuBarOutageWarningText: String = "⚠️",
         chartConfigurations: [ChartConfiguration] = [],
         chartConfigurationsInitialized: Bool = false,
         ignoredAccounts: [IgnoredAccount] = [],
@@ -290,8 +247,6 @@ public final class InMemoryAppPreferences: AppPreferences {
         self.menuBarSegments = menuBarSegments
         self.menuBarSegmentsInitialized = menuBarSegmentsInitialized
         self.menuBarSeparator = menuBarSeparator
-        self.menuBarOutageWarningEnabled = menuBarOutageWarningEnabled
-        self.menuBarOutageWarningText = menuBarOutageWarningText
         self.chartConfigurations = chartConfigurations
         self.chartConfigurationsInitialized = chartConfigurationsInitialized
         self.ignoredAccounts = ignoredAccounts

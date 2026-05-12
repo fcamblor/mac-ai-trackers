@@ -1,9 +1,7 @@
 import Foundation
 
 /// GitHub Copilot CLI plugin namespace — see `ClaudeCodePlugin` for the
-/// rationale on factory-style assembly. Copilot does not currently
-/// expose a public statuspage we consume, so the bundle's `status`
-/// stays optional with a `nil` default.
+/// rationale on factory-style assembly.
 public enum CopilotCLIPlugin {
     public static let branding = VendorBranding(
         vendor: .copilot,
@@ -20,7 +18,7 @@ public enum CopilotCLIPlugin {
     @discardableResult
     public static func register(
         connector: CopilotConnector,
-        status: (any StatusConnector)? = nil,
+        status: (any StatusConnector)? = CopilotStatusConnector(),
         monitor: CopilotActiveAccountMonitor? = nil,
         logger: FileLogger = Loggers.copilot,
         sanitizer: CopilotPayloadSanitizer = CopilotPayloadSanitizer()
