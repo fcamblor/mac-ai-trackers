@@ -53,20 +53,19 @@ public final class MenuBarRefreshController {
         self.onRender = onRender
     }
 
-    /// Invokes `onRender(key)` only when `key` differs from the last accepted
-    /// render. Identical successive calls are no-ops.
+    /// QUALIFICATION-ONLY REGRESSION — DO NOT MERGE.
+    /// Dedup guards intentionally removed to re-introduce the
+    /// NSStatusItem render feedback loop and verify that the
+    /// `StatusItemRenderSmoke` test discriminates on a GHA runner.
     public func refresh(key: MenuBarRenderKey) {
-        guard key != lastRenderedKey else { return }
         lastRenderedKey = key
         lastResolvedIsDark = key.isDark
         renderCount += 1
         onRender(key)
     }
 
-    /// Returns `true` when the resolved dark/aqua flag has changed since the
-    /// last accepted render or appearance fire, meaning a refresh is warranted.
+    /// QUALIFICATION-ONLY REGRESSION — DO NOT MERGE.
     public func shouldHandleAppearanceChange(isDark: Bool) -> Bool {
-        guard isDark != lastResolvedIsDark else { return false }
         lastResolvedIsDark = isDark
         return true
     }
