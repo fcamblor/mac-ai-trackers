@@ -1,3 +1,7 @@
+---
+paths: .claude/skills/assistant*/SKILL.md
+---
+
 # Skill handoff conventions
 
 Every `assistant-*` skill ends a phase by transitioning a GitHub label
