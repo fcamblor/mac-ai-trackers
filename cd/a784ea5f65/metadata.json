@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "cda784ea5f65",
+  "strategy": "manual-commit",
+  "branch": "new-vendor-assistant-improvements",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".claude/skills/assistant-implement/SKILL.md",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Plugins/CopilotCLIPlugin.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CopilotStatusConnectorTests.swift",
+    "docs/REVIEW-CHECKLIST-ASSISTANT-CHANGE.md",
+    "docs/VENDOR-PLUGIN-CONTRACT.md",
+    "docs/vendors/_TEMPLATE.md",
+    "docs/vendors/copilot.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/cd/a784ea5f65/0/metadata.json",
+      "transcript": "/cd/a784ea5f65/0/full.jsonl",
+      "content_hash": "/cd/a784ea5f65/0/content_hash.txt",
+      "prompt": "/cd/a784ea5f65/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 150,
+    "cache_creation_tokens": 259405,
+    "cache_read_tokens": 5939274,
+    "output_tokens": 35737,
+    "api_call_count": 85
+  }
+}
