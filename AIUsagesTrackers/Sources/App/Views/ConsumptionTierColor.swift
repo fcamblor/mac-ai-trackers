@@ -24,3 +24,19 @@ extension ConsumptionTier {
         }
     }
 }
+
+extension Optional where Wrapped == ConsumptionTier {
+    /// Single source of truth for the menu-bar dot color. The "unknown" case
+    /// (no resolvable tier — e.g. percent shown as "???") gets a fixed mid-gray
+    /// rather than falling back to the surrounding text color, so the dot looks
+    /// the same in the real menu bar and in the Settings preview even when
+    /// those two surfaces run in different appearances. The dot's contrasted
+    /// border (see `MenuBarLabelRenderer`) keeps it visible against arbitrary
+    /// menu-bar wallpapers regardless of fill color.
+    var dotNSColor: NSColor {
+        switch self {
+        case .some(let tier): return tier.nsColor
+        case .none:           return NSColor(white: 0.6, alpha: 1.0)
+        }
+    }
+}
