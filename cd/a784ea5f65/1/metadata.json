@@ -1,0 +1,42 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "cda784ea5f65",
+  "session_id": "ff0fd450-a797-4e70-be4f-0119cba57d82",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-12T09:00:49.993904Z",
+  "branch": "new-vendor-assistant-improvements",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".claude/skills/assistant-implement/SKILL.md",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CopilotStatusConnector.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Plugins/CopilotCLIPlugin.swift",
+    "docs/REVIEW-CHECKLIST-ASSISTANT-CHANGE.md",
+    "docs/vendors/_TEMPLATE.md",
+    "docs/vendors/copilot.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "dacc963c9b84",
+  "token_usage": {
+    "input_tokens": 30,
+    "cache_creation_tokens": 62294,
+    "cache_read_tokens": 1208262,
+    "output_tokens": 15157,
+    "api_call_count": 26
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-12T09:00:49.737736Z",
+    "agent_lines": 151,
+    "agent_removed": 5,
+    "human_added": 249,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 400,
+    "total_lines_changed": 412,
+    "agent_percentage": 37.86407766990291,
+    "metric_version": 2
+  }
+}
