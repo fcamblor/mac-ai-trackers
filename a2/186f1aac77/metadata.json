@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "a2186f1aac77",
+  "strategy": "manual-commit",
+  "branch": "qualify-smoke-test-in-gha",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Logging/Logger.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/MenuBar/MenuBarRefreshController.swift",
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/MenuBarRefreshControllerTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/StatusItemRenderSmokeTests.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/a2/186f1aac77/0/metadata.json",
+      "transcript": "/a2/186f1aac77/0/full.jsonl",
+      "content_hash": "/a2/186f1aac77/0/content_hash.txt",
+      "prompt": "/a2/186f1aac77/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 8,
+    "cache_creation_tokens": 1039,
+    "cache_read_tokens": 187351,
+    "output_tokens": 427,
+    "api_call_count": 3
+  }
+}
