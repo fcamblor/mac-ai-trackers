@@ -108,13 +108,18 @@ If this checklist disagrees with `docs/ASSISTANT-ONBOARDING.md` or
       build hitting the new payload shape does not crash; it surfaces a
       `lastError` describing "incompatible API" and stops emitting metrics.
 
-## Post-release follow-ups (handled by `assistant-release`)
+## Pre-merge artefacts (carried in the squash-merge commit, verified by `assistant-merge`)
 
-- [ ] (new-assistant) README "Supported assistants" updated.
+- [ ] (new-assistant) README "Supported assistants" updated on the PR
+      branch before merging.
 - [ ] (vendor-evolution) `docs/vendors/index.md` row reflects the new
       `Last verified` date if the index exists.
-- [ ] GitHub release notes credit testers by handle.
-- [ ] (`kind:breaking`) Release notes prefixed `BREAKING:` with min-version
+- [ ] Squash-merge commit body credits testers by handle.
+- [ ] (`kind:breaking`) Commit body prefixed `BREAKING:` with min-version
       requirement called out.
-- [ ] (`kind:urgent-fix`) Release notes call out the urgent context and
+- [ ] (`kind:urgent-fix`) Commit body calls out the urgent context and
       affected-since timeline.
+
+The maintainer aggregates these commit bodies into the GitHub release
+notes when cutting a tag — this is release-engineering work, not part
+of the assistant skill family.

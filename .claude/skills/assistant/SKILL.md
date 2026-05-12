@@ -70,7 +70,7 @@ automatically; a missing phase label means manual editing happened).
 | `phase:review` | `assistant-review` |
 | `phase:testing` | `assistant-tester-followup` (each time a tester comments) |
 | `phase:merge-ready` | `assistant-merge` |
-| `phase:merged` | `assistant-release` (only after a tagged release ships the merge commit) |
+| `phase:merged` | (terminal for the skill family — awaiting a tagged release; transition to `phase:released` is handled by release engineering, not by a skill) |
 | `phase:released` | (terminal — no skill operates) |
 | _no issue yet_ | `assistant-propose` (open the issue from the user's intent) |
 

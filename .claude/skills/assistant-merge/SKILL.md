@@ -75,9 +75,11 @@ git push
 
 ### Phase D — Draft release notes for the merge commit body
 
-Draft the release-notes text now (it becomes the single source of truth
-copied into the GitHub release later by `assistant-release`). Required
-content per type/kind, see `docs/ASSISTANT-ONBOARDING.md` §3.1.6:
+Draft the release-notes text now. It becomes the single source of
+truth that the maintainer (or a release-engineering workflow) will
+aggregate into the GitHub release notes when cutting the next tag.
+Required content per type/kind, see `docs/ASSISTANT-ONBOARDING.md`
+§3.1.6:
 
 - All types — credit testers by handle (pull from the latest
   `assistant-tester-tally:sticky` comment).
@@ -115,6 +117,14 @@ confirmations after the release ships."
 
 ### Phase G — Hand off
 
-Once a tagged release ships including the merged commit, the next skill
-is `assistant-release`. It will copy the release-notes body from the
-squash-merge commit (Phase E) into the GitHub release.
+This is the terminal phase for the assistant skill family. The issue
+stays open at `phase:merged` until a tagged release ships including the
+merge commit; at that point the maintainer (or a release-engineering
+workflow) transitions to `phase:released` and closes the issue.
+
+The squash-merge commit body authored in Phase D is the single source
+of truth for the release notes. It is the maintainer's responsibility
+to aggregate merge commit bodies into the GitHub release notes when
+they cut a tag — this skill does not edit `gh release` (it is a
+destructive operation that would clobber concurrent vendor changes
+shipped in the same release).

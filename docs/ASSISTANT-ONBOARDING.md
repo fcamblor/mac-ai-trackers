@@ -72,8 +72,8 @@ The phase set is identical for both issue types — what branches is the
 | `phase:review` | PR is opened and ready for review | `assistant-review` | Maintainer |
 | `phase:testing` | Code review passed; testers can validate | `assistant-tester-followup` (does not transition out) | Maintainer |
 | `phase:merge-ready` | Tester threshold reached on the latest build SHA | `assistant-merge` | Maintainer |
-| `phase:merged` | PR squash-merged; awaiting tagged release | `assistant-release` (once a release ships) | `assistant-merge` |
-| `phase:released` | Tagged release ships with the change | (terminal — no skill operates after release) | `assistant-release` |
+| `phase:merged` | PR squash-merged; awaiting tagged release | (terminal for the skill family — see §3.1.7) | `assistant-merge` |
+| `phase:released` | Tagged release ships with the change | (terminal — no skill operates after release) | Maintainer or release-engineering workflow |
 
 A separate concept — **vendor doc re-verification** — happens long after
 `phase:released` and operates on a different artefact (the live vendor doc).
@@ -277,8 +277,9 @@ copy them from the sticky build comment.
       `Min app version` annotation in the vendor doc) is reflected.
   - Release-notes text drafted and embedded in the squash-merge commit
     **body** (not the title). This text is the single source of truth
-    that `assistant-release` will copy into the GitHub release once a
-    tag ships. Required content:
+    consumed at release time by the maintainer (or by a future
+    release-engineering workflow) when aggregating commit bodies into
+    the GitHub release notes. Required content:
     - All types — credit testers by handle.
     - `kind:breaking` — prefix with
       `BREAKING: <vendor> connector requires <next-version>+` and
@@ -290,7 +291,7 @@ copy them from the sticky build comment.
     marker.
 - **Exit**: PR merged.
 
-#### 3.1.7 Merged
+#### 3.1.7 Merged (terminal for the skill family)
 
 - **Trigger**: PR squash-merged.
 - **Transition**: `phase:merge-ready` → `phase:merged` (set by
@@ -299,16 +300,24 @@ copy them from the sticky build comment.
   stays open until `phase:released`).
 - **Exit**: a tagged release `v*.*.*` ships including the merged commit.
 
+This is the terminal phase for the assistant skill family. The release
+cadence is independent of vendor onboarding — a maintainer may batch
+several merged vendors and fixes into a single release, with their own
+stabilisation window. The skills deliberately do not own release
+operations.
+
 #### 3.1.8 Released (and issue closes)
 
 - **Trigger**: a tagged release ships including the merge commit.
 - **Transition**: `phase:merged` → `phase:released`.
-- **Skill**: `assistant-release`. Officializes the merged work against
-  a tagged release.
+- **Owner**: maintainer (or a release-engineering workflow, out of
+  scope of this spec). No assistant skill operates here.
 - **Outputs**:
-  - The release-notes text was already drafted in the squash-merge
-    commit body during `phase:merge-ready`. `assistant-release` copies
-    it into the GitHub release via `gh release edit <tag> --notes`.
+  - GitHub release notes aggregate the squash-merge commit bodies of
+    every vendor change shipped in the tag (drafted during
+    `phase:merge-ready`). This aggregation is the maintainer's
+    responsibility — patching the release notes per-issue would clobber
+    concurrent vendor changes that share the same tag.
   - For `kind:urgent-fix`, the issue may stay open a few days at
     `phase:released` for follow-up confirmations before the maintainer
     closes it manually.
@@ -375,8 +384,7 @@ maintainer invokes them in response to an event.
 | `assistant-implement` | 3.1.3 → 3.1.4 readiness | Branches on `type:*`. Scaffolds (new-assistant) or refactors (vendor-evolution). |
 | `assistant-review` | 3.1.4 | Documentation-first review. PR pre-flight (draft, mergeable, author-vs-reviewer). Proposes the `phase:testing` transition for a single Y/n confirmation. |
 | `assistant-tester-followup` | 3.1.5 | Tally + log audit. Knows the `kind:urgent-fix` threshold escape. Proposes `phase:merge-ready` for a single Y/n confirmation once the gate is green. |
-| `assistant-merge` | 3.1.6 → 3.1.7 | Re-verifies gates. Commits README / index updates to the PR branch and embeds the release-notes draft in the squash-merge commit body. Applies `phase:merged`. |
-| `assistant-release` | 3.1.8 | Copies the squash-merge commit body into the GitHub release notes once a tag ships. |
+| `assistant-merge` | 3.1.6 → 3.1.7 | Re-verifies gates. Commits README / index updates to the PR branch and embeds the release-notes draft in the squash-merge commit body. Applies `phase:merged`. Terminal for the skill family. |
 | `assistant-reverify` | (decoupled) | Doc-only refresh PR or files a `type:vendor-evolution` issue. |
 
 ## 5. Issue forms, PR template, gating action
