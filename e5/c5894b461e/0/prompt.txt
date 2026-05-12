@@ -18,3 +18,7 @@ traite tout
 ---
 
 crees une PR avec ces changements
+
+---
+
+tu n'as pas mis de frontmatter sur la rule skill-handoff
