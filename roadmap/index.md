@@ -10,8 +10,9 @@ See `docs/ROADMAP.md` for the process and file conventions.
 
 ```mermaid
 graph TD
+    codex-status-component-subscriptions["Codex status component subscriptions"]
 ```
 
 ## Epics
 
-_No epics yet — propose one with the `roadmap-feature` skill._
+1. `planned` — [Codex status component subscriptions](codex-status-component-subscriptions.md) — filter OpenAI status incidents to only those affecting subscribed Codex child components, with a preferences tab to manage the subscription list.
