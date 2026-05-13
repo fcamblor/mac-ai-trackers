@@ -1,5 +1,13 @@
 import Foundation
 
+/// Async closure resolving the currently-subscribed component IDs the status
+/// connector should retain. `nil` disables filtering entirely — the legacy
+/// "no resolver wired" path used by the convenience init and pre-filter
+/// tests. An empty set means the filter is wired but nothing is subscribed,
+/// so every incident is dropped; only a non-empty set surfaces incidents
+/// that overlap with at least one subscribed component.
+public typealias SubscribedComponentIDsResolver = @Sendable () async -> Set<StatusComponentID>?
+
 public actor CodexStatusConnector: StatusConnector {
     nonisolated public let vendor: Vendor = .codex
 
@@ -7,6 +15,7 @@ public actor CodexStatusConnector: StatusConnector {
     private let session: URLSession
     private let endpointURLString: String
     private let incidentHrefBase: String
+    private let resolveSubscribedComponentIDs: SubscribedComponentIDsResolver
 
     /// OpenAI moved off statuspage.io to incident.io; the public status page exposes
     /// a JSON document at this path that lists every incident (resolved + active).
@@ -14,16 +23,45 @@ public actor CodexStatusConnector: StatusConnector {
     public static let defaultEndpoint = "https://status.openai.com/proxy/status.openai.com/incidents"
     public static let defaultIncidentHrefBase = "https://status.openai.com/incidents/"
 
+    /// Codex group root id observed on `status.openai.com`. Its children are
+    /// the user-subscribable components (Codex Web, App, CLI, Codex API, VS
+    /// Code extension). Lives on the connector so tests and the registry can
+    /// share one source of truth.
+    public static let codexGroupRootID: StatusComponentID = "01KMKF9EBTCD8BN9PG8DJZXRSQ"
+
+    /// Convenience init used by production paths that have no resolver wired
+    /// yet — keeps the legacy "no filter" behaviour for tests until they opt
+    /// into a subscription set.
     public init(
         logger: FileLogger = Loggers.codex,
         session: URLSession = .shared,
         endpointURLString: String = CodexStatusConnector.defaultEndpoint,
         incidentHrefBase: String = CodexStatusConnector.defaultIncidentHrefBase
     ) {
+        self.init(
+            logger: logger,
+            session: session,
+            endpointURLString: endpointURLString,
+            incidentHrefBase: incidentHrefBase,
+            // No resolver supplied → unfiltered. Production wires
+            // `StatusComponentRegistry` + `AppPreferences` so this path is
+            // only ever taken by tests that pre-date the filter.
+            resolveSubscribedComponentIDs: { nil }
+        )
+    }
+
+    public init(
+        logger: FileLogger = Loggers.codex,
+        session: URLSession = .shared,
+        endpointURLString: String = CodexStatusConnector.defaultEndpoint,
+        incidentHrefBase: String = CodexStatusConnector.defaultIncidentHrefBase,
+        resolveSubscribedComponentIDs: @escaping SubscribedComponentIDsResolver
+    ) {
         self.logger = logger
         self.session = session
         self.endpointURLString = endpointURLString
         self.incidentHrefBase = incidentHrefBase
+        self.resolveSubscribedComponentIDs = resolveSubscribedComponentIDs
     }
 
     public func fetchOutages() async throws -> [Outage] {
@@ -59,11 +97,26 @@ public actor CodexStatusConnector: StatusConnector {
             throw StatusConnectorError.parseError(underlying: error, url: endpointURLString)
         }
 
+        let subscribed = await resolveSubscribedComponentIDs()
+        let useComponentFilter = subscribed != nil
+
+        var droppedCount = 0
         let outages: [Outage] = decoded.incidents.compactMap { incident in
             // incident.io marks a closed incident with status "resolved" — anything
             // else (investigating / identified / monitoring / scheduled / in_progress)
             // is still affecting the page and should surface to the user.
             guard incident.status.lowercased() != "resolved" else { return nil }
+
+            if useComponentFilter {
+                let incidentComponentIDs = Set(
+                    incident.affectedComponents.compactMap { $0.componentID }
+                )
+                let overlap = incidentComponentIDs.intersection(subscribed ?? [])
+                if overlap.isEmpty {
+                    droppedCount += 1
+                    return nil
+                }
+            }
 
             let worst = worstComponentStatus(in: incident.affectedComponents)
             let severity = Self.severity(for: incident, worstComponent: worst)
@@ -74,6 +127,12 @@ public actor CodexStatusConnector: StatusConnector {
                 severity: severity,
                 since: incident.publishedAt,
                 href: href
+            )
+        }
+        if useComponentFilter && droppedCount > 0 {
+            logger.log(
+                .debug,
+                "Codex status: dropped \(droppedCount) incident(s) with no subscribed component overlap"
             )
         }
         logger.log(.info, "Codex status: \(outages.count) active outage(s)")
@@ -153,5 +212,24 @@ public actor CodexStatusConnector: StatusConnector {
 
     private struct IncidentIOAffectedComponent: Decodable {
         let status: String
+        /// `component_id` is present on the incident.io payload but optional
+        /// in this DTO so older fixtures without it still decode (the filter
+        /// then drops the incident as if no overlap existed).
+        let componentID: StatusComponentID?
+
+        private enum CodingKeys: String, CodingKey {
+            case status
+            case componentID = "component_id"
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            status = try container.decode(String.self, forKey: .status)
+            if let raw = try container.decodeIfPresent(String.self, forKey: .componentID) {
+                componentID = StatusComponentID(rawValue: raw)
+            } else {
+                componentID = nil
+            }
+        }
     }
 }

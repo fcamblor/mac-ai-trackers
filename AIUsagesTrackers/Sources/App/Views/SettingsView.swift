@@ -22,6 +22,11 @@ struct SettingsView: View {
             ChartSettingsView(preferences: preferences)
                 .tabItem { Label("Charts", systemImage: "chart.xyaxis.line") }
 
+            if let registry = AppDelegate.sharedCodexStatusRegistry {
+                StatusSettingsView(preferences: preferences, registry: registry)
+                    .tabItem { Label("Status", systemImage: "exclamationmark.triangle") }
+            }
+
             UpdatesSettingsView(
                 preferences: preferences,
                 updateState: AppDelegate.sharedUpdateState

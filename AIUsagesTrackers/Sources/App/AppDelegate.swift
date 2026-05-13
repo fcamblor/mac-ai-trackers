@@ -49,6 +49,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Pointer to the running update scheduler so Settings can trigger a manual check.
     static var sharedUpdateScheduler: UpdateScheduler?
 
+    /// Registry resolving Codex's incident.io child components. Exposed so the
+    /// Status preferences tab can list / refresh entries; constructed in
+    /// `applicationDidFinishLaunching` so it remains nil for headless tests
+    /// of `SettingsView`.
+    static var sharedCodexStatusRegistry: StatusComponentRegistry?
+
     /// Closure exposed to Settings so the user can launch installation of the
     /// current pending update without going through the popover banner.
     static var sharedTriggerUpdateInstall: (() -> Void)?
@@ -104,7 +110,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let claudeConnector = ClaudeCodeConnector()
         let claudeStatus = ClaudeStatusConnector()
         let codexConnector = CodexConnector()
-        let codexStatus = CodexStatusConnector()
+        let codexStatusRegistry = StatusComponentRegistry(
+            platform: .incidentIO,
+            host: "status.openai.com",
+            groupRootID: CodexStatusConnector.codexGroupRootID,
+            discovery: IncidentIOPageComponentsDiscovery()
+        )
+        Self.sharedCodexStatusRegistry = codexStatusRegistry
+        let codexStatus = CodexStatusConnector(
+            resolveSubscribedComponentIDs: StatusSubscriptionResolver.makeResolver(
+                registry: codexStatusRegistry,
+                preferences: Self.sharedPreferences
+            )
+        )
         let copilotConnector = CopilotConnector()
         let poller = UsagePoller(
             connectors: [claudeConnector, codexConnector, copilotConnector],
@@ -168,6 +186,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let scheduler = self.updateScheduler {
                 await scheduler.start()
             }
+            // Lazy 24h refresh of the Codex status component cache. Runs after
+            // poller startup so the discovery network call doesn't compete
+            // with the user-visible usages fetch on the first refresh tick.
+            await codexStatusRegistry.refreshIfStale()
         }
     }
 

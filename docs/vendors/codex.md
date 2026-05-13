@@ -1,6 +1,6 @@
 # Codex (ChatGPT)
 
-> **Last verified:** 2026-05-07 by @fcamblor on ChatGPT Plus plan
+> **Last verified:** 2026-05-13 by @fcamblor on ChatGPT Plus plan
 
 <!--
   Read `docs/VENDOR-PLUGIN-CONTRACT.md` first; it defines the shape of
@@ -179,11 +179,12 @@ the active account cannot be attributed.
 
 ## Status page
 
-_verified: 2026-05-12_
+_verified: 2026-05-13_
 
 | URL | Format | Component filter |
 |-----|--------|-----------------|
-| `https://status.openai.com/proxy/status.openai.com/incidents` | incident.io public-page proxy (JSON) | none — all incidents on this page are OpenAI-specific |
+| `https://status.openai.com/proxy/status.openai.com/incidents` | incident.io public-page proxy (JSON) | `affected_components[].component_id` must intersect the user-subscribed Codex component set |
+| `https://status.openai.com/` | HTML page embedding the Next.js RSC payload | parsed once per 24h to discover the current Codex child components |
 
 OpenAI moved off statuspage.io to incident.io; the legacy
 `status.openai.com/api/v2/incidents/unresolved.json` path now returns
@@ -191,9 +192,11 @@ HTTP 404. The page itself fetches the JSON document above (it lists
 every incident, resolved + active).
 
 `CodexStatusConnector` retains incidents whose `status` is anything
-other than `"resolved"` (i.e. `investigating`, `identified`,
-`monitoring`, scheduled or in-progress maintenance). Severity is
-derived from the worst entry in `affected_components[].status`:
+other than `"resolved"` AND whose `affected_components[].component_id`
+intersects the user-subscribed Codex component set. Incidents whose
+only affected components live outside the Codex group (Audio, Chat
+Completions, Sora, FedRAMP, …) are dropped. Severity is derived from
+the worst entry in `affected_components[].status`:
 
 | incident.io component status | `OutageSeverity` |
 |------------------------------|------------------|
@@ -217,10 +220,33 @@ Schema reference of an incident entry (fields the connector consumes):
   "type": "incident",                   // or "maintenance"
   "published_at": "2026-05-11T16:11:00Z",
   "affected_components": [
-    { "status": "degraded_performance", "current_status": "operational" }
+    {
+      "component_id": "01JVCV8YSWZFRSM1G5CVP253SK", // matched against the user-subscribed set
+      "status": "degraded_performance",
+      "current_status": "operational"
+    }
   ]
 }
 ```
+
+### Codex component group
+
+incident.io exposes no public unauthenticated JSON endpoint for the
+component hierarchy, so the discovery layer parses the Next.js RSC
+payload embedded in `https://status.openai.com/`. The payload nests
+each child under its group object: the discovery layer locates the
+group whose `id` matches the Codex root, then enumerates the
+`{component_id, name}` pairs inside that group's `components` array:
+
+| Group root id | Observed children (subject to change as OpenAI ships products) |
+|---|---|
+| `01KMKF9EBTCD8BN9PG8DJZXRSQ` | Codex Web, App, Codex API, CLI, VS Code extension |
+
+The cache is refreshed lazily on app start when older than 24h, plus
+on-demand via the "Refresh now" button in the Status preferences tab.
+If parsing fails the connector keeps the last successful cache; on a
+fresh install with no successful refresh yet, the Codex outage banner
+stays silent until the parser succeeds.
 
 ## Known unknowns
 
@@ -243,3 +269,9 @@ Schema reference of an incident entry (fields the connector consumes):
 - 2026-05-07 — initial capture: Plus plan response shape, Unix epoch
   reset semantics, `User-Agent: OpenUsage` header. Cascade order
   `$CODEX_HOME` → `~/.config/codex` → `~/.codex` → keychain.
+- 2026-05-13 — Codex status filter: incidents now require an overlap
+  between `affected_components[].component_id` and the user-subscribed
+  Codex component set. Discovery of the Codex child components runs
+  off the Next.js RSC payload of `https://status.openai.com/` with a
+  24h lazy cadence; the Status preferences tab manages subscriptions
+  and exposes a manual "Refresh now" button.

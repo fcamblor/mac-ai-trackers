@@ -27,6 +27,12 @@ public protocol AppPreferences: AnyObject, Observable, Sendable {
     /// Versions the user explicitly dismissed via the "Skip this version"
     /// banner action. Stored as raw `tag_name` strings (without leading `v`).
     var updatesDismissedVersions: [String] { get set }
+    /// Per-component subscription state keyed by `StatusComponentID.rawValue`.
+    /// A missing key means "subscribed" (default ON); the dictionary only
+    /// stores explicit user overrides — typically `false` for opted-out
+    /// components. Storing the key set explicitly would force a migration
+    /// every time the registry discovers a new component.
+    var statusComponentSubscriptions: [String: Bool] { get set }
 }
 
 // MARK: - UserDefaults-backed implementation
@@ -208,6 +214,35 @@ public final class UserDefaultsAppPreferences: AppPreferences {
             }
         }
     }
+
+    public var statusComponentSubscriptions: [String: Bool] {
+        get {
+            access(keyPath: \.statusComponentSubscriptions)
+            guard let data = defaults.data(
+                forKey: AppPreferenceKeys.statusComponentSubscriptions.rawValue
+            ) else {
+                return [:]
+            }
+            do {
+                return try JSONDecoder().decode([String: Bool].self, from: data)
+            } catch {
+                Loggers.app.log(.error, "Failed to decode statusComponentSubscriptions: \(error)")
+                return [:]
+            }
+        }
+        set {
+            withMutation(keyPath: \.statusComponentSubscriptions) {
+                do {
+                    let data = try JSONEncoder().encode(newValue)
+                    defaults.set(
+                        data, forKey: AppPreferenceKeys.statusComponentSubscriptions.rawValue
+                    )
+                } catch {
+                    Loggers.app.log(.error, "Failed to encode statusComponentSubscriptions: \(error)")
+                }
+            }
+        }
+    }
 }
 
 // MARK: - In-memory test double
@@ -227,6 +262,7 @@ public final class InMemoryAppPreferences: AppPreferences {
     public var ignoredAccounts: [IgnoredAccount]
     public var updatesAutoCheckEnabled: Bool
     public var updatesDismissedVersions: [String]
+    public var statusComponentSubscriptions: [String: Bool]
 
     public init(
         refreshInterval: RefreshInterval = .default,
@@ -239,7 +275,8 @@ public final class InMemoryAppPreferences: AppPreferences {
         chartConfigurationsInitialized: Bool = false,
         ignoredAccounts: [IgnoredAccount] = [],
         updatesAutoCheckEnabled: Bool = true,
-        updatesDismissedVersions: [String] = []
+        updatesDismissedVersions: [String] = [],
+        statusComponentSubscriptions: [String: Bool] = [:]
     ) {
         self.refreshInterval = refreshInterval
         self.launchAtLogin = launchAtLogin
@@ -252,5 +289,6 @@ public final class InMemoryAppPreferences: AppPreferences {
         self.ignoredAccounts = ignoredAccounts
         self.updatesAutoCheckEnabled = updatesAutoCheckEnabled
         self.updatesDismissedVersions = updatesDismissedVersions
+        self.statusComponentSubscriptions = statusComponentSubscriptions
     }
 }
