@@ -1,0 +1,77 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "319d47f51a7f",
+  "session_id": "0419c7d3-dc98-4c98-a07d-2ae496ea93ca",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-13T09:31:28.054052Z",
+  "branch": "fix-incidentio-component-filtering",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexStatusConnector.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/IncidentIOComponentsDiscovery.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/StatusComponent.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/StatusComponentsFileManager.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Preferences/AppPreferenceKeys.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Preferences/AppPreferences.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Store/StatusComponentRegistry.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Store/StatusSubscriptionResolver.swift",
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/StatusSettingsView.swift",
+    "AIUsagesTrackers/Sources/App/Views/SettingsView.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CodexStatusConnectorFilterTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/IncidentIOComponentsDiscoveryTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/StatusComponentsCacheTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/StatusSubscriptionResolverTests.swift",
+    "docs/vendors/codex.md",
+    "roadmap/codex-status-component-subscriptions.md",
+    "roadmap/index.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-haiku-4-5-20251001",
+  "turn_id": "562a42887583",
+  "token_usage": {
+    "input_tokens": 230,
+    "cache_creation_tokens": 506121,
+    "cache_read_tokens": 18067911,
+    "output_tokens": 86944,
+    "api_call_count": 151
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-13T09:31:27.202051Z",
+    "agent_lines": 1466,
+    "agent_removed": 58,
+    "human_added": 10,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1476,
+    "total_lines_changed": 1534,
+    "agent_percentage": 99.34810951760105,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1344,
+      "agent_lines_removed": 58
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1467,
+      "agent_lines_removed": 58
+    }
+  ]
+}

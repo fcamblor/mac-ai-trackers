@@ -1,0 +1,42 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "319d47f51a7f",
+  "strategy": "manual-commit",
+  "branch": "fix-incidentio-component-filtering",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexStatusConnector.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/IncidentIOComponentsDiscovery.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Models/StatusComponent.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Persistence/StatusComponentsFileManager.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Preferences/AppPreferenceKeys.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Preferences/AppPreferences.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Store/StatusComponentRegistry.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Store/StatusSubscriptionResolver.swift",
+    "AIUsagesTrackers/Sources/App/AppDelegate.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/StatusSettingsView.swift",
+    "AIUsagesTrackers/Sources/App/Views/SettingsView.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/CodexStatusConnectorFilterTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/IncidentIOComponentsDiscoveryTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/StatusComponentsCacheTests.swift",
+    "AIUsagesTrackers/Tests/AIUsagesTrackersTests/StatusSubscriptionResolverTests.swift",
+    "docs/vendors/codex.md",
+    "roadmap/codex-status-component-subscriptions.md",
+    "roadmap/index.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/31/9d47f51a7f/0/metadata.json",
+      "transcript": "/31/9d47f51a7f/0/full.jsonl",
+      "content_hash": "/31/9d47f51a7f/0/content_hash.txt",
+      "prompt": "/31/9d47f51a7f/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 230,
+    "cache_creation_tokens": 506121,
+    "cache_read_tokens": 18067911,
+    "output_tokens": 86944,
+    "api_call_count": 151
+  }
+}
