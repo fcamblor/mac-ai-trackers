@@ -100,15 +100,18 @@ struct UsageDetailsView: View {
         "\(contentMode.rawValue)-\(selectedHistoryWindow.rawValue)"
     }
 
-    /// Returns a map of vendor → first index in sorted, for vendors that have active outages.
-    private func vendorsNeedingBanner(in sorted: [VendorUsageEntry]) -> [Vendor: Int] {
-        var result: [Vendor: Int] = [:]
-        for (index, entry) in sorted.enumerated() where result[entry.vendor] == nil {
+    /// Vendors with active outages, ordered by first appearance in the sorted entries
+    /// so banners follow the same visual order users see for cards below.
+    private func vendorsWithOutages(in sorted: [VendorUsageEntry]) -> [Vendor] {
+        var seen: Set<Vendor> = []
+        var ordered: [Vendor] = []
+        for entry in sorted where !seen.contains(entry.vendor) {
             if store.outagesByVendor[entry.vendor] != nil {
-                result[entry.vendor] = index
+                ordered.append(entry.vendor)
             }
+            seen.insert(entry.vendor)
         }
-        return result
+        return ordered
     }
 
     // MARK: - Subviews
@@ -136,15 +139,15 @@ struct UsageDetailsView: View {
         } else {
             ScrollView {
                 LazyVStack(spacing: 8) {
-                    // Track which vendors have already shown their status banner
-                    // using a running cursor — entries are sorted by vendor so
-                    // entries of the same vendor are contiguous.
-                    let vendorsWithBanner = vendorsNeedingBanner(in: sorted)
-                    ForEach(Array(sorted.enumerated()), id: \.element.id) { index, entry in
-                        if vendorsWithBanner[entry.vendor] == index,
-                           let outages = store.outagesByVendor[entry.vendor] {
+                    // Status banners surface above every account card so an active
+                    // outage is the first thing the user sees, regardless of the
+                    // affected vendor's sort position.
+                    ForEach(vendorsWithOutages(in: sorted), id: \.self) { vendor in
+                        if let outages = store.outagesByVendor[vendor] {
                             VendorStatusBanner(outages: outages)
                         }
+                    }
+                    ForEach(sorted, id: \.id) { entry in
                         AccountCardView(
                             entry: entry,
                             isRefreshing: refreshState.isRefreshing(
