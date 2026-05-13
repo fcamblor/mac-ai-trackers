@@ -1,0 +1,63 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "0253207960a0",
+  "session_id": "0db19844-46bc-42f0-9cb5-a378f4d12700",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-13T12:49:25.808476Z",
+  "branch": "fix-incidentio-component-filtering",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/CodexStatusConnector.swift",
+    "AIUsagesTrackers/Sources/AIUsagesTrackers/Connectors/IncidentIOComponentsDiscovery.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/StatusSettingsView.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "f5c97bad238e",
+  "token_usage": {
+    "input_tokens": 2364,
+    "cache_creation_tokens": 193984,
+    "cache_read_tokens": 1477981,
+    "output_tokens": 14135,
+    "api_call_count": 27
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-13T12:49:25.57133Z",
+    "agent_lines": 11,
+    "agent_removed": 14,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 11,
+    "total_lines_changed": 25,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 109,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".context/attachments/PR instructions.md": 17,
+        ".context/attachments/Review request.md": 92
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 109,
+      "user_lines_removed": 0,
+      "agent_lines_added": 11,
+      "agent_lines_removed": 14,
+      "user_added_per_file": {
+        ".context/attachments/PR instructions.md": 17,
+        ".context/attachments/Review request.md": 92
+      }
+    }
+  ]
+}
