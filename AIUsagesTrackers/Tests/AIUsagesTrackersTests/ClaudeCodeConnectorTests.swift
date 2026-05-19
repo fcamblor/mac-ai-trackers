@@ -156,18 +156,133 @@ struct ClaudeCodeConnectorFetchTests {
         #expect(entries[0].metrics.isEmpty)
     }
 
-    @Test("HTTP 401 returns error entry")
+    @Test("HTTP 401 surfaces token_expired and preserves last-known metrics")
     func httpError() async throws {
         let dir = makeTempDir()
+        let connector = makeConnector(dir: dir) { "fake-token" }
+
+        // Seed lastKnownMetrics with a successful fetch — token expiry doesn't
+        // invalidate what was already measured; metrics whose window has not
+        // yet rolled stay accurate until their resetAt naturally lapses.
+        mockHTTP200(json: """
+        {"five_hour":{"utilization":42,"resets_at":"2026-04-17T15:00:00Z"},
+         "seven_day":{"utilization":8,"resets_at":"2026-04-23T21:00:00Z"}}
+        """)
+        let firstEntries = try await connector.fetchUsages()
+        #expect(firstEntries[0].metrics.count == 2)
+
         MockURLProtocol.handler = { _ in
             let resp = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!, statusCode: 401, httpVersion: nil, headerFields: nil)!
             return (Data(), resp)
         }
-        let connector = makeConnector(dir: dir) { "fake-token" }
         let entries = try await connector.fetchUsages()
 
         #expect(entries.count == 1)
-        #expect(entries[0].lastError?.type == "http_401")
+        #expect(entries[0].lastError?.type == "token_expired")
+        #expect(entries[0].isActive == true)
+        #expect(entries[0].metrics == firstEntries[0].metrics)
+    }
+
+    @Test("HTTP 429 following a 401 keeps surfacing token_expired (cascade)")
+    func authFailureSurvivesCascade() async throws {
+        let dir = makeTempDir()
+        let connector = makeConnector(dir: dir) { "fake-token" }
+
+        mockHTTP200(json: """
+        {"five_hour":{"utilization":42,"resets_at":"2026-04-17T15:00:00Z"},
+         "seven_day":{"utilization":8,"resets_at":"2026-04-23T21:00:00Z"}}
+        """)
+        let seedEntries = try await connector.fetchUsages()
+        #expect(seedEntries[0].metrics.count == 2)
+
+        // First trip — Anthropic returns 401.
+        MockURLProtocol.handler = { _ in
+            let resp = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!, statusCode: 401, httpVersion: nil, headerFields: nil)!
+            return (Data(), resp)
+        }
+        let after401 = try await connector.fetchUsages()
+        #expect(after401[0].lastError?.type == "token_expired")
+
+        // Subsequent 429 — must NOT be reported as plain rate-limit. The auth
+        // failure stays the actionable diagnostic.
+        MockURLProtocol.handler = { _ in
+            let body = #"{"error":"rate limited"}"#.data(using: .utf8)!
+            let resp = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!, statusCode: 429, httpVersion: nil, headerFields: nil)!
+            return (body, resp)
+        }
+        let after429 = try await connector.fetchUsages()
+        #expect(after429[0].lastError?.type == "token_expired")
+        #expect(after429[0].metrics == seedEntries[0].metrics)
+    }
+
+    @Test("HTTP 200 clears the auth-failure flag so later 429s are genuine rate-limits again")
+    func authFailureFlagClearedOn200() async throws {
+        let dir = makeTempDir()
+        let connector = makeConnector(dir: dir) { "fake-token" }
+
+        // Trigger a 401 to arm the sticky flag.
+        MockURLProtocol.handler = { _ in
+            let resp = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!, statusCode: 401, httpVersion: nil, headerFields: nil)!
+            return (Data(), resp)
+        }
+        _ = try await connector.fetchUsages()
+
+        // Healthy round-trip — must disarm the flag.
+        mockHTTP200(json: """
+        {"five_hour":{"utilization":42,"resets_at":"2026-04-17T15:00:00Z"},
+         "seven_day":{"utilization":8,"resets_at":"2026-04-23T21:00:00Z"}}
+        """)
+        _ = try await connector.fetchUsages()
+
+        // A 429 now must be reported as a genuine rate-limit, not token_expired.
+        MockURLProtocol.handler = { _ in
+            let body = #"{"error":"rate limited"}"#.data(using: .utf8)!
+            let resp = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!, statusCode: 429, httpVersion: nil, headerFields: nil)!
+            return (body, resp)
+        }
+        let after429 = try await connector.fetchUsages()
+        #expect(after429[0].lastError?.type == "http_429")
+    }
+
+    @Test("locator tokenExpired error surfaces token_expired and preserves metrics")
+    func locatorTokenExpired() async throws {
+        let dir = makeTempDir()
+        let connector = makeConnector(dir: dir) { "fake-token" }
+
+        mockHTTP200(json: """
+        {"five_hour":{"utilization":42,"resets_at":"2026-04-17T15:00:00Z"},
+         "seven_day":{"utilization":8,"resets_at":"2026-04-23T21:00:00Z"}}
+        """)
+        let seedEntries = try await connector.fetchUsages()
+
+        // Replace tokenProvider on the SAME connector by reaching into the same
+        // path with a new connector that shares the actor-private cache via the
+        // same instance is not possible — instead we keep using the seeded
+        // connector but mock the HTTP layer to behave as if the token had just
+        // expired in transit (locator path is exercised separately in
+        // ClaudeCredentialLocatorTests).
+        //
+        // Here we cover the connector-side mapping by routing through a fresh
+        // connector that throws tokenExpired immediately. Metrics start empty
+        // (no seed) so we verify the no-data shape; the seeded case is covered
+        // by the 401 test above.
+        let configPath = "\(dir)/claude.json"
+        let logger = FileLogger(filePath: "\(dir)/test-expired.log", minLevel: .debug)
+        let expiredAt = Date(timeIntervalSinceNow: -3600)
+        let expiredConnector = ClaudeCodeConnector(
+            claudeConfigPath: configPath,
+            logger: logger,
+            session: mockSession(),
+            tokenProvider: { throw ClaudeAuthError.tokenExpired(serviceName: "Claude Code-credentials", expiredAt: expiredAt) }
+        )
+        let entries = try await expiredConnector.fetchUsages()
+
+        #expect(entries.count == 1)
+        #expect(entries[0].lastError?.type == "token_expired")
+        #expect(entries[0].isActive == true)
+        // Fresh connector has no seeded metrics — preserve [] is still preserve.
+        #expect(entries[0].metrics.isEmpty)
+        _ = seedEntries
     }
 
     @Test("HTTP 429 preserves previous metrics and sets rate-limit error")
@@ -602,5 +717,200 @@ struct ClaudeCodeConnectorFetchTests {
 
         let logContent = try String(contentsOfFile: "\(dir)/test.log", encoding: .utf8)
         #expect(logContent.contains("API payload:"))
+    }
+
+    // MARK: - Window preservation guard tests
+    //
+    // These tests live in this same .serialized suite (not a sibling suite)
+    // because they share `MockURLProtocol.handler` static state with the rest
+    // of the file. Swift Testing's .serialized trait orders tests within ONE
+    // suite — siblings would still run in parallel and stomp the handler.
+    //
+    // Their semantic invariant: token validity and data validity are
+    // independent. A 5h session at 42% with reset in 2h is still 42%
+    // whether our bearer is alive or dead. The assertions are per-field
+    // (name, percent, resetAt, duration) so a regression that drops or
+    // mutates a single window surfaces exactly which field went wrong.
+
+    private struct ExpectedMetric {
+        let name: String
+        let percent: Int
+        let resetAt: String?
+        let duration: Int
+    }
+
+    /// Future-dated payload: every window resets well past test execution time
+    /// so any "we wiped it because resetAt looks expired" code path would be
+    /// wrong by construction.
+    private static let futureSeedJSON = """
+    {"five_hour":{"utilization":42,"resets_at":"2099-12-31T15:00:00Z"},
+     "seven_day":{"utilization":8,"resets_at":"2099-12-31T21:00:00Z"},
+     "seven_day_sonnet":{"utilization":15,"resets_at":"2099-12-31T21:00:00Z"},
+     "seven_day_opus":{"utilization":3,"resets_at":"2099-12-31T21:00:00Z"}}
+    """
+
+    private static let expectedFutureSeed: [ExpectedMetric] = [
+        ExpectedMetric(name: "5h sessions (all models)", percent: 42, resetAt: "2099-12-31T15:00:00Z", duration: 300),
+        ExpectedMetric(name: "Weekly (all models)", percent: 8, resetAt: "2099-12-31T21:00:00Z", duration: 10080),
+        ExpectedMetric(name: "Weekly Sonnet", percent: 15, resetAt: "2099-12-31T21:00:00Z", duration: 10080),
+        ExpectedMetric(name: "Weekly Opus", percent: 3, resetAt: "2099-12-31T21:00:00Z", duration: 10080),
+    ]
+
+    private func mockHTTP(status: Int, body: String) {
+        MockURLProtocol.errorToThrow = nil
+        MockURLProtocol.handler = { _ in
+            let data = body.data(using: .utf8)!
+            let resp = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!, statusCode: status, httpVersion: nil, headerFields: nil)!
+            return (data, resp)
+        }
+    }
+
+    private func assertPreserved(
+        _ metrics: [UsageMetric],
+        against expected: [ExpectedMetric],
+        context: String,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        #expect(metrics.count == expected.count, "\(context): expected \(expected.count) metrics, got \(metrics.count)", sourceLocation: sourceLocation)
+        for expectedMetric in expected {
+            let found = metrics.first(where: {
+                if case .timeWindow(let name, _, _, _) = $0 { return name == expectedMetric.name }
+                return false
+            })
+            guard let metric = found else {
+                Issue.record("\(context): metric '\(expectedMetric.name)' missing — token expiry must not delete non-expired windows", sourceLocation: sourceLocation)
+                continue
+            }
+            guard case .timeWindow(let name, let resetAt, let duration, let pct) = metric else {
+                Issue.record("\(context): metric '\(expectedMetric.name)' has wrong kind", sourceLocation: sourceLocation)
+                continue
+            }
+            #expect(name == expectedMetric.name, "\(context): name drifted on '\(expectedMetric.name)'", sourceLocation: sourceLocation)
+            #expect(pct.rawValue == expectedMetric.percent, "\(context): percent for '\(expectedMetric.name)' changed (expected \(expectedMetric.percent), got \(pct.rawValue))", sourceLocation: sourceLocation)
+            #expect(resetAt?.rawValue == expectedMetric.resetAt, "\(context): resetAt for '\(expectedMetric.name)' changed", sourceLocation: sourceLocation)
+            #expect(duration.rawValue == expectedMetric.duration, "\(context): duration for '\(expectedMetric.name)' changed", sourceLocation: sourceLocation)
+        }
+    }
+
+    @Test("guard: HTTP 401 must preserve every non-expired window — per-field assertion")
+    func guardHttp401PreservesEveryWindow() async throws {
+        let dir = makeTempDir()
+        let connector = makeConnector(dir: dir) { "fake-token" }
+
+        mockHTTP(status: 200, body: Self.futureSeedJSON)
+        let seed = try await connector.fetchUsages()
+        assertPreserved(seed[0].metrics, against: Self.expectedFutureSeed, context: "seed/200")
+
+        mockHTTP(status: 401, body: "")
+        let after401 = try await connector.fetchUsages()
+        #expect(after401[0].lastError?.type == "token_expired")
+        assertPreserved(after401[0].metrics, against: Self.expectedFutureSeed, context: "after 401")
+    }
+
+    @Test("guard: local tokenExpired (locator) must preserve every non-expired window")
+    func guardLocatorTokenExpiredPreservesEveryWindow() async throws {
+        let dir = makeTempDir()
+
+        // Use one connector instance throughout so lastKnownMetrics is shared:
+        // tokenProvider is swapped between seeding and the expiry phase by
+        // toggling a mutable holder. The Box keeps it Sendable-safe.
+        final class TokenBox: @unchecked Sendable {
+            var current: () throws -> String = { "fake-token" }
+        }
+        let box = TokenBox()
+        let configPath = "\(dir)/claude.json"
+        let json = #"{"oauthAccount":{"emailAddress":"user@example.com"}}"#
+        try json.write(toFile: configPath, atomically: true, encoding: .utf8)
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let connector = ClaudeCodeConnector(
+            claudeConfigPath: configPath,
+            logger: logger,
+            session: mockSession(),
+            tokenProvider: { try box.current() }
+        )
+
+        mockHTTP(status: 200, body: Self.futureSeedJSON)
+        let seed = try await connector.fetchUsages()
+        assertPreserved(seed[0].metrics, against: Self.expectedFutureSeed, context: "seed/200")
+
+        // Flip the token provider to simulate the locator's pre-check firing.
+        box.current = { throw ClaudeAuthError.tokenExpired(serviceName: "Claude Code-credentials", expiredAt: Date(timeIntervalSinceNow: -10)) }
+        let afterLocalExpiry = try await connector.fetchUsages()
+        #expect(afterLocalExpiry[0].lastError?.type == "token_expired")
+        assertPreserved(afterLocalExpiry[0].metrics, against: Self.expectedFutureSeed, context: "after locator tokenExpired")
+    }
+
+    @Test("guard: 401 → 429 → 429 cascade must not erode metrics across iterations")
+    func guardCascadeDoesNotErodeMetrics() async throws {
+        let dir = makeTempDir()
+        let connector = makeConnector(dir: dir) { "fake-token" }
+
+        mockHTTP(status: 200, body: Self.futureSeedJSON)
+        _ = try await connector.fetchUsages()
+
+        mockHTTP(status: 401, body: "")
+        let step1 = try await connector.fetchUsages()
+        assertPreserved(step1[0].metrics, against: Self.expectedFutureSeed, context: "step1: 401")
+
+        mockHTTP(status: 429, body: #"{"error":"rate limited"}"#)
+        let step2 = try await connector.fetchUsages()
+        #expect(step2[0].lastError?.type == "token_expired", "429 after 401 must keep the auth diagnostic")
+        assertPreserved(step2[0].metrics, against: Self.expectedFutureSeed, context: "step2: 429 (cascade)")
+
+        let step3 = try await connector.fetchUsages()
+        assertPreserved(step3[0].metrics, against: Self.expectedFutureSeed, context: "step3: 429 again")
+
+        let step4 = try await connector.fetchUsages()
+        assertPreserved(step4[0].metrics, against: Self.expectedFutureSeed, context: "step4: 429 again")
+    }
+
+    @Test("guard: token_expired entry must mark isActive: true, with lastAcquiredOn unset")
+    func guardTokenExpiredEntryShape() async throws {
+        let dir = makeTempDir()
+        let connector = makeConnector(dir: dir) { "fake-token" }
+
+        mockHTTP(status: 200, body: Self.futureSeedJSON)
+        _ = try await connector.fetchUsages()
+
+        mockHTTP(status: 401, body: "")
+        let entries = try await connector.fetchUsages()
+
+        // isActive: true keeps the row visible in the popover so the user sees
+        // the token_expired diagnostic — without it the entry would disappear
+        // and the bug would look like "the app forgot my account".
+        #expect(entries[0].isActive == true, "token_expired entry must keep the account visible in the UI")
+        // lastAcquiredOn is intentionally nil on error entries — the previous
+        // value lives in lastKnownMetrics' resetAt, not in this field.
+        #expect(entries[0].lastAcquiredOn == nil)
+    }
+
+    @Test("guard: a successful 200 after token_expired must refresh metrics with the new payload")
+    func guardRecoveryReplacesMetrics() async throws {
+        let dir = makeTempDir()
+        let connector = makeConnector(dir: dir) { "fake-token" }
+
+        mockHTTP(status: 200, body: Self.futureSeedJSON)
+        _ = try await connector.fetchUsages()
+
+        mockHTTP(status: 401, body: "")
+        _ = try await connector.fetchUsages()
+
+        // User re-runs `claude` CLI → fresh token → 200 with NEW numbers.
+        mockHTTP(status: 200, body: """
+        {"five_hour":{"utilization":50,"resets_at":"2099-12-31T16:00:00Z"},
+         "seven_day":{"utilization":12,"resets_at":"2099-12-31T22:00:00Z"}}
+        """)
+        let recovered = try await connector.fetchUsages()
+        #expect(recovered[0].lastError == nil)
+        #expect(recovered[0].metrics.count == 2)
+        if case .timeWindow(_, _, _, let pct) = recovered[0].metrics[0] {
+            #expect(pct.rawValue == 50, "recovery must replace the seeded 42% with the fresh 50%")
+        }
+
+        // A subsequent 429 must now be reported as a real rate-limit — the
+        // sticky auth-failure flag was cleared by the 200.
+        mockHTTP(status: 429, body: #"{"error":"rate limited"}"#)
+        let afterRecovery429 = try await connector.fetchUsages()
+        #expect(afterRecovery429[0].lastError?.type == "http_429", "200 must disarm the auth-failure flag")
     }
 }
