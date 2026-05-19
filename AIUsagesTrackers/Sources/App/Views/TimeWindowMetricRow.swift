@@ -44,14 +44,24 @@ struct TimeWindowMetricRow: View {
                 tier: state.tier
             )
 
-            HStack {
-                Text(state.isUnknown ? "???" : formatRemainingTime(resetAt: resetAt!, now: now))
-                    .font(.system(size: 10).monospacedDigit())
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(state.isUnknown ? "resets ???" : "resets \(formatResetDate(resetAt!, now: now))")
+            if state.isUnknown {
+                // No window opened yet: percent and reset time have no
+                // denominator to anchor them, so we explain the state in
+                // plain text rather than echoing "???" on every field.
+                Text("Window opens with your next request — usage and reset time will appear then.")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                HStack {
+                    Text(formatRemainingTime(resetAt: resetAt!, now: now))
+                        .font(.system(size: 10).monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("resets \(formatResetDate(resetAt!, now: now))")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }
