@@ -1,0 +1,70 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "729747544130",
+  "session_id": "a5c6d40c-6925-4e14-bf08-39302b8bc890",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-19T11:17:46.336237Z",
+  "branch": "improve-segment-config-ux",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/App/Views/Settings/MenubarHintSettingsView.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/MetricSelectionEditor.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/SegmentCardView.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/SegmentEditor.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "fc06514ff8c7",
+  "token_usage": {
+    "input_tokens": 261,
+    "cache_creation_tokens": 282084,
+    "cache_read_tokens": 5174780,
+    "output_tokens": 61607,
+    "api_call_count": 54
+  },
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-19T11:17:45.931168Z",
+    "agent_lines": 842,
+    "agent_removed": 171,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 842,
+    "total_lines_changed": 1013,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 511,
+      "agent_lines_removed": 129
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 840,
+      "agent_lines_removed": 171
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 842,
+      "agent_lines_removed": 171
+    }
+  ]
+}
