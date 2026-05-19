@@ -11,6 +11,13 @@ public actor ClaudeCodeConnector: UsageConnector {
     private let accountProvider: (@Sendable () -> AccountEmail?)?
 
     private var lastKnownMetrics: [UsageMetric] = []
+    /// Sticky flag set when the locator's local pre-check or HTTP 401 has
+    /// surfaced an auth failure. While true, subsequent HTTP 429s are
+    /// attributed to `token_expired` instead of `http_429` so the auth
+    /// diagnostic is not masked by the chronic 401→429 cascade Anthropic
+    /// produces against a stale bearer (see docs/vendors/claude.md
+    /// Stale-token failure mode). Cleared on any HTTP 200.
+    private var lastAuthFailureSeen: Bool = false
 
     // Claude Pro/Max rate-limit policy — durations are fixed by Anthropic and not returned by the API
     private static let sessionWindowMinutes = DurationMinutes(rawValue: 300)
@@ -100,6 +107,16 @@ public actor ClaudeCodeConnector: UsageConnector {
             } else {
                 token = try await credentialLocator.locate().accessToken
             }
+        } catch ClaudeAuthError.tokenExpired(_, let expiredAt) {
+            // Stale token detected locally — skip the HTTP call entirely. Spamming
+            // /api/oauth/usage with an expired bearer is what triggers Anthropic's
+            // chronic 429 (see docs/vendors/claude.md Stale-token failure mode).
+            // Metrics are preserved: token expiry invalidates our ability to refresh,
+            // not the data itself — values whose window has not yet rolled stay
+            // accurate until their resetAt; the UI handles the rest via isUnknown.
+            logger.log(.warning, "Skipping fetch: token expired at \(expiredAt). Re-run the `claude` CLI to refresh.")
+            lastAuthFailureSeen = true
+            return [errorEntry(account: earlyAccount, type: "token_expired", isActive: true, preservedMetrics: lastKnownMetrics)]
         } catch {
             logger.log(.error, "Token retrieval failed: \(error)")
             return [errorEntry(account: earlyAccount, type: "token_error")]
@@ -130,8 +147,27 @@ public actor ClaudeCodeConnector: UsageConnector {
         let httpCode = (response as? HTTPURLResponse)?.statusCode ?? -1
         logger.log(.info, "API response: HTTP \(httpCode)")
 
+        if httpCode == 401 {
+            // The bearer is rejected by Anthropic. Preserve lastKnownMetrics so
+            // the UI keeps showing data whose window has not yet rolled — what
+            // the user consumed is unchanged; we just can't refresh it.
+            logger.log(.error, "API returned HTTP 401 — token expired. Re-run the `claude` CLI to refresh.")
+            lastAuthFailureSeen = true
+            return [errorEntry(account: account, type: "token_expired", isActive: true, preservedMetrics: lastKnownMetrics)]
+        }
+
         if httpCode == 429 {
             let body = String(data: data, encoding: .utf8) ?? "<non-UTF8 body, \(data.count) bytes>"
+            // A 429 that follows a recent auth failure is downstream of it —
+            // Anthropic switches from 401 to 429 when an expired bearer keeps
+            // hammering the endpoint. Re-attribute to token_expired so the auth
+            // signal survives the cascade, otherwise each 429 overwrites
+            // lastError and the user sees "rate limited" instead of the
+            // actionable "token expired".
+            if lastAuthFailureSeen {
+                logger.log(.warning, "API HTTP 429 after a recent auth failure — surfacing as token_expired (cascade): \(body)")
+                return [errorEntry(account: account, type: "token_expired", isActive: true, preservedMetrics: lastKnownMetrics)]
+            }
             logger.log(.warning, "API rate-limited (HTTP 429): \(body)")
             return [errorEntry(account: account, type: "http_429", isActive: true, preservedMetrics: lastKnownMetrics)]
         }
@@ -182,6 +218,10 @@ public actor ClaudeCodeConnector: UsageConnector {
                 }
             }
             lastKnownMetrics = metrics
+            // A successful round-trip means the bearer is healthy — clear any
+            // sticky auth-failure flag so future 429s are treated as genuine
+            // rate-limits again.
+            lastAuthFailureSeen = false
             return [VendorUsageEntry(
                 vendor: vendor,
                 account: account,

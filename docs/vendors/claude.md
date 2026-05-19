@@ -1,6 +1,6 @@
 # Claude Code
 
-> **Last verified:** 2026-05-07 by @fcamblor on Claude Code Pro plan
+> **Last verified:** 2026-05-19 by @fcamblor on Claude Code Pro plan
 
 <!--
   Read `docs/VENDOR-PLUGIN-CONTRACT.md` first; it defines the shape of
@@ -21,19 +21,78 @@ OAuth-app usage endpoint was made available.
 
 ## Credential sources
 
-_verified: 2026-05-07_
+_verified: 2026-05-19_
 
 Cascade (read-only — the app never writes any of these):
 
 1. **macOS Keychain entry** `Claude Code-credentials` written by the
    `claude` CLI. Value is JSON of the form
-   `{"claudeAiOauth":{"accessToken":"sk-ant-oat01-...","refreshToken":"...","expiresAt":...}}`.
+   `{"claudeAiOauth":{"accessToken":"sk-ant-oat01-...","refreshToken":"...","expiresAt":1715000000000}}`.
+   `expiresAt` is a Unix millisecond timestamp (Node.js `Date.now()`
+   convention — Claude Code CLI is a Node/Bun program).
 
 The `claude` CLI owns the lifecycle. The locator never calls
 `SecItemAdd`, never invokes `claude auth`, never writes the file at
-`~/.claude.json`.
+`~/.claude.json`. The locator also never performs the OAuth refresh
+flow — if the access token has expired, the only way to get a new one
+is for the user to invoke the `claude` CLI, which uses the stored
+refresh token. **An access token whose owner stops using the CLI dies
+within hours and stays dead until the CLI is invoked again** — see the
+"Stale-token failure mode" section below.
+
+### Local expiry pre-check
+
+Before sending each request, the locator parses `expiresAt` from the
+keychain JSON and short-circuits with `ClaudeAuthError.tokenExpired` if
+the token is past its expiry (with a 60-second skew margin to avoid
+racing the boundary). A missing or unparseable `expiresAt` skips the
+local check and falls through to the HTTP layer — a real 401 then
+surfaces as `token_expired` (see Error catalog).
+
+This pre-check exists specifically to break the chronic 401→429 loop
+described in the Stale-token failure mode below.
 
 The active account email is read from `~/.claude.json` (`oauthAccount.emailAddress`).
+
+## Stale-token failure mode
+
+_verified: 2026-05-19_
+
+A user who logs into the `claude` CLI once (typically to enable this
+app) and then stops using the CLI exhibits a distinctive failure mode:
+
+1. The keychain `accessToken` expires within hours (no refresh because
+   the CLI is never invoked).
+2. Subsequent calls to `/api/oauth/usage` return HTTP 401.
+3. If the app keeps polling on the expired token (every 15s), Anthropic
+   eventually switches from 401 to **HTTP 429** (rate_limit_error). The
+   429 persists indefinitely as long as the polling continues — it is
+   not a transient throttle, it is a downstream effect of the 401.
+4. Without a sticky auth-failure flag, each 429 overwrites the
+   connector's `lastError` to `http_429` and the actionable diagnostic
+   ("token expired, re-run the CLI") is lost behind a misleading
+   "rate limited" surface.
+
+The fix has three pieces:
+
+- **Locator-side pre-check.** Parsing `expiresAt` and short-circuiting
+  with `tokenExpired` skips the HTTP call entirely when we already know
+  the bearer is dead, which prevents the request that would have
+  produced the 429 cascade in the first place.
+- **Preserve `lastKnownMetrics` on `token_expired`.** Token expiry
+  invalidates our ability to *refresh* the numbers, not the numbers
+  themselves. A 5h session at 42% is still 42% — the user actually
+  consumed that. Values whose window has not yet rolled stay accurate
+  until their `resetAt`; once `resetAt` is in the past, the UI's
+  `isUnknown` logic naturally degrades the row to `???` without any
+  data wipe on our side.
+- **Sticky auth-failure flag.** Once a 401 (or local `tokenExpired`)
+  has fired, subsequent 429s are re-attributed to `token_expired` so
+  the auth signal is not overwritten by the cascade. The flag clears
+  on any HTTP 200.
+
+The fix only addresses the diagnostic, not the root cause: the user
+must still re-invoke the `claude` CLI for the OAuth refresh to happen.
 
 ## Sanitized fields
 
@@ -137,17 +196,29 @@ _verified: 2026-05-07_
 
 ## Error catalog
 
-_verified: 2026-05-07_
+_verified: 2026-05-19_
 
-| Status | Connector response |
-|--------|--------------------|
-| 200    | parse, emit metrics, refresh `lastKnownMetrics` |
-| 401    | surface `token_expired`; no metric refresh |
-| 429    | preserve last-known metrics, mark active, surface `http_429` |
-| other  | surface `http_<code>`; do not refresh metrics |
+| Source | Outcome | Connector response |
+|--------|---------|--------------------|
+| Locator | `ClaudeAuthError.tokenExpired` (pre-check) | surface `token_expired`; preserve `lastKnownMetrics`; mark `isActive: true`; arm sticky auth-failure flag; skip HTTP entirely |
+| Locator | other `ClaudeAuthError` (keychain missing / denied / parse) | surface `token_error` |
+| HTTP   | 200 | parse, emit metrics, refresh `lastKnownMetrics`, clear sticky auth-failure flag |
+| HTTP   | 401 | surface `token_expired`; preserve `lastKnownMetrics`; mark `isActive: true`; arm sticky auth-failure flag |
+| HTTP   | 429 (auth-failure flag armed) | re-attribute to `token_expired`; preserve `lastKnownMetrics`; mark `isActive: true` |
+| HTTP   | 429 (no recent auth failure) | surface `http_429`; preserve `lastKnownMetrics`; mark `isActive: true` |
+| HTTP   | other | surface `http_<code>`; do not refresh metrics |
 
-A `parse_error` is surfaced if the response cannot be decoded as JSON or
-contains no known window block.
+A `parse_error` is surfaced if a 200 response cannot be decoded as JSON
+or contains no known window block.
+
+`lastKnownMetrics` is intentionally **preserved** across auth failures:
+an expired bearer means we can no longer refresh the data, but the
+values we previously read are still semantically valid until their
+window's `resetAt` naturally lapses. Wiping them would destroy
+information that is still correct; instead the UI's `isUnknown` logic
+collapses each metric to `???` on its own schedule (per-row), while
+the `token_expired` error type drives any global "re-auth required"
+banner.
 
 ## Status page
 
@@ -187,3 +258,13 @@ incident `shortlink` becomes the clickable href in the UI.
 - 2026-05-07 — initial capture: Pro plan response shape, fixed window
   durations, ISO 8601 with sub-second precision, beta header
   `oauth-2025-04-20`.
+- 2026-05-19 — documented `expiresAt` keychain field (Unix ms epoch),
+  added local expiry pre-check in the locator and explicit
+  `token_expired` mapping for both the pre-check and HTTP 401.
+  `lastKnownMetrics` is preserved across auth failures (data validity
+  is independent of token validity — the UI's `isUnknown` logic
+  handles per-row staleness on `resetAt` lapse). A sticky
+  auth-failure flag re-attributes subsequent 429s to `token_expired`
+  until a successful 200 disarms it, preventing the chronic 401→429
+  cascade from masking the auth diagnostic. Documented the
+  Stale-token failure mode that motivated the change.
