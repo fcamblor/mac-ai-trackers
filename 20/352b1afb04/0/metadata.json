@@ -1,0 +1,45 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "20352b1afb04",
+  "session_id": "fb93f418-9bda-45ff-94b7-3667f06b03c3",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-19T17:05:29.547068Z",
+  "branch": "improve-segment-config-ux",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/App/Views/Settings/ChartConfigurationCard.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/ChartConfigurationEditor.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/MetricSelectionEditor.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "bcf8246e4e4e",
+  "token_usage": {
+    "input_tokens": 0,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 0,
+    "api_call_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-19T17:05:29.469898Z",
+    "agent_lines": 135,
+    "agent_removed": 44,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 135,
+    "total_lines_changed": 179,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
