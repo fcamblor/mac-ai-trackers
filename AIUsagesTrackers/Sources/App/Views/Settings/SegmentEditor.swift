@@ -3,6 +3,8 @@ import AppKit
 import AIUsagesTrackersLib
 
 struct SegmentEditor: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let preferences: any AppPreferences
     @Bindable var store: UsageStore
     let segmentID: UUID
@@ -266,8 +268,16 @@ struct SegmentEditor: View {
                 RoundedRectangle(cornerRadius: 6)
                     .fill(Color.secondary.opacity(0.07))
             )
-            .transition(.opacity.combined(with: .move(edge: .top)))
+            .transition(subOptionsTransition)
         }
+    }
+
+    private var subOptionsTransition: AnyTransition {
+        guard !reduceMotion else { return .identity }
+        return .asymmetric(
+            insertion: .opacity.combined(with: .scale(scale: 0.985, anchor: .top)),
+            removal: .opacity
+        )
     }
 
     private func subOptionRow<Control: View>(

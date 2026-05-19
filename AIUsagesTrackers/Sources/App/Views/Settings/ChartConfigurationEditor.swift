@@ -22,6 +22,8 @@ private final class DragCursorTracker: ObservableObject {
 }
 
 struct ChartConfigurationEditor: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @Bindable var store: UsageStore
     @Binding var configuration: ChartConfiguration
 
@@ -29,6 +31,7 @@ struct ChartConfigurationEditor: View {
     @State private var rowFrames: [UUID: CGRect] = [:]
     @State private var draggingID: UUID?
     @State private var dropIndex: Int?
+    @State private var renderedSeriesCount: Int = 0
     @StateObject private var cursorTracker = DragCursorTracker()
 
     private var coordinateSpaceName: String {
@@ -53,6 +56,9 @@ struct ChartConfigurationEditor: View {
             if case .custom = configuration.selection {
                 customSeriesBlock
             }
+        }
+        .task(id: seriesHydrationKey) {
+            await hydrateSeriesRows()
         }
     }
 
@@ -98,8 +104,15 @@ struct ChartConfigurationEditor: View {
             if series.isEmpty {
                 emptySeriesState
             } else {
-                seriesListBody(series: series, metricOptions: metricOptions)
+                seriesListBody(
+                    series: Array(series.prefix(renderedSeriesCount)),
+                    allSeries: series,
+                    metricOptions: metricOptions
+                )
             }
+        }
+        .transaction { transaction in
+            transaction.animation = nil
         }
     }
 
@@ -110,9 +123,13 @@ struct ChartConfigurationEditor: View {
             .padding(.vertical, 6)
     }
 
-    private func seriesListBody(series: [ChartSeriesConfig], metricOptions: MetricSelectionOptions) -> some View {
+    private func seriesListBody(
+        series: [ChartSeriesConfig],
+        allSeries: [ChartSeriesConfig],
+        metricOptions: MetricSelectionOptions
+    ) -> some View {
         ZStack(alignment: .topLeading) {
-            VStack(spacing: 6) {
+            LazyVStack(spacing: 6) {
                 ForEach(Array(series.enumerated()), id: \.element.id) { index, item in
                     ChartSeriesRow(
                         item: item,
@@ -127,16 +144,54 @@ struct ChartConfigurationEditor: View {
                         onDragEnded: { value in handleDragEnded(value: value, seriesID: item.id) }
                     )
                     .equatable()
+                    .transition(seriesRowInsertionTransition)
                 }
             }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: renderedSeriesCount)
             .animation(.spring(response: 0.34, dampingFraction: 0.85), value: draggingID)
             .animation(.spring(response: 0.34, dampingFraction: 0.85), value: dropIndex)
 
-            dropIndicator(series: series)
-            floatingPreview(series: series)
+            dropIndicator(series: allSeries)
+            floatingPreview(series: allSeries)
         }
         .coordinateSpace(name: coordinateSpaceName)
         .onPreferenceChange(ChartSeriesRowFramePreferenceKey.self) { rowFrames = $0 }
+    }
+
+    private var seriesRowInsertionTransition: AnyTransition {
+        guard !reduceMotion else { return .identity }
+        return .asymmetric(
+            insertion: .opacity.combined(with: .scale(scale: 0.985, anchor: .top)),
+            removal: .opacity
+        )
+    }
+
+    private var seriesHydrationKey: String {
+        guard case .custom(let series) = configuration.selection else {
+            return "\(configuration.id.uuidString):all"
+        }
+        let stableIDs = series.map(\.id.uuidString).sorted().joined(separator: ",")
+        return "\(configuration.id.uuidString):\(stableIDs)"
+    }
+
+    private func hydrateSeriesRows() async {
+        guard case .custom(let series) = configuration.selection else {
+            renderedSeriesCount = 0
+            return
+        }
+        let total = series.count
+        renderedSeriesCount = 0
+        guard total > 0 else { return }
+
+        await Task.yield()
+        guard !Task.isCancelled else { return }
+
+        renderedSeriesCount = min(total, 1)
+        while renderedSeriesCount < total {
+            try? await Task.sleep(nanoseconds: reduceMotion ? 1_000_000 : 14_000_000)
+            guard !Task.isCancelled else { return }
+            renderedSeriesCount = min(total, renderedSeriesCount + 1)
+        }
     }
 
     // MARK: Drop indicator + floating preview

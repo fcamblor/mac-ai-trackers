@@ -104,7 +104,7 @@ struct ChartConfigurationCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture {
-            withAnimation(.easeOut(duration: 0.14)) { isExpanded.toggle() }
+            isExpanded.toggle()
         }
     }
 
@@ -114,6 +114,7 @@ struct ChartConfigurationCard: View {
             .foregroundStyle(.secondary)
             .rotationEffect(.degrees(isExpanded ? 90 : 0))
             .frame(width: 12)
+            .animation(.easeOut(duration: 0.12), value: isExpanded)
     }
 
     private func summary(for configuration: ChartConfiguration) -> some View {
@@ -194,10 +195,12 @@ private struct DeferredChartConfigurationEditor: View {
             if isMounted {
                 ChartConfigurationEditor(store: store, configuration: $configuration)
             } else {
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(maxWidth: .infinity, minHeight: 36, alignment: .center)
+                Color.clear
+                    .frame(maxWidth: .infinity, minHeight: 36)
             }
+        }
+        .transaction { transaction in
+            transaction.animation = nil
         }
         .task(id: configuration.id) {
             isMounted = false

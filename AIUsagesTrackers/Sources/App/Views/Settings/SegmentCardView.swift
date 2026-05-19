@@ -3,6 +3,8 @@ import AppKit
 import AIUsagesTrackersLib
 
 struct SegmentCardView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let preferences: any AppPreferences
     @Bindable var store: UsageStore
     let isDark: Bool
@@ -40,12 +42,7 @@ struct SegmentCardView: View {
                     .padding(.leading, 30)
                     .padding(.trailing, 4)
                     .padding(.bottom, 10)
-                    .transition(
-                        .asymmetric(
-                            insertion: .opacity.combined(with: .move(edge: .top)),
-                            removal: .opacity
-                        )
-                    )
+                    .transition(expandedEditorTransition)
                 }
             }
             .padding(.vertical, 6)
@@ -120,6 +117,14 @@ struct SegmentCardView: View {
         .onTapGesture {
             withAnimation(.easeOut(duration: 0.18)) { isExpanded.toggle() }
         }
+    }
+
+    private var expandedEditorTransition: AnyTransition {
+        guard !reduceMotion else { return .identity }
+        return .asymmetric(
+            insertion: .opacity.combined(with: .scale(scale: 0.985, anchor: .top)),
+            removal: .opacity
+        )
     }
 
     private var disclosureChevron: some View {
