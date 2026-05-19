@@ -102,6 +102,9 @@ public actor ClaudeCodeConnector: UsageConnector {
             }
         } catch {
             logger.log(.error, "Token retrieval failed: \(error)")
+            if case ClaudeAuthError.apiKeyOnlyUnsupported = error {
+                return [errorEntry(account: earlyAccount, type: "api_key_usage_unsupported")]
+            }
             return [errorEntry(account: earlyAccount, type: "token_error")]
         }
 
@@ -145,7 +148,7 @@ public actor ClaudeCodeConnector: UsageConnector {
 
         do {
             let usage = try parseAPIResponse(data)
-            logger.log(.info, "Fetched successfully: session=\(usage.sessionPercent.map { "\($0)%" } ?? "nil") weekly=\(usage.weeklyPercent.map { "\($0)%" } ?? "nil") sonnet=\(usage.sonnetWeekly.map { "\($0.percent)%" } ?? "nil") opus=\(usage.opusWeekly.map { "\($0.percent)%" } ?? "nil")")
+            logger.log(.info, "Fetched successfully: session=\(usage.sessionPercent.map { "\($0)%" } ?? "nil") weekly=\(usage.weeklyPercent.map { "\($0)%" } ?? "nil") sonnet=\(usage.sonnetWeekly.map { "\($0.percent)%" } ?? "nil") opus=\(usage.opusWeekly.map { "\($0.percent)%" } ?? "nil") extraUsage=\(usage.extraUsage.map { "\($0.amount) \($0.currency)" } ?? "nil")")
             // A window is emitted whenever utilization is known, even if resets_at is null
             // (fresh account, between cycles). A null reset date surfaces in the UI as "???"
             // rather than silently omitting the metric.
@@ -180,6 +183,13 @@ public actor ClaudeCodeConnector: UsageConnector {
                         usagePercent: UsagePercent(rawValue: m.percent)
                     ))
                 }
+            }
+            if let extraUsage = usage.extraUsage {
+                metrics.append(.payAsYouGo(
+                    name: "Extra usage spent",
+                    currentAmount: extraUsage.amount,
+                    currency: extraUsage.currency
+                ))
             }
             lastKnownMetrics = metrics
             return [VendorUsageEntry(
@@ -235,6 +245,11 @@ public actor ClaudeCodeConnector: UsageConnector {
         let resetAt: ISODate?
     }
 
+    private struct ExtraUsageMetric {
+        let amount: Double
+        let currency: String
+    }
+
     private struct ParsedUsage {
         // Every window is optional: a freshly provisioned account (or an account
         // between reset cycles) returns `utilization: 0, resets_at: null` and must
@@ -245,6 +260,7 @@ public actor ClaudeCodeConnector: UsageConnector {
         let weeklyResetAt: ISODate?
         let sonnetWeekly: ModelWeeklyMetric?
         let opusWeekly: ModelWeeklyMetric?
+        let extraUsage: ExtraUsageMetric?
     }
 
     private func parseAPIResponse(_ data: Data) throws -> ParsedUsage {
@@ -260,10 +276,11 @@ public actor ClaudeCodeConnector: UsageConnector {
         let weekly = extractOptionalModelMetric(from: json, key: "seven_day")
         let sonnet = extractOptionalModelMetric(from: json, key: "seven_day_sonnet")
         let opus = extractOptionalModelMetric(from: json, key: "seven_day_opus")
+        let extraUsage = extractExtraUsage(from: json)
 
         let hasFiveHourBlock = json["five_hour"] is [String: Any]
         let hasSevenDayBlock = json["seven_day"] is [String: Any]
-        if !hasFiveHourBlock, !hasSevenDayBlock {
+        if !hasFiveHourBlock, !hasSevenDayBlock, extraUsage == nil {
             logger.log(.warning, "No known usage window in payload — top-level keys: \(Array(json.keys))")
             throw ConnectorError.unexpectedAPIFormat(receivedKeys: Array(json.keys))
         }
@@ -274,7 +291,8 @@ public actor ClaudeCodeConnector: UsageConnector {
             weeklyPercent: weekly.map { Int($0.percent) },
             weeklyResetAt: weekly.flatMap { $0.resetAt.map { normalizeISO8601($0) } },
             sonnetWeekly: sonnet.map { ModelWeeklyMetric(percent: $0.percent, resetAt: $0.resetAt.map { normalizeISO8601($0) }) },
-            opusWeekly: opus.map { ModelWeeklyMetric(percent: $0.percent, resetAt: $0.resetAt.map { normalizeISO8601($0) }) }
+            opusWeekly: opus.map { ModelWeeklyMetric(percent: $0.percent, resetAt: $0.resetAt.map { normalizeISO8601($0) }) },
+            extraUsage: extraUsage
         )
     }
 
@@ -294,6 +312,24 @@ public actor ClaudeCodeConnector: UsageConnector {
             logger.log(.debug, "Block '\(key)' has null resets_at — metric emitted without reset date")
         }
         return (percent: Int(util.rounded()), resetAt: resetAt)
+    }
+
+    private func extractExtraUsage(from json: [String: Any]) -> ExtraUsageMetric? {
+        guard let block = json["extra_usage"] as? [String: Any],
+              block["is_enabled"] as? Bool == true,
+              let usedCredits = block["used_credits"] as? Double,
+              usedCredits >= 0 else {
+            return nil
+        }
+        let rawCurrency = (block["currency"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let currency: String
+        if let rawCurrency, !rawCurrency.isEmpty {
+            currency = rawCurrency.uppercased()
+        } else {
+            currency = "USD"
+        }
+        return ExtraUsageMetric(amount: usedCredits / 100, currency: currency)
     }
 
     /// Strips sub-second precision from API-provided ISO8601 strings so downstream

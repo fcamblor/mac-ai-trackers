@@ -15,6 +15,7 @@ public enum ClaudeAuthError: Error, CustomStringConvertible {
     case keychainEmpty(serviceName: String)
     case keychainTimeout(serviceName: String, timeoutSeconds: Int)
     case keychainParseFailed(serviceName: String, rawPreview: String)
+    case apiKeyOnlyUnsupported(serviceName: String)
 
     public var description: String {
         switch self {
@@ -26,6 +27,8 @@ public enum ClaudeAuthError: Error, CustomStringConvertible {
             "Keychain access timed out after \(secs)s for service '\(svc)'"
         case let .keychainParseFailed(svc, preview):
             "Failed to parse keychain value for service '\(svc)' — preview: '\(preview.prefix(80))'"
+        case let .apiKeyOnlyUnsupported(svc):
+            "Claude Code is authenticated with a standard API key in service '\(svc)'; usage reporting requires Claude Code OAuth credentials"
         }
     }
 }
@@ -38,6 +41,7 @@ public actor ClaudeCredentialLocator: CredentialLocator {
     public typealias Credentials = ClaudeCredentials
 
     public static let defaultKeychainService = "Claude Code-credentials"
+    public static let apiKeyKeychainService = "Claude Code"
     /// Long enough for a cached keychain lookup; short enough to avoid
     /// stalling the poller.
     public static let keychainTimeoutSeconds = 10
@@ -69,6 +73,10 @@ public actor ClaudeCredentialLocator: CredentialLocator {
             throw ClaudeAuthError.keychainTimeout(serviceName: serviceName, timeoutSeconds: timeoutSecs)
         }
         guard result.terminationStatus == 0 else {
+            if serviceName == Self.defaultKeychainService,
+               try await hasStandardAPIKey(timeoutSeconds: timeoutSecs) {
+                throw ClaudeAuthError.apiKeyOnlyUnsupported(serviceName: Self.apiKeyKeychainService)
+            }
             throw ClaudeAuthError.keychainAccessDenied(serviceName: serviceName, exitCode: result.terminationStatus)
         }
 
@@ -95,5 +103,18 @@ public actor ClaudeCredentialLocator: CredentialLocator {
         }
 
         return ClaudeCredentials(accessToken: token)
+    }
+
+    private func hasStandardAPIKey(timeoutSeconds: Int) async throws -> Bool {
+        let result = try await processRunner.run(
+            executablePath: "/usr/bin/security",
+            arguments: ["find-generic-password", "-s", Self.apiKeyKeychainService, "-w"],
+            timeoutSeconds: timeoutSeconds
+        )
+        guard !result.timedOut, result.terminationStatus == 0,
+              let raw = String(data: result.stdout, encoding: .utf8) else {
+            return false
+        }
+        return raw.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("sk-ant-api")
     }
 }

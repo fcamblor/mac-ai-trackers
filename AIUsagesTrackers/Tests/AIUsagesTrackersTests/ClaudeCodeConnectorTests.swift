@@ -40,6 +40,20 @@ private func mockSession() -> URLSession {
     return URLSession(configuration: config)
 }
 
+private struct RoutingProcessRunner: ProcessRunning {
+    let resultsByService: [String: ProcessExecutionResult]
+
+    func run(executablePath: String, arguments: [String], timeoutSeconds: Int) async throws -> ProcessExecutionResult {
+        guard let serviceFlagIndex = arguments.firstIndex(of: "-s"),
+              arguments.indices.contains(arguments.index(after: serviceFlagIndex)) else {
+            return ProcessExecutionResult(stdout: Data(), terminationStatus: 44, timedOut: false)
+        }
+        let service = arguments[arguments.index(after: serviceFlagIndex)]
+        return resultsByService[service]
+            ?? ProcessExecutionResult(stdout: Data(), terminationStatus: 44, timedOut: false)
+    }
+}
+
 // MARK: - Account resolution tests
 
 @Suite("ClaudeCodeConnector — account resolution")
@@ -143,6 +157,62 @@ struct ClaudeCodeConnectorFetchTests {
         } else {
             Issue.record("Expected timeWindow metric for weekly")
         }
+    }
+
+    @Test("extra_usage emits pay-as-you-go metric in dollars")
+    func extraUsageEmitsPayAsYouGoMetric() async throws {
+        let dir = makeTempDir()
+        mockHTTP200(json: """
+        {"five_hour":{"utilization":42,"resets_at":"2026-04-17T15:00:00+00:00"},
+         "extra_usage":{"is_enabled":true,"used_credits":1250,"monthly_limit":5000,"currency":"usd"}}
+        """)
+        let connector = makeConnector(dir: dir) { "fake-token" }
+        let entries = try await connector.fetchUsages()
+
+        #expect(entries.count == 1)
+        #expect(entries[0].lastError == nil)
+        guard let metric = entries[0].metrics.first(where: {
+            if case .payAsYouGo(let name, _, _) = $0 { return name == "Extra usage spent" }
+            return false
+        }) else {
+            Issue.record("Expected Extra usage spent payAsYouGo metric")
+            return
+        }
+        if case .payAsYouGo(_, let amount, let currency) = metric {
+            #expect(amount == 12.5)
+            #expect(currency == "USD")
+        } else {
+            Issue.record("Expected payAsYouGo metric")
+        }
+    }
+
+    @Test("standard API key without OAuth credentials returns explicit unsupported usage error")
+    func apiKeyOnlyReturnsUnsupportedUsageError() async throws {
+        let dir = makeTempDir()
+        let configPath = "\(dir)/claude.json"
+        try! #"{"oauthAccount":{"emailAddress":"user@example.com"}}"#
+            .write(toFile: configPath, atomically: true, encoding: .utf8)
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let runner = RoutingProcessRunner(resultsByService: [
+            ClaudeCredentialLocator.defaultKeychainService: ProcessExecutionResult(
+                stdout: Data(), terminationStatus: 44, timedOut: false
+            ),
+            ClaudeCredentialLocator.apiKeyKeychainService: ProcessExecutionResult(
+                stdout: Data("sk-ant-api03-test-key\n".utf8), terminationStatus: 0, timedOut: false
+            ),
+        ])
+        let connector = ClaudeCodeConnector(
+            claudeConfigPath: configPath,
+            logger: logger,
+            session: mockSession(),
+            credentialLocator: ClaudeCredentialLocator(processRunner: runner, logger: logger)
+        )
+
+        let entries = try await connector.fetchUsages()
+
+        #expect(entries.count == 1)
+        #expect(entries[0].lastError?.type == "api_key_usage_unsupported")
+        #expect(entries[0].metrics.isEmpty)
     }
 
     @Test("token error returns error entry")

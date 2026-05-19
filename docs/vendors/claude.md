@@ -15,9 +15,15 @@ _verified: 2026-05-07_
 | Method | URL | Headers | Timeout | Response Content-Type |
 |--------|-----|---------|---------|-----------------------|
 | GET    | `https://api.anthropic.com/api/oauth/usage` | `Authorization: Bearer <oauth>`, `anthropic-beta: oauth-2025-04-20` | 5s | `application/json` |
+| GET    | `https://api.anthropic.com/v1/organizations/cost_report` | `x-api-key: <admin_key>`, `anthropic-version: 2023-06-01` | unimplemented | `application/json` |
 
 The `anthropic-beta` value matches the rollout date documented when the
 OAuth-app usage endpoint was made available.
+
+The organization cost endpoint is documented by Anthropic's Admin API but
+is not implemented by this tracker. It requires an Admin API key
+(`sk-ant-admin...`), not a standard API key (`sk-ant-api...`), and Anthropic
+documents the Admin API as unavailable for individual accounts.
 
 ## Credential sources
 
@@ -28,6 +34,12 @@ Cascade (read-only — the app never writes any of these):
 1. **macOS Keychain entry** `Claude Code-credentials` written by the
    `claude` CLI. Value is JSON of the form
    `{"claudeAiOauth":{"accessToken":"sk-ant-oat01-...","refreshToken":"...","expiresAt":...}}`.
+2. **Unsupported diagnostic only:** macOS Keychain entry `Claude Code`
+   may contain a standard Claude API key (`sk-ant-api...`) when Claude Code
+   is configured for API-key auth. The tracker detects this state so it can
+   surface `api_key_usage_unsupported` instead of a generic token error, but
+   it does not use that key for usage fetching because Anthropic's usage/cost
+   reporting requires an Admin API key.
 
 The `claude` CLI owns the lifecycle. The locator never calls
 `SecItemAdd`, never invokes `claude auth`, never writes the file at
@@ -95,10 +107,10 @@ _verified: 2026-05-07_
 }
 ```
 
-Unknown top-level keys (`seven_day_omelette`, `tangelo`, `iguana_necktie`,
-`omelette_promotional`, `extra_usage`) are ignored by design — the API
-evolves with experimental fields and the connector only consumes the
-windows it knows about.
+Unknown top-level keys such as `seven_day_omelette`, `tangelo`,
+`iguana_necktie`, and `omelette_promotional` are ignored by design.
+`extra_usage` is consumed when enabled and emitted as
+`.payAsYouGo("Extra usage spent", used_credits / 100, currency)`.
 
 ### Max plan (assumed, not yet verified by tester)
 
@@ -112,7 +124,7 @@ and `five_hour.utilization` capped on a tighter quota.
 
 ## Metric semantics
 
-_verified: 2026-05-07_
+_verified: 2026-05-20_
 
 | Swift metric | Source field | Reset cadence | Unit | Edge cases |
 |--------------|--------------|---------------|------|------------|
@@ -120,6 +132,7 @@ _verified: 2026-05-07_
 | `.timeWindow("Weekly (all models)")` | `seven_day.utilization` / `seven_day.resets_at` | weekly (10080 minutes) | percent | same |
 | `.timeWindow("Weekly Sonnet")` | `seven_day_sonnet.*` | weekly | percent | additive — absent → metric omitted |
 | `.timeWindow("Weekly Opus")` | `seven_day_opus.*` | weekly | percent | additive — absent → metric omitted |
+| `.payAsYouGo("Extra usage spent")` | `extra_usage.used_credits` / `extra_usage.currency` | n/a | currency amount | emitted only when `extra_usage.is_enabled == true` and `used_credits` is numeric; API reports cents, tracker stores dollars |
 
 Window durations are not returned by the API — they are fixed by
 Anthropic's rate-limit policy and hard-coded in the connector
@@ -145,6 +158,7 @@ _verified: 2026-05-07_
 | 401    | surface `token_expired`; no metric refresh |
 | 429    | preserve last-known metrics, mark active, surface `http_429` |
 | other  | surface `http_<code>`; do not refresh metrics |
+| API-key auth only | surface `api_key_usage_unsupported`; no metric refresh |
 
 A `parse_error` is surfaced if the response cannot be decoded as JSON or
 contains no known window block.
@@ -180,6 +194,9 @@ incident `shortlink` becomes the clickable href in the UI.
 
 - Anthropic API documentation, OAuth usage endpoint
   (https://docs.anthropic.com/) (retrieved 2026-05-07).
+- Anthropic Usage and Cost Admin API documentation
+  (https://docs.anthropic.com/en/api/data-usage-cost-api) (retrieved
+  2026-05-20).
 - Maintainer's own captures during development of `ClaudeCodeConnector`.
 
 ## Change log
@@ -187,3 +204,5 @@ incident `shortlink` becomes the clickable href in the UI.
 - 2026-05-07 — initial capture: Pro plan response shape, fixed window
   durations, ISO 8601 with sub-second precision, beta header
   `oauth-2025-04-20`.
+- 2026-05-20 — document standard API-key auth limitation and parse
+  `extra_usage` as a pay-as-you-go metric.

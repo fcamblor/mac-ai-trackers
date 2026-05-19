@@ -39,6 +39,10 @@ struct AccountCardView: View {
             ForEach(Array(entry.metrics.enumerated()), id: \.offset) { _, metric in
                 metricRow(for: metric)
             }
+
+            if let lastError = entry.lastError {
+                errorRow(for: lastError)
+            }
         }
         .padding(10)
         .background(
@@ -76,6 +80,83 @@ struct AccountCardView: View {
             )
         case .unknown:
             EmptyView()
+        }
+    }
+
+    private func errorRow(for error: UsageError) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.orange)
+                .frame(width: 12, height: 12)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(errorTitle(for: error.type))
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(errorDetail(for: error.type))
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(Color.orange.opacity(0.35), lineWidth: 1)
+        )
+    }
+
+    private func errorTitle(for type: String) -> String {
+        switch type {
+        case "api_key_usage_unsupported":
+            "Usage unavailable with API key auth"
+        case "token_error":
+            "Authentication unavailable"
+        case "token_expired":
+            "Session expired"
+        case "api_error":
+            "Usage refresh failed"
+        case "parse_error":
+            "Unexpected usage response"
+        case "account_unknown":
+            "Account not detected"
+        case "http_429":
+            "Usage refresh rate-limited"
+        default:
+            if type.hasPrefix("http_") {
+                "Usage refresh failed"
+            } else {
+                "Usage issue"
+            }
+        }
+    }
+
+    private func errorDetail(for type: String) -> String {
+        switch type {
+        case "api_key_usage_unsupported":
+            "Claude standard API keys cannot expose usage here. Claude Code OAuth credentials are required."
+        case "token_error":
+            "Credentials could not be read from the expected local source."
+        case "token_expired":
+            "Re-authenticate with the vendor CLI, then refresh."
+        case "api_error":
+            "Network or API request failed. Last known metrics may be stale."
+        case "parse_error":
+            "The vendor response shape changed or was incomplete."
+        case "account_unknown":
+            "The active local account could not be resolved."
+        case "http_429":
+            "The vendor is throttling usage refreshes. Last known metrics are kept."
+        default:
+            if type.hasPrefix("http_") {
+                "Vendor returned \(type.replacingOccurrences(of: "http_", with: "HTTP "))."
+            } else {
+                "Connector reported \(type)."
+            }
         }
     }
 }
