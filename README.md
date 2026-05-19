@@ -27,6 +27,22 @@ On a fresh install, the menu bar shows a **Configure AI Metrics** call to action
 
 Click the menu bar item to open the popover, then **Open Settings** to add your first segment (vendor, account, metric, display options). Once at least one segment is configured, the menu bar label switches to live usage data.
 
+## Menu Bar Space and the Notch
+
+On MacBooks with a notch, the usable menu bar width is split between the left side (occupied by app menus of the focused application) and the right side (occupied by status items). When the focused app exposes many menus, status items — including this tracker's label — can be hidden behind the notch, especially once several configurable segments are enabled.
+
+This is a system-wide constraint rather than something the app can work around on its own. A robust workaround is to use [Ice](https://icemenubar.app/) ([source](https://github.com/jordanbaird/Ice)) by Jordan Baird, a free menu bar manager that hides, groups, and arranges status items so the tracker stays visible regardless of the focused app's menu width:
+
+```sh
+brew install --cask jordanbaird-ice
+```
+
+On macOS Tahoe, prefer the beta cask, which tracks the fixes required for that release:
+
+```sh
+brew install --cask jordanbaird-ice@beta
+```
+
 ## Screenshots & Features
 
 ### Multi-account support
