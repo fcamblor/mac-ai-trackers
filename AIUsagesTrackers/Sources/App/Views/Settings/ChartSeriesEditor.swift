@@ -4,6 +4,7 @@ import AIUsagesTrackersLib
 struct ChartSeriesEditor: View {
     @Bindable var store: UsageStore
     @Binding var series: ChartSeriesConfig
+    let options: MetricSelectionOptions
     let onDuplicate: () -> Void
     let onDelete: () -> Void
 
@@ -15,7 +16,8 @@ struct ChartSeriesEditor: View {
                 vendor: $series.vendor,
                 account: $series.account,
                 metricName: $series.metricName,
-                layout: .grid
+                layout: .grid,
+                options: options
             )
             stylePanel
         }
@@ -155,7 +157,7 @@ struct ChartSeriesEditor: View {
         let accountLabel: String
         switch series.account {
         case .currentlyActive:
-            if let entry = store.entries.first(where: { $0.vendor == series.vendor && $0.isActive }) {
+            if let entry = options.resolveEntry(vendor: series.vendor, account: .currentlyActive) {
                 accountLabel = entry.account.rawValue
             } else {
                 accountLabel = "currently active"

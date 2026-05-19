@@ -29,7 +29,7 @@ struct ChartConfigurationCard: View {
             VStack(alignment: .leading, spacing: 0) {
                 header(for: configurationBinding.wrappedValue)
                 if isExpanded {
-                    ChartConfigurationEditor(
+                    DeferredChartConfigurationEditor(
                         store: store,
                         configuration: configurationBinding
                     )
@@ -37,12 +37,7 @@ struct ChartConfigurationCard: View {
                     .padding(.leading, 30)
                     .padding(.trailing, 4)
                     .padding(.bottom, 10)
-                    .transition(
-                        .asymmetric(
-                            insertion: .opacity.combined(with: .move(edge: .top)),
-                            removal: .opacity
-                        )
-                    )
+                    .transition(.opacity)
                 }
             }
             .padding(.vertical, 6)
@@ -109,7 +104,7 @@ struct ChartConfigurationCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture {
-            withAnimation(.easeOut(duration: 0.18)) { isExpanded.toggle() }
+            withAnimation(.easeOut(duration: 0.14)) { isExpanded.toggle() }
         }
     }
 
@@ -186,5 +181,32 @@ struct ChartConfigurationCard: View {
             .help("Delete chart")
         }
         .opacity(isHovering || isExpanded ? 1.0 : 0.45)
+    }
+}
+
+private struct DeferredChartConfigurationEditor: View {
+    @Bindable var store: UsageStore
+    @Binding var configuration: ChartConfiguration
+    @State private var isMounted = false
+
+    var body: some View {
+        Group {
+            if isMounted {
+                ChartConfigurationEditor(store: store, configuration: $configuration)
+            } else {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(maxWidth: .infinity, minHeight: 36, alignment: .center)
+            }
+        }
+        .task(id: configuration.id) {
+            isMounted = false
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            isMounted = true
+        }
+        .onDisappear {
+            isMounted = false
+        }
     }
 }

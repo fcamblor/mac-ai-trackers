@@ -1,6 +1,84 @@
 import SwiftUI
 import AIUsagesTrackersLib
 
+struct MetricSelectionOptions: Equatable {
+    private let entriesByVendor: [Vendor: [VendorUsageEntry]]
+    private let signature: Int
+
+    init(entries: [VendorUsageEntry]) {
+        entriesByVendor = Dictionary(grouping: entries, by: \.vendor)
+        var hasher = Hasher()
+        for entry in entries.sorted(by: { $0.id < $1.id }) {
+            hasher.combine(entry.vendor)
+            hasher.combine(entry.account)
+            hasher.combine(entry.isActive)
+            for metric in entry.metrics {
+                hasher.combine(SegmentEditingHelpers.metricName(metric))
+            }
+        }
+        signature = hasher.finalize()
+    }
+
+    static func == (lhs: MetricSelectionOptions, rhs: MetricSelectionOptions) -> Bool {
+        lhs.signature == rhs.signature
+    }
+
+    var availableVendors: [Vendor] {
+        entriesByVendor.keys.sorted { $0.rawValue < $1.rawValue }
+    }
+
+    func availableAccounts(for vendor: Vendor) -> [AccountEmail] {
+        entriesByVendor[vendor, default: []]
+            .filter { !$0.metrics.isEmpty }
+            .map(\.account)
+    }
+
+    func availableMetrics(vendor: Vendor, account: AccountSelection) -> [MetricOption] {
+        guard let entry = resolveEntry(vendor: vendor, account: account) else { return [] }
+        return entry.metrics.compactMap { metric in
+            guard let name = SegmentEditingHelpers.metricName(metric) else { return nil }
+            return MetricOption(name: name, kind: metric.kind)
+        }
+    }
+
+    func selectedMetric(
+        vendor: Vendor,
+        account: AccountSelection,
+        metricName: String
+    ) -> UsageMetric? {
+        resolveEntry(vendor: vendor, account: account)?
+            .metrics
+            .first { SegmentEditingHelpers.metricName($0) == metricName }
+    }
+
+    func firstMetricName(vendor: Vendor, account: AccountSelection) -> String? {
+        resolveEntry(vendor: vendor, account: account)?
+            .metrics
+            .compactMap(SegmentEditingHelpers.metricName)
+            .first
+    }
+
+    func metricExists(on vendor: Vendor, account: AccountSelection, name: String) -> Bool {
+        guard let entry = resolveEntry(vendor: vendor, account: account) else { return false }
+        return entry.metrics.contains { SegmentEditingHelpers.metricName($0) == name }
+    }
+
+    func resolveEntry(vendor: Vendor, account: AccountSelection) -> VendorUsageEntry? {
+        let vendorEntries = entriesByVendor[vendor, default: []]
+        switch account {
+        case .currentlyActive:
+            return vendorEntries.first(where: { $0.isActive })
+        case .specific(let email):
+            return vendorEntries.first(where: { $0.account == email })
+        }
+    }
+}
+
+struct MetricOption: Hashable {
+    let name: String
+    let kind: MetricKind
+}
+
 struct MetricSelectionEditor: View {
     enum Layout {
         /// Original look: label on the left, picker on the right, stacked vertically.
@@ -17,6 +95,7 @@ struct MetricSelectionEditor: View {
 
     let labelWidth: CGFloat
     let layout: Layout
+    let options: MetricSelectionOptions?
     let onMetricChanged: (UsageMetric?) -> Void
 
     init(
@@ -26,6 +105,7 @@ struct MetricSelectionEditor: View {
         metricName: Binding<String>,
         labelWidth: CGFloat = 80,
         layout: Layout = .stacked,
+        options: MetricSelectionOptions? = nil,
         onMetricChanged: @escaping (UsageMetric?) -> Void = { _ in }
     ) {
         self.store = store
@@ -34,6 +114,7 @@ struct MetricSelectionEditor: View {
         self._metricName = metricName
         self.labelWidth = labelWidth
         self.layout = layout
+        self.options = options
         self.onMetricChanged = onMetricChanged
     }
 
@@ -215,49 +296,28 @@ struct MetricSelectionEditor: View {
 
     // MARK: - Data helpers
 
+    private var resolvedOptions: MetricSelectionOptions {
+        options ?? MetricSelectionOptions(entries: store.entries)
+    }
+
     private var availableVendors: [Vendor] {
-        Array(Set(store.entries.map(\.vendor))).sorted { $0.rawValue < $1.rawValue }
+        resolvedOptions.availableVendors
     }
 
     private func availableAccounts(for vendor: Vendor) -> [AccountEmail] {
-        store.entries
-            .filter { $0.vendor == vendor && !$0.metrics.isEmpty }
-            .map(\.account)
-    }
-
-    private struct MetricOption: Hashable {
-        let name: String
-        let kind: MetricKind
+        resolvedOptions.availableAccounts(for: vendor)
     }
 
     private func availableMetrics(vendor: Vendor, account: AccountSelection) -> [MetricOption] {
-        guard let entry = resolveEntry(vendor: vendor, account: account) else { return [] }
-        return entry.metrics.compactMap { metric in
-            guard let name = SegmentEditingHelpers.metricName(metric) else { return nil }
-            return MetricOption(name: name, kind: metric.kind)
-        }
-    }
-
-    private func resolveEntry(vendor: Vendor, account: AccountSelection) -> VendorUsageEntry? {
-        let vendorEntries = store.entries.filter { $0.vendor == vendor }
-        switch account {
-        case .currentlyActive:
-            return vendorEntries.first(where: { $0.isActive })
-        case .specific(let email):
-            return vendorEntries.first(where: { $0.account == email })
-        }
+        resolvedOptions.availableMetrics(vendor: vendor, account: account)
     }
 
     private func firstMetricName(vendor: Vendor, account: AccountSelection) -> String? {
-        resolveEntry(vendor: vendor, account: account)?
-            .metrics
-            .compactMap(SegmentEditingHelpers.metricName)
-            .first
+        resolvedOptions.firstMetricName(vendor: vendor, account: account)
     }
 
     private func metricExists(on vendor: Vendor, account: AccountSelection, name: String) -> Bool {
-        guard let entry = resolveEntry(vendor: vendor, account: account) else { return false }
-        return entry.metrics.contains { SegmentEditingHelpers.metricName($0) == name }
+        resolvedOptions.metricExists(on: vendor, account: account, name: name)
     }
 
     private func selectedMetric(
@@ -265,8 +325,6 @@ struct MetricSelectionEditor: View {
         account: AccountSelection,
         metricName: String
     ) -> UsageMetric? {
-        resolveEntry(vendor: vendor, account: account)?
-            .metrics
-            .first { SegmentEditingHelpers.metricName($0) == metricName }
+        resolvedOptions.selectedMetric(vendor: vendor, account: account, metricName: metricName)
     }
 }

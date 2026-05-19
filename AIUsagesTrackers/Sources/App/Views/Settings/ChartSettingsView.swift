@@ -27,6 +27,11 @@ private struct ChartRowFramePreferenceKey: PreferenceKey {
     }
 }
 
+@MainActor
+private final class ChartListDragCursorTracker: ObservableObject {
+    @Published var y: CGFloat = 0
+}
+
 // MARK: - Content
 
 private struct ChartSettingsContent: View {
@@ -40,8 +45,8 @@ private struct ChartSettingsContent: View {
     // Drag state
     @State private var rowFrames: [UUID: CGRect] = [:]
     @State private var draggingID: UUID?
-    @State private var dragCursorY: CGFloat = 0
     @State private var dropIndex: Int?
+    @StateObject private var cursorTracker = ChartListDragCursorTracker()
 
     var body: some View {
         ScrollView {
@@ -139,7 +144,7 @@ private struct ChartSettingsContent: View {
     private var listBody: some View {
         let configurations = preferences.chartConfigurations
         return ZStack(alignment: .topLeading) {
-            VStack(spacing: 4) {
+            LazyVStack(spacing: 4) {
                 ForEach(Array(configurations.enumerated()), id: \.element.id) { index, configuration in
                     rowContainer(configuration: configuration, index: index, count: configurations.count)
                 }
@@ -218,10 +223,11 @@ private struct ChartSettingsContent: View {
         if let id = draggingID,
            let configuration = configurations.first(where: { $0.id == id }),
            let frame = rowFrames[id] {
-            ChartDragPreviewCard(configuration: configuration)
-                .frame(width: max(frame.width, 240))
-                .offset(x: frame.minX, y: dragCursorY - frame.height / 2)
-                .allowsHitTesting(false)
+            ChartListFloatingDragPreview(
+                tracker: cursorTracker,
+                configuration: configuration,
+                frame: frame
+            )
         }
     }
 
@@ -229,13 +235,14 @@ private struct ChartSettingsContent: View {
 
     private func handleDragChanged(value: DragGesture.Value, configurationID: UUID) {
         if draggingID == nil {
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
-                draggingID = configurationID
-            }
+            draggingID = configurationID
         }
-        dragCursorY = value.location.y
+        cursorTracker.y = value.location.y
         let configurations = preferences.chartConfigurations
-        dropIndex = computeDropIndex(at: value.location.y, configurations: configurations)
+        let newDropIndex = computeDropIndex(at: value.location.y, configurations: configurations)
+        if newDropIndex != dropIndex {
+            dropIndex = newDropIndex
+        }
     }
 
     private func handleDragEnded(value: DragGesture.Value, configurationID: UUID) {
@@ -377,5 +384,18 @@ private struct ChartDragPreviewCard: View {
         case .allAvailable: return "All available metrics"
         case .custom(let series): return series.isEmpty ? "No series" : "\(series.count) series"
         }
+    }
+}
+
+private struct ChartListFloatingDragPreview: View {
+    @ObservedObject var tracker: ChartListDragCursorTracker
+    let configuration: ChartConfiguration
+    let frame: CGRect
+
+    var body: some View {
+        ChartDragPreviewCard(configuration: configuration)
+            .frame(width: max(frame.width, 240))
+            .offset(x: frame.minX, y: tracker.y - frame.height / 2)
+            .allowsHitTesting(false)
     }
 }

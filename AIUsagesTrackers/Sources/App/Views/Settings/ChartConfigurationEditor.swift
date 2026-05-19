@@ -11,6 +11,16 @@ private struct ChartSeriesRowFramePreferenceKey: PreferenceKey {
     }
 }
 
+// The cursor position during a drag is updated on every mouse move (60+ Hz). Storing it
+// as `@State` on `ChartConfigurationEditor` re-evaluated the whole editor body — and the
+// embedded ChartSeriesEditor rows with their AppKit Pickers — at each tick, which is the
+// dominant cost of the drag stutter. Wrapping the value in a dedicated ObservableObject
+// scopes the subscription to the floating preview only: the parent body stays still.
+@MainActor
+private final class DragCursorTracker: ObservableObject {
+    @Published var y: CGFloat = 0
+}
+
 struct ChartConfigurationEditor: View {
     @Bindable var store: UsageStore
     @Binding var configuration: ChartConfiguration
@@ -18,11 +28,15 @@ struct ChartConfigurationEditor: View {
     // Drag state, scoped to this editor instance
     @State private var rowFrames: [UUID: CGRect] = [:]
     @State private var draggingID: UUID?
-    @State private var dragCursorY: CGFloat = 0
     @State private var dropIndex: Int?
+    @StateObject private var cursorTracker = DragCursorTracker()
 
     private var coordinateSpaceName: String {
         "chart.series.\(configuration.id.uuidString)"
+    }
+
+    private var metricOptions: MetricSelectionOptions {
+        MetricSelectionOptions(entries: store.entries)
     }
 
     var body: some View {
@@ -84,7 +98,7 @@ struct ChartConfigurationEditor: View {
             if series.isEmpty {
                 emptySeriesState
             } else {
-                seriesListBody(series: series)
+                seriesListBody(series: series, metricOptions: metricOptions)
             }
         }
     }
@@ -96,11 +110,23 @@ struct ChartConfigurationEditor: View {
             .padding(.vertical, 6)
     }
 
-    private func seriesListBody(series: [ChartSeriesConfig]) -> some View {
+    private func seriesListBody(series: [ChartSeriesConfig], metricOptions: MetricSelectionOptions) -> some View {
         ZStack(alignment: .topLeading) {
             VStack(spacing: 6) {
                 ForEach(Array(series.enumerated()), id: \.element.id) { index, item in
-                    seriesRow(item: item, index: index)
+                    ChartSeriesRow(
+                        item: item,
+                        isDragging: draggingID == item.id,
+                        store: store,
+                        options: metricOptions,
+                        coordinateSpaceName: coordinateSpaceName,
+                        onItemChange: { newValue in updateSeries(at: index, with: newValue) },
+                        onDuplicate: { duplicateSeries(at: index) },
+                        onDelete: { deleteSeries(at: index) },
+                        onDragChanged: { value in handleDragChanged(value: value, seriesID: item.id) },
+                        onDragEnded: { value in handleDragEnded(value: value, seriesID: item.id) }
+                    )
+                    .equatable()
                 }
             }
             .animation(.spring(response: 0.34, dampingFraction: 0.85), value: draggingID)
@@ -111,49 +137,6 @@ struct ChartConfigurationEditor: View {
         }
         .coordinateSpace(name: coordinateSpaceName)
         .onPreferenceChange(ChartSeriesRowFramePreferenceKey.self) { rowFrames = $0 }
-    }
-
-    private func seriesRow(item: ChartSeriesConfig, index: Int) -> some View {
-        let isDragging = draggingID == item.id
-        return HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "line.3.horizontal")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary.opacity(0.7))
-                .frame(width: 18, height: 24)
-                .contentShape(Rectangle())
-                .help("Drag to reorder")
-                .onHover { hovering in
-                    if hovering { NSCursor.openHand.push() } else { NSCursor.pop() }
-                }
-                .gesture(
-                    DragGesture(minimumDistance: 4, coordinateSpace: .named(coordinateSpaceName))
-                        .onChanged { value in handleDragChanged(value: value, seriesID: item.id) }
-                        .onEnded { value in handleDragEnded(value: value, seriesID: item.id) }
-                )
-
-            ChartSeriesEditor(
-                store: store,
-                series: seriesBinding(at: index),
-                onDuplicate: { duplicateSeries(at: index) },
-                onDelete: { deleteSeries(at: index) }
-            )
-            .padding(10)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color(NSColor.controlBackgroundColor))
-            )
-        }
-        .background(
-            GeometryReader { geo in
-                Color.clear.preference(
-                    key: ChartSeriesRowFramePreferenceKey.self,
-                    value: [item.id: geo.frame(in: .named(coordinateSpaceName))]
-                )
-            }
-        )
-        .opacity(isDragging ? 0.0 : 1.0)
-        .frame(maxHeight: isDragging ? 0 : nil)
-        .clipped()
     }
 
     // MARK: Drop indicator + floating preview
@@ -191,56 +174,25 @@ struct ChartConfigurationEditor: View {
         if let id = draggingID,
            let item = series.first(where: { $0.id == id }),
            let frame = rowFrames[id] {
-            seriesDragPreview(item: item)
-                .frame(width: max(frame.width, 200))
-                .offset(x: frame.minX, y: dragCursorY - frame.height / 2)
-                .allowsHitTesting(false)
+            FloatingDragPreview(tracker: cursorTracker, item: item, frame: frame)
         }
-    }
-
-    private func seriesDragPreview(item: ChartSeriesConfig) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "line.3.horizontal")
-                .foregroundStyle(.secondary)
-                .font(.system(size: 11, weight: .semibold))
-            Path { path in
-                path.move(to: CGPoint(x: 0, y: 8))
-                path.addLine(to: CGPoint(x: 26, y: 8))
-            }
-            .stroke(item.style.color.swiftUIColor, style: item.style.lineStyle.strokeStyle)
-            .frame(width: 26, height: 16)
-            Text(item.label.isEmpty ? "\(item.vendor.rawValue) / \(item.metricName)" : item.label)
-                .font(.callout)
-                .fontWeight(.medium)
-                .lineLimit(1)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(.background)
-                .shadow(color: .black.opacity(0.28), radius: 14, x: 0, y: 6)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.accentColor.opacity(0.5), lineWidth: 1)
-        )
-        .rotationEffect(.degrees(-1.2))
-        .scaleEffect(1.02)
     }
 
     // MARK: Drag handling
 
     private func handleDragChanged(value: DragGesture.Value, seriesID: UUID) {
         if draggingID == nil {
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
-                draggingID = seriesID
-            }
+            draggingID = seriesID
         }
-        dragCursorY = value.location.y
+        // Route the high-frequency cursor update through cursorTracker so only the
+        // floating preview re-renders. `dropIndex` is updated only when it actually
+        // changes — most drag frames stay inside the same slot.
+        cursorTracker.y = value.location.y
         let series = customSeries
-        dropIndex = computeDropIndex(at: value.location.y, series: series)
+        let newDropIndex = computeDropIndex(at: value.location.y, series: series)
+        if newDropIndex != dropIndex {
+            dropIndex = newDropIndex
+        }
     }
 
     private func handleDragEnded(value: DragGesture.Value, seriesID: UUID) {
@@ -349,36 +301,137 @@ struct ChartConfigurationEditor: View {
         return []
     }
 
-    private func seriesBinding(at index: Int) -> Binding<ChartSeriesConfig> {
-        Binding(
-            get: { customSeries[index] },
-            set: { newValue in
-                var series = customSeries
-                guard series.indices.contains(index) else { return }
-                series[index] = newValue
-                configuration.selection = .custom(series)
-            }
-        )
+    private func updateSeries(at index: Int, with newValue: ChartSeriesConfig) {
+        var series = customSeries
+        guard series.indices.contains(index) else { return }
+        series[index] = newValue
+        configuration.selection = .custom(series)
     }
 
     private var availableVendors: [Vendor] {
-        Array(Set(store.entries.map(\.vendor))).sorted { $0.rawValue < $1.rawValue }
+        metricOptions.availableVendors
     }
 
     private func firstAvailableMetricName(for vendor: Vendor, account: AccountSelection) -> String? {
-        let vendorEntries = store.entries.filter { $0.vendor == vendor }
-        let entry: VendorUsageEntry?
-        switch account {
-        case .currentlyActive:
-            entry = vendorEntries.first(where: { $0.isActive })
-        case .specific(let email):
-            entry = vendorEntries.first(where: { $0.account == email })
-        }
-        return entry?.metrics.compactMap(SegmentEditingHelpers.metricName).first
+        metricOptions.firstMetricName(vendor: vendor, account: account)
     }
 }
 
 enum ChartSelectionMode: Hashable {
     case allAvailable
     case custom
+}
+
+// Extracted as a struct with Equatable conformance so `.equatable()` can short-circuit
+// SwiftUI's diffing during a drag: when only `dragCursorY` changes on the parent, the
+// parent's body is re-evaluated, but rows whose `item`/`isDragging` are unchanged keep
+// their previous body (including the embedded `ChartSeriesEditor` + `MetricSelectionEditor`
+// pickers). Without this, every drag frame rebuilds the whole row tree and stutters.
+private struct ChartSeriesRow: View, Equatable {
+    let item: ChartSeriesConfig
+    let isDragging: Bool
+    let store: UsageStore
+    let options: MetricSelectionOptions
+    let coordinateSpaceName: String
+    let onItemChange: (ChartSeriesConfig) -> Void
+    let onDuplicate: () -> Void
+    let onDelete: () -> Void
+    let onDragChanged: (DragGesture.Value) -> Void
+    let onDragEnded: (DragGesture.Value) -> Void
+
+    // Closures and the `@Bindable` store are intentionally excluded from equality:
+    // they are stable for a given row identity during a drag, and SwiftUI's
+    // @Bindable handles store mutations independently.
+    nonisolated static func == (lhs: ChartSeriesRow, rhs: ChartSeriesRow) -> Bool {
+        lhs.item == rhs.item && lhs.isDragging == rhs.isDragging && lhs.options == rhs.options
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary.opacity(0.7))
+                .frame(width: 18, height: 24)
+                .contentShape(Rectangle())
+                .help("Drag to reorder")
+                .onHover { hovering in
+                    if hovering { NSCursor.openHand.push() } else { NSCursor.pop() }
+                }
+                .gesture(
+                    DragGesture(minimumDistance: 4, coordinateSpace: .named(coordinateSpaceName))
+                        .onChanged(onDragChanged)
+                        .onEnded(onDragEnded)
+                )
+
+            ChartSeriesEditor(
+                store: store,
+                series: Binding(
+                    get: { item },
+                    set: { newValue in onItemChange(newValue) }
+                ),
+                options: options,
+                onDuplicate: onDuplicate,
+                onDelete: onDelete
+            )
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color(NSColor.controlBackgroundColor))
+            )
+        }
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: ChartSeriesRowFramePreferenceKey.self,
+                    value: [item.id: geo.frame(in: .named(coordinateSpaceName))]
+                )
+            }
+        )
+        .opacity(isDragging ? 0.0 : 1.0)
+        .frame(maxHeight: isDragging ? 0 : nil)
+        .clipped()
+    }
+}
+
+// Scoped to the cursor tracker so SwiftUI only re-evaluates this view at each drag tick,
+// not the entire ChartConfigurationEditor with its picker-heavy series rows.
+private struct FloatingDragPreview: View {
+    @ObservedObject var tracker: DragCursorTracker
+    let item: ChartSeriesConfig
+    let frame: CGRect
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "line.3.horizontal")
+                .foregroundStyle(.secondary)
+                .font(.system(size: 11, weight: .semibold))
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: 8))
+                path.addLine(to: CGPoint(x: 26, y: 8))
+            }
+            .stroke(item.style.color.swiftUIColor, style: item.style.lineStyle.strokeStyle)
+            .frame(width: 26, height: 16)
+            Text(item.label.isEmpty ? "\(item.vendor.rawValue) / \(item.metricName)" : item.label)
+                .font(.callout)
+                .fontWeight(.medium)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(.background)
+                .shadow(color: .black.opacity(0.28), radius: 14, x: 0, y: 6)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.accentColor.opacity(0.5), lineWidth: 1)
+        )
+        .rotationEffect(.degrees(-1.2))
+        .scaleEffect(1.02)
+        .frame(width: max(frame.width, 200))
+        .offset(x: frame.minX, y: tracker.y - frame.height / 2)
+        .allowsHitTesting(false)
+    }
 }
