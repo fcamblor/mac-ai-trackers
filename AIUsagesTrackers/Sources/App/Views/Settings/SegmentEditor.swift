@@ -1,10 +1,12 @@
 import SwiftUI
+import AppKit
 import AIUsagesTrackersLib
 
 struct SegmentEditor: View {
     let preferences: any AppPreferences
     @Bindable var store: UsageStore
     let segmentID: UUID
+    let isDark: Bool
 
     private var segmentBinding: Binding<MenuBarSegmentConfig>? {
         SettingsConfigurationBindings.menuBarSegment(preferences: preferences, segmentID: segmentID)
@@ -12,12 +14,13 @@ struct SegmentEditor: View {
 
     var body: some View {
         if let segmentBinding {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 14) {
                 MetricSelectionEditor(
                     store: store,
                     vendor: segmentBinding.vendor,
                     account: segmentBinding.account,
                     metricName: segmentBinding.metricName,
+                    layout: .grid,
                     onMetricChanged: { metric in
                         var segment = segmentBinding.wrappedValue
                         segment.display = defaultDisplay(metric: metric, metricName: segment.metricName)
@@ -29,48 +32,298 @@ struct SegmentEditor: View {
 
                 switch segmentBinding.wrappedValue.display {
                 case .timeWindow:
-                    timeWindowEditor(segmentBinding)
+                    timeWindowSection(segmentBinding)
                 case .payAsYouGo:
-                    payAsYouGoInfo(segmentBinding)
+                    payAsYouGoSection(segmentBinding)
                 }
             }
         }
     }
 
-    // MARK: Outage warning row
+    // MARK: Section header
 
-    private func outageWarningRow(_ binding: Binding<MenuBarSegmentConfig>) -> some View {
-        let enabledBinding = Binding<Bool>(
-            get: { binding.wrappedValue.showOutageWarning },
-            set: { newValue in
-                var seg = binding.wrappedValue
-                seg.showOutageWarning = newValue
-                binding.wrappedValue = seg
-            }
-        )
-        let textBinding = Binding<String>(
-            get: { binding.wrappedValue.outageWarningText },
-            set: { newValue in
-                var seg = binding.wrappedValue
-                seg.outageWarningText = newValue
-                binding.wrappedValue = seg
-            }
-        )
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text)
+            .font(.caption2)
+            .fontWeight(.semibold)
+            .tracking(0.8)
+            .textCase(.uppercase)
+            .foregroundStyle(.secondary)
+    }
 
-        return HStack {
-            Toggle("Outage warning", isOn: enabledBinding)
-                .fixedSize()
-            TextField("", text: textBinding)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 48)
-                .disabled(!enabledBinding.wrappedValue)
+    // MARK: Time-window — chip strip + sub-options
+
+    @ViewBuilder
+    private func timeWindowSection(_ binding: Binding<MenuBarSegmentConfig>) -> some View {
+        let displayBinding = timeWindowDisplayBinding(binding)
+        let segment = binding.wrappedValue
+
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                sectionTitle("Menu bar pieces")
+                Text("— click a piece to toggle it")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            chipStrip(segment: segment, binding: binding, display: displayBinding)
+
+            subOptionsPanel(segment: segment, binding: binding, display: displayBinding)
         }
     }
 
-    // MARK: Time-window editor
+    // MARK: Chip strip
 
-    private func timeWindowEditor(_ binding: Binding<MenuBarSegmentConfig>) -> some View {
-        let displayBinding = Binding<TimeWindowDisplay>(
+    @ViewBuilder
+    private func chipStrip(
+        segment: MenuBarSegmentConfig,
+        binding: Binding<MenuBarSegmentConfig>,
+        display: Binding<TimeWindowDisplay>
+    ) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            chip(
+                caption: "Icon",
+                isOn: display.wrappedValue.showVendorIcon,
+                toggle: { display.wrappedValue.showVendorIcon.toggle() }
+            ) {
+                VendorIconView(vendor: segment.vendor, size: 14)
+            }
+
+            chipConnector
+
+            chip(
+                caption: "Outage",
+                isOn: segment.showOutageWarning,
+                toggle: {
+                    var seg = binding.wrappedValue
+                    seg.showOutageWarning.toggle()
+                    binding.wrappedValue = seg
+                }
+            ) {
+                Text(segment.outageWarningText.isEmpty ? "⚠️" : segment.outageWarningText)
+                    .font(.system(size: 13))
+            }
+
+            chipConnector
+
+            chip(
+                caption: "Dot",
+                isOn: display.wrappedValue.showDot,
+                toggle: { display.wrappedValue.showDot.toggle() }
+            ) {
+                Circle()
+                    .fill(Color.green)
+                    .overlay(Circle().stroke(Color.primary.opacity(0.35), lineWidth: 0.6))
+                    .frame(width: 9, height: 9)
+            }
+
+            chipConnector
+
+            chip(
+                caption: "Label",
+                isOn: display.wrappedValue.showLetter,
+                toggle: { display.wrappedValue.showLetter.toggle() }
+            ) {
+                Text(display.wrappedValue.letter.isEmpty ? "·" : display.wrappedValue.letter)
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+            }
+
+            chipConnector
+
+            chip(
+                caption: "Percent",
+                isOn: display.wrappedValue.showPercent,
+                toggle: { display.wrappedValue.showPercent.toggle() }
+            ) {
+                Text(percentSamplePreview(display: display.wrappedValue))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+            }
+
+            chipConnector
+
+            chip(
+                caption: "Reset",
+                isOn: display.wrappedValue.showReset,
+                toggle: { display.wrappedValue.showReset.toggle() }
+            ) {
+                Text(resetSamplePreview(display: display.wrappedValue))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var chipConnector: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 8, weight: .semibold))
+            .foregroundStyle(.tertiary)
+            .frame(height: 32)
+    }
+
+    private func chip<Symbol: View>(
+        caption: String,
+        isOn: Bool,
+        toggle: @escaping () -> Void,
+        @ViewBuilder symbol: () -> Symbol
+    ) -> some View {
+        Button(action: {
+            withAnimation(.easeOut(duration: 0.14)) { toggle() }
+        }) {
+            VStack(spacing: 4) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(isOn ? Color.accentColor.opacity(0.16) : Color.clear)
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(
+                            isOn ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.45),
+                            style: StrokeStyle(
+                                lineWidth: 1,
+                                dash: isOn ? [] : [3, 2]
+                            )
+                        )
+                    symbol()
+                        .opacity(isOn ? 1.0 : 0.4)
+                }
+                .frame(width: 48, height: 32)
+                .contentShape(RoundedRectangle(cornerRadius: 6))
+
+                Text(caption)
+                    .font(.system(size: 9, weight: isOn ? .semibold : .regular))
+                    .tracking(0.4)
+                    .textCase(.uppercase)
+                    .foregroundStyle(isOn ? Color.primary : Color.secondary)
+            }
+        }
+        .buttonStyle(.plain)
+        .help(isOn ? "\(caption) shown — click to hide" : "\(caption) hidden — click to show")
+    }
+
+    private func percentSamplePreview(display: TimeWindowDisplay) -> String {
+        switch display.percentDisplayMode {
+        case .consumed:  return "42%"
+        case .remaining: return "58%"
+        }
+    }
+
+    private func resetSamplePreview(display: TimeWindowDisplay) -> String {
+        // Sample assumes a > 1 day countdown so the toggle's effect is visible.
+        // See formatRemainingTime in UsageComputations.swift.
+        display.hideResetMinutesWhenOverOneDay ? "2d 4h" : "2d 4h 15m"
+    }
+
+    // MARK: Sub-options panel
+
+    @ViewBuilder
+    private func subOptionsPanel(
+        segment: MenuBarSegmentConfig,
+        binding: Binding<MenuBarSegmentConfig>,
+        display: Binding<TimeWindowDisplay>
+    ) -> some View {
+        let hasOutage = segment.showOutageWarning
+        let hasLetter = display.wrappedValue.showLetter
+        let hasPercent = display.wrappedValue.showPercent
+        let hasReset = display.wrappedValue.showReset
+        let anyOption = hasOutage || hasLetter || hasPercent || hasReset
+
+        if anyOption {
+            VStack(alignment: .leading, spacing: 8) {
+                if hasOutage {
+                    subOptionRow(label: "Outage text") {
+                        TextField("", text: outageTextBinding(binding))
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 64)
+                    }
+                }
+                if hasLetter {
+                    subOptionRow(label: "Label letter") {
+                        TextField("", text: display.letter)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 64)
+                    }
+                }
+                if hasPercent {
+                    subOptionRow(label: "Percent shows") {
+                        Picker("", selection: display.percentDisplayMode) {
+                            Text("Consumed").tag(UsagePercentDisplayMode.consumed)
+                            Text("Remaining").tag(UsagePercentDisplayMode.remaining)
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 200)
+                    }
+                }
+                if hasReset {
+                    subOptionRow(label: "Reset format") {
+                        Toggle("Hide minutes when over 1 day", isOn: display.hideResetMinutesWhenOverOneDay)
+                            .toggleStyle(.checkbox)
+                            .fixedSize()
+                    }
+                }
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.secondary.opacity(0.07))
+            )
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        }
+    }
+
+    private func subOptionRow<Control: View>(
+        label: String,
+        @ViewBuilder _ control: () -> Control
+    ) -> some View {
+        HStack(spacing: 10) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 100, alignment: .leading)
+            control()
+            Spacer(minLength: 0)
+        }
+    }
+
+    // MARK: Pay-as-you-go
+
+    private func payAsYouGoSection(_ binding: Binding<MenuBarSegmentConfig>) -> some View {
+        let preview = previewPayAsYouGo(for: binding.wrappedValue) ?? "—"
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "info.circle")
+                    .foregroundStyle(.secondary)
+                Text("Displays \"\(preview)\" — no display pieces to toggle.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            HStack(spacing: 8) {
+                chip(
+                    caption: "Outage",
+                    isOn: binding.wrappedValue.showOutageWarning,
+                    toggle: {
+                        var seg = binding.wrappedValue
+                        seg.showOutageWarning.toggle()
+                        binding.wrappedValue = seg
+                    }
+                ) {
+                    Text(binding.wrappedValue.outageWarningText.isEmpty ? "⚠️" : binding.wrappedValue.outageWarningText)
+                        .font(.system(size: 13))
+                }
+                if binding.wrappedValue.showOutageWarning {
+                    TextField("", text: outageTextBinding(binding))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 64)
+                }
+            }
+        }
+    }
+
+    // MARK: Bindings
+
+    private func timeWindowDisplayBinding(
+        _ binding: Binding<MenuBarSegmentConfig>
+    ) -> Binding<TimeWindowDisplay> {
+        Binding<TimeWindowDisplay>(
             get: {
                 if case .timeWindow(let d) = binding.wrappedValue.display {
                     return d
@@ -83,51 +336,17 @@ struct SegmentEditor: View {
                 binding.wrappedValue = seg
             }
         )
-
-        return VStack(alignment: .leading, spacing: 8) {
-            Text("Display")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-
-            Toggle("Show vendor icon", isOn: displayBinding.showVendorIcon)
-            outageWarningRow(binding)
-            Toggle("Colored status dot", isOn: displayBinding.showDot)
-            HStack {
-                Toggle("Metric short label", isOn: displayBinding.showLetter)
-                    .fixedSize()
-                TextField("", text: displayBinding.letter)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 48)
-            }
-            Toggle("Usage percentage", isOn: displayBinding.showPercent)
-            Picker("Percentage value", selection: displayBinding.percentDisplayMode) {
-                Text("Consumed").tag(UsagePercentDisplayMode.consumed)
-                Text("Remaining").tag(UsagePercentDisplayMode.remaining)
-            }
-            .disabled(!displayBinding.wrappedValue.showPercent)
-            .padding(.leading, 20)
-            Toggle("Time until reset", isOn: displayBinding.showReset)
-            Toggle("Hide minutes when over 1 day", isOn: displayBinding.hideResetMinutesWhenOverOneDay)
-                .disabled(!displayBinding.wrappedValue.showReset)
-                .padding(.leading, 20)
-        }
     }
 
-    // MARK: Pay-as-you-go info
-
-    private func payAsYouGoInfo(_ binding: Binding<MenuBarSegmentConfig>) -> some View {
-        let preview = previewPayAsYouGo(for: binding.wrappedValue) ?? "—"
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "info.circle")
-                    .foregroundStyle(.secondary)
-                Text("This metric displays \"\(preview)\" — no additional options.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+    private func outageTextBinding(_ binding: Binding<MenuBarSegmentConfig>) -> Binding<String> {
+        Binding<String>(
+            get: { binding.wrappedValue.outageWarningText },
+            set: { newValue in
+                var seg = binding.wrappedValue
+                seg.outageWarningText = newValue
+                binding.wrappedValue = seg
             }
-            outageWarningRow(binding)
-        }
+        )
     }
 
     // MARK: Data helpers
