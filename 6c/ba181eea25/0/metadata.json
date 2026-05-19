@@ -1,0 +1,58 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "6cba181eea25",
+  "session_id": "a5c6d40c-6925-4e14-bf08-39302b8bc890",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-19T11:30:13.727497Z",
+  "branch": "improve-segment-config-ux",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/App/Views/Settings/ChartConfigurationCard.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/ChartConfigurationEditor.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/ChartSeriesEditor.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/ChartSettingsView.swift"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-haiku-4-5-20251001",
+  "turn_id": "cc54c9f7a4f2",
+  "checkpoint_transcript_start": 281,
+  "transcript_lines_at_start": 281,
+  "token_usage": {
+    "input_tokens": 180,
+    "cache_creation_tokens": 67648,
+    "cache_read_tokens": 3645977,
+    "output_tokens": 25840,
+    "api_call_count": 23
+  },
+  "session_metrics": {
+    "turn_count": 6
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-19T11:30:13.134751Z",
+    "agent_lines": 984,
+    "agent_removed": 321,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 984,
+    "total_lines_changed": 1305,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 984,
+      "agent_lines_removed": 321
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "6cba181eea25",
+  "strategy": "manual-commit",
+  "branch": "improve-segment-config-ux",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "AIUsagesTrackers/Sources/App/Views/Settings/ChartConfigurationCard.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/ChartConfigurationEditor.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/ChartSeriesEditor.swift",
+    "AIUsagesTrackers/Sources/App/Views/Settings/ChartSettingsView.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/6c/ba181eea25/0/metadata.json",
+      "transcript": "/6c/ba181eea25/0/full.jsonl",
+      "content_hash": "/6c/ba181eea25/0/content_hash.txt",
+      "prompt": "/6c/ba181eea25/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 180,
+    "cache_creation_tokens": 67648,
+    "cache_read_tokens": 3645977,
+    "output_tokens": 25840,
+    "api_call_count": 23
+  }
+}
