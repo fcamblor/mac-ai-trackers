@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Foundation
 import AIUsagesTrackersLib
 
 // PreferenceKey kept distinct from MenubarHintSettingsView and the top-level chart
@@ -24,6 +25,8 @@ private final class DragCursorTracker: ObservableObject {
 struct ChartConfigurationEditor: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private static let hydrationBatchSize = 4
+
     @Bindable var store: UsageStore
     @Binding var configuration: ChartConfiguration
 
@@ -31,7 +34,7 @@ struct ChartConfigurationEditor: View {
     @State private var rowFrames: [UUID: CGRect] = [:]
     @State private var draggingID: UUID?
     @State private var dropIndex: Int?
-    @State private var renderedSeriesCount: Int = 0
+    @State private var renderedSeriesCount: Int?
     @StateObject private var cursorTracker = DragCursorTracker()
 
     private var coordinateSpaceName: String {
@@ -44,6 +47,19 @@ struct ChartConfigurationEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            editorHeader
+
+            if case .custom = configuration.selection {
+                customSeriesBlock
+            }
+        }
+        .task(id: seriesHydrationKey) {
+            await hydrateSeriesRows()
+        }
+    }
+
+    private var editorHeader: some View {
+        VStack(alignment: .leading, spacing: 12) {
             nameRow
 
             Picker("Series", selection: selectionModeBinding) {
@@ -52,13 +68,6 @@ struct ChartConfigurationEditor: View {
             }
             .labelsHidden()
             .pickerStyle(.segmented)
-
-            if case .custom = configuration.selection {
-                customSeriesBlock
-            }
-        }
-        .task(id: seriesHydrationKey) {
-            await hydrateSeriesRows()
         }
     }
 
@@ -104,8 +113,9 @@ struct ChartConfigurationEditor: View {
             if series.isEmpty {
                 emptySeriesState
             } else {
+                let visibleSeriesCount = renderedSeriesCount ?? min(series.count, Self.hydrationBatchSize)
                 seriesListBody(
-                    series: Array(series.prefix(renderedSeriesCount)),
+                    series: Array(series.prefix(visibleSeriesCount)),
                     allSeries: series,
                     metricOptions: metricOptions
                 )
@@ -176,22 +186,49 @@ struct ChartConfigurationEditor: View {
 
     private func hydrateSeriesRows() async {
         guard case .custom(let series) = configuration.selection else {
-            renderedSeriesCount = 0
+            renderedSeriesCount = nil
             return
         }
         let total = series.count
-        renderedSeriesCount = 0
+        let shouldLogPerformance = Loggers.app.effectiveMinLevel <= .debug
+        let startedAt = shouldLogPerformance ? DispatchTime.now().uptimeNanoseconds : 0
+        let chartID = String(configuration.id.uuidString.prefix(8))
         guard total > 0 else { return }
+
+        if shouldLogPerformance {
+            Loggers.app.log(
+                .debug,
+                "ChartSettingsPerf: hydrateSeriesRows start chart=\(chartID) "
+                    + "totalSeries=\(total) batchSize=\(Self.hydrationBatchSize) reduceMotion=\(reduceMotion)"
+            )
+        }
+
+        let currentCount = renderedSeriesCount ?? Self.hydrationBatchSize
+        let initialCount = min(total, max(currentCount, Self.hydrationBatchSize))
+        renderedSeriesCount = initialCount
+        logHydrationProgress(chartID: chartID, startedAt: startedAt, rendered: initialCount, total: total)
 
         await Task.yield()
         guard !Task.isCancelled else { return }
 
-        renderedSeriesCount = min(total, 1)
-        while renderedSeriesCount < total {
+        while (renderedSeriesCount ?? 0) < total {
             try? await Task.sleep(nanoseconds: reduceMotion ? 1_000_000 : 14_000_000)
             guard !Task.isCancelled else { return }
-            renderedSeriesCount = min(total, renderedSeriesCount + 1)
+            let nextCount = min(total, (renderedSeriesCount ?? 0) + Self.hydrationBatchSize)
+            renderedSeriesCount = nextCount
+            logHydrationProgress(chartID: chartID, startedAt: startedAt, rendered: nextCount, total: total)
         }
+    }
+
+    private func logHydrationProgress(chartID: String, startedAt: UInt64, rendered: Int, total: Int) {
+        guard Loggers.app.effectiveMinLevel <= .debug else { return }
+        let elapsedMillis = Double(DispatchTime.now().uptimeNanoseconds - startedAt) / 1_000_000
+        let elapsed = String(format: "%.2f", elapsedMillis)
+        Loggers.app.log(
+            .debug,
+            "ChartSettingsPerf: hydrateSeriesRows progress chart=\(chartID) "
+                + "renderedSeries=\(rendered)/\(total) elapsedMs=\(elapsed)"
+        )
     }
 
     // MARK: Drop indicator + floating preview
@@ -445,6 +482,17 @@ private struct ChartSeriesRow: View, Equatable {
         .opacity(isDragging ? 0.0 : 1.0)
         .frame(maxHeight: isDragging ? 0 : nil)
         .clipped()
+        .onAppear {
+            guard Loggers.app.effectiveMinLevel <= .debug else { return }
+            let seriesID = String(item.id.uuidString.prefix(8))
+            let accountOptionsCount = options.availableAccounts(for: item.vendor).count
+            let metricOptionsCount = options.availableMetrics(vendor: item.vendor, account: item.account).count
+            Loggers.app.log(
+                .debug,
+                "ChartSettingsPerf: ChartSeriesRow appeared series=\(seriesID) vendor=\(item.vendor.rawValue) "
+                    + "accountOptions=\(accountOptionsCount) metricOptions=\(metricOptionsCount)"
+            )
+        }
     }
 }
 

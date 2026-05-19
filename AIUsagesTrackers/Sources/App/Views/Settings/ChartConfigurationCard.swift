@@ -2,7 +2,17 @@ import SwiftUI
 import AppKit
 import AIUsagesTrackersLib
 
+private struct ChartConfigurationEditorHeightPreferenceKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct ChartConfigurationCard: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let preferences: UserDefaultsAppPreferences
     @Bindable var store: UsageStore
     let configurationID: UUID
@@ -19,17 +29,23 @@ struct ChartConfigurationCard: View {
 
     @State private var isExpanded: Bool = false
     @State private var isHovering: Bool = false
+    @State private var shouldMountEditor: Bool = false
+    @State private var editorMeasuredHeight: CGFloat = 0
 
     private var configurationBinding: Binding<ChartConfiguration>? {
         SettingsConfigurationBindings.chartConfiguration(preferences: preferences, configurationID: configurationID)
+    }
+
+    private var expansionAnimation: Animation? {
+        reduceMotion ? .easeOut(duration: 0.08) : .spring(response: 0.36, dampingFraction: 0.9)
     }
 
     var body: some View {
         if let configurationBinding {
             VStack(alignment: .leading, spacing: 0) {
                 header(for: configurationBinding.wrappedValue)
-                if isExpanded {
-                    DeferredChartConfigurationEditor(
+                if shouldMountEditor {
+                    ChartConfigurationEditor(
                         store: store,
                         configuration: configurationBinding
                     )
@@ -37,7 +53,18 @@ struct ChartConfigurationCard: View {
                     .padding(.leading, 30)
                     .padding(.trailing, 4)
                     .padding(.bottom, 10)
-                    .transition(.opacity)
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear.preference(
+                                key: ChartConfigurationEditorHeightPreferenceKey.self,
+                                value: proxy.size.height
+                            )
+                        }
+                    )
+                    .frame(height: isExpanded ? editorMeasuredHeight : 0, alignment: .top)
+                    .clipped()
+                    .allowsHitTesting(isExpanded)
+                    .accessibilityHidden(!isExpanded)
                 }
             }
             .padding(.vertical, 6)
@@ -49,7 +76,21 @@ struct ChartConfigurationCard: View {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(Color.secondary.opacity(isExpanded ? 0.22 : 0.0), lineWidth: 1)
             )
-            .onHover { isHovering = $0 }
+            .onHover { hovering in
+                isHovering = hovering
+                if hovering {
+                    shouldMountEditor = true
+                }
+            }
+            .task(id: configurationID) {
+                await Task.yield()
+                guard !Task.isCancelled else { return }
+                shouldMountEditor = true
+            }
+            .onPreferenceChange(ChartConfigurationEditorHeightPreferenceKey.self) { height in
+                guard height > 0, abs(editorMeasuredHeight - height) > 0.5 else { return }
+                editorMeasuredHeight = height
+            }
             .contextMenu {
                 Button("Duplicate", systemImage: "plus.square.on.square", action: onDuplicate)
                 Divider()
@@ -60,6 +101,8 @@ struct ChartConfigurationCard: View {
                 Divider()
                 Button("Delete", systemImage: "trash", role: .destructive, action: onRequestDelete)
             }
+            .animation(expansionAnimation, value: isExpanded)
+            .animation(expansionAnimation, value: editorMeasuredHeight)
         }
     }
 
@@ -104,7 +147,7 @@ struct ChartConfigurationCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture {
-            isExpanded.toggle()
+            toggleExpansion()
         }
     }
 
@@ -183,33 +226,17 @@ struct ChartConfigurationCard: View {
         }
         .opacity(isHovering || isExpanded ? 1.0 : 0.45)
     }
-}
 
-private struct DeferredChartConfigurationEditor: View {
-    @Bindable var store: UsageStore
-    @Binding var configuration: ChartConfiguration
-    @State private var isMounted = false
-
-    var body: some View {
-        Group {
-            if isMounted {
-                ChartConfigurationEditor(store: store, configuration: $configuration)
-            } else {
-                Color.clear
-                    .frame(maxWidth: .infinity, minHeight: 36)
+    private func toggleExpansion() {
+        if isExpanded {
+            withAnimation(expansionAnimation) {
+                isExpanded = false
             }
-        }
-        .transaction { transaction in
-            transaction.animation = nil
-        }
-        .task(id: configuration.id) {
-            isMounted = false
-            await Task.yield()
-            guard !Task.isCancelled else { return }
-            isMounted = true
-        }
-        .onDisappear {
-            isMounted = false
+        } else {
+            shouldMountEditor = true
+            withAnimation(expansionAnimation) {
+                isExpanded = true
+            }
         }
     }
 }

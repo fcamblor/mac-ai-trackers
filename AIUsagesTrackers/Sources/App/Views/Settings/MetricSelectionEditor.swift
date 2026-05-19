@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 import AIUsagesTrackersLib
 
 struct MetricSelectionOptions: Equatable {
@@ -6,17 +7,32 @@ struct MetricSelectionOptions: Equatable {
     private let signature: Int
 
     init(entries: [VendorUsageEntry]) {
+        let shouldLogPerformance = Loggers.app.effectiveMinLevel <= .debug
+        let startedAt = shouldLogPerformance ? DispatchTime.now().uptimeNanoseconds : 0
         entriesByVendor = Dictionary(grouping: entries, by: \.vendor)
         var hasher = Hasher()
+        var metricCount = 0
         for entry in entries.sorted(by: { $0.id < $1.id }) {
             hasher.combine(entry.vendor)
             hasher.combine(entry.account)
             hasher.combine(entry.isActive)
             for metric in entry.metrics {
+                if shouldLogPerformance {
+                    metricCount += 1
+                }
                 hasher.combine(SegmentEditingHelpers.metricName(metric))
             }
         }
         signature = hasher.finalize()
+        if shouldLogPerformance {
+            let elapsedMillis = Double(DispatchTime.now().uptimeNanoseconds - startedAt) / 1_000_000
+            let elapsed = String(format: "%.2f", elapsedMillis)
+            Loggers.app.log(
+                .debug,
+                "ChartSettingsPerf: MetricSelectionOptions built entries=\(entries.count) "
+                    + "vendors=\(entriesByVendor.count) metrics=\(metricCount) elapsedMs=\(elapsed)"
+            )
+        }
     }
 
     static func == (lhs: MetricSelectionOptions, rhs: MetricSelectionOptions) -> Bool {
