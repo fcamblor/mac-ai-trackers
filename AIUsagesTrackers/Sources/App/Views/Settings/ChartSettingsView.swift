@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import AIUsagesTrackersLib
 
 struct ChartSettingsView: View {
@@ -17,17 +18,43 @@ struct ChartSettingsView: View {
     }
 }
 
+// MARK: - Row frame preference key (distinct from segments + series)
+
+private struct ChartRowFramePreferenceKey: PreferenceKey {
+    static let defaultValue: [UUID: CGRect] = [:]
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
+@MainActor
+private final class ChartListDragCursorTracker: ObservableObject {
+    @Published var y: CGFloat = 0
+}
+
+// MARK: - Content
+
 private struct ChartSettingsContent: View {
     let preferences: UserDefaultsAppPreferences
     @Bindable var store: UsageStore
 
+    private static let coordinateSpaceName = "chartSettings.list"
+
     @State private var pendingDelete: UUID?
 
+    // Drag state
+    @State private var rowFrames: [UUID: CGRect] = [:]
+    @State private var draggingID: UUID?
+    @State private var dropIndex: Int?
+    @StateObject private var cursorTracker = ChartListDragCursorTracker()
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-            Divider()
-            chartList
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                headerSection
+                Divider()
+                chartList
+            }
         }
         .confirmationDialog(
             deleteConfirmationTitle,
@@ -35,21 +62,19 @@ private struct ChartSettingsContent: View {
             titleVisibility: .visible
         ) {
             Button("Delete chart", role: .destructive) {
-                if let id = pendingDelete {
-                    delete(configurationID: id)
-                }
+                if let id = pendingDelete { delete(configurationID: id) }
                 pendingDelete = nil
             }
-            Button("Cancel", role: .cancel) {
-                pendingDelete = nil
-            }
+            Button("Cancel", role: .cancel) { pendingDelete = nil }
         } message: {
             Text("This chart will no longer appear in the popover.")
         }
     }
 
-    private var header: some View {
-        HStack {
+    // MARK: Header
+
+    private var headerSection: some View {
+        HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Charts")
                     .font(.headline)
@@ -58,38 +83,18 @@ private struct ChartSettingsContent: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Button {
-                addConfiguration()
-            } label: {
-                Label("Add", systemImage: "plus")
-            }
         }
         .padding(16)
     }
+
+    // MARK: List
 
     @ViewBuilder
     private var chartList: some View {
         if preferences.chartConfigurations.isEmpty {
             emptyState
         } else {
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(Array(preferences.chartConfigurations.enumerated()), id: \.element.id) { index, configuration in
-                        ChartConfigurationCard(
-                            preferences: preferences,
-                            store: store,
-                            configurationID: configuration.id,
-                            canMoveUp: index > 0,
-                            canMoveDown: index < preferences.chartConfigurations.count - 1,
-                            onMoveUp: { move(from: index, to: index - 1) },
-                            onMoveDown: { move(from: index, to: index + 2) },
-                            onRequestDelete: { pendingDelete = configuration.id }
-                        )
-                        Divider()
-                    }
-                }
-                .padding(.horizontal, 16)
-            }
+            populatedList
         }
     }
 
@@ -112,8 +117,188 @@ private struct ChartSettingsContent: View {
         .padding(16)
     }
 
+    private var populatedList: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Charts")
+                    .font(.headline)
+                Text("· drag the handle to reorder")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                Spacer()
+                Button {
+                    addConfiguration()
+                } label: {
+                    Label("Add", systemImage: "plus")
+                }
+            }
+            .padding(.bottom, 2)
+
+            listBody
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 16)
+    }
+
+    private var listBody: some View {
+        let configurations = preferences.chartConfigurations
+        return ZStack(alignment: .topLeading) {
+            LazyVStack(spacing: 4) {
+                ForEach(Array(configurations.enumerated()), id: \.element.id) { index, configuration in
+                    rowContainer(configuration: configuration, index: index, count: configurations.count)
+                }
+            }
+            .animation(.spring(response: 0.34, dampingFraction: 0.85), value: draggingID)
+            .animation(.spring(response: 0.34, dampingFraction: 0.85), value: dropIndex)
+
+            dropIndicator(configurations: configurations)
+            floatingPreview(configurations: configurations)
+        }
+        .coordinateSpace(name: Self.coordinateSpaceName)
+        .onPreferenceChange(ChartRowFramePreferenceKey.self) { rowFrames = $0 }
+    }
+
+    private func rowContainer(configuration: ChartConfiguration, index: Int, count: Int) -> some View {
+        let isDragging = draggingID == configuration.id
+        return ChartConfigurationCard(
+            preferences: preferences,
+            store: store,
+            configurationID: configuration.id,
+            canMoveUp: index > 0,
+            canMoveDown: index < count - 1,
+            onMoveUp: { move(from: index, to: index - 1) },
+            onMoveDown: { move(from: index, to: index + 2) },
+            onDuplicate: { duplicate(configurationID: configuration.id) },
+            onRequestDelete: { pendingDelete = configuration.id },
+            isBeingDragged: isDragging,
+            dragCoordinateSpace: Self.coordinateSpaceName,
+            onDragChanged: { value in handleDragChanged(value: value, configurationID: configuration.id) },
+            onDragEnded: { value in handleDragEnded(value: value, configurationID: configuration.id) }
+        )
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: ChartRowFramePreferenceKey.self,
+                    value: [configuration.id: geo.frame(in: .named(Self.coordinateSpaceName))]
+                )
+            }
+        )
+        .opacity(isDragging ? 0.0 : 1.0)
+        .frame(maxHeight: isDragging ? 0 : nil)
+        .clipped()
+    }
+
+    // MARK: Drop indicator + floating preview
+
+    @ViewBuilder
+    private func dropIndicator(configurations: [ChartConfiguration]) -> some View {
+        if let dropIndex, let y = dropIndicatorY(configurations: configurations, atIndex: dropIndex) {
+            Capsule()
+                .fill(Color.accentColor)
+                .frame(height: 2)
+                .padding(.horizontal, 4)
+                .offset(y: y - 1)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private func dropIndicatorY(configurations: [ChartConfiguration], atIndex index: Int) -> CGFloat? {
+        let visible = configurations.filter { $0.id != draggingID }
+        guard !visible.isEmpty else { return 0 }
+        let clamped = max(0, min(index, visible.count))
+        if clamped == 0 {
+            return rowFrames[visible[0].id]?.minY
+        }
+        if clamped >= visible.count {
+            return rowFrames[visible.last!.id]?.maxY
+        }
+        let prev = rowFrames[visible[clamped - 1].id]?.maxY ?? 0
+        let next = rowFrames[visible[clamped].id]?.minY ?? prev
+        return (prev + next) / 2
+    }
+
+    @ViewBuilder
+    private func floatingPreview(configurations: [ChartConfiguration]) -> some View {
+        if let id = draggingID,
+           let configuration = configurations.first(where: { $0.id == id }),
+           let frame = rowFrames[id] {
+            ChartListFloatingDragPreview(
+                tracker: cursorTracker,
+                configuration: configuration,
+                frame: frame
+            )
+        }
+    }
+
+    // MARK: Drag handling
+
+    private func handleDragChanged(value: DragGesture.Value, configurationID: UUID) {
+        if draggingID == nil {
+            draggingID = configurationID
+        }
+        cursorTracker.y = value.location.y
+        let configurations = preferences.chartConfigurations
+        let newDropIndex = computeDropIndex(at: value.location.y, configurations: configurations)
+        if newDropIndex != dropIndex {
+            dropIndex = newDropIndex
+        }
+    }
+
+    private func handleDragEnded(value: DragGesture.Value, configurationID: UUID) {
+        let configurations = preferences.chartConfigurations
+        let finalIndex = computeDropIndex(at: value.location.y, configurations: configurations)
+        performDrop(draggedID: configurationID, toVisibleIndex: finalIndex)
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
+            draggingID = nil
+            dropIndex = nil
+        }
+    }
+
+    private func computeDropIndex(at y: CGFloat, configurations: [ChartConfiguration]) -> Int {
+        let visible = configurations.filter { $0.id != draggingID }
+        for (idx, configuration) in visible.enumerated() {
+            guard let frame = rowFrames[configuration.id] else { continue }
+            if y < frame.midY { return idx }
+        }
+        return visible.count
+    }
+
+    private func performDrop(draggedID: UUID, toVisibleIndex visibleIndex: Int) {
+        var configurations = preferences.chartConfigurations
+        guard let sourceIdx = configurations.firstIndex(where: { $0.id == draggedID }) else { return }
+        let destOffset: Int
+        if visibleIndex >= sourceIdx {
+            destOffset = visibleIndex + 1
+        } else {
+            destOffset = visibleIndex
+        }
+        if destOffset == sourceIdx || destOffset == sourceIdx + 1 { return }
+        configurations.move(fromOffsets: IndexSet(integer: sourceIdx), toOffset: destOffset)
+        preferences.chartConfigurations = configurations
+    }
+
+    // MARK: Mutations
+
     private func addConfiguration() {
         preferences.chartConfigurations.append(ChartConfigurationsSeeder.defaultConfigurations()[0])
+    }
+
+    private func duplicate(configurationID: UUID) {
+        var configurations = preferences.chartConfigurations
+        guard let idx = configurations.firstIndex(where: { $0.id == configurationID }) else { return }
+        let source = configurations[idx]
+        let copy = ChartConfiguration(
+            title: duplicateTitle(from: source.title),
+            selection: source.selection
+        )
+        configurations.insert(copy, at: idx + 1)
+        preferences.chartConfigurations = configurations
+    }
+
+    private func duplicateTitle(from original: String) -> String {
+        let trimmed = original.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Untitled (copy)" : "\(trimmed) (copy)"
     }
 
     private func delete(configurationID: UUID) {
@@ -127,6 +312,8 @@ private struct ChartSettingsContent: View {
         configurations.move(fromOffsets: IndexSet(integer: source), toOffset: dest)
         preferences.chartConfigurations = configurations
     }
+
+    // MARK: Confirmation
 
     private var deleteConfirmationBinding: Binding<Bool> {
         Binding(
@@ -144,317 +331,71 @@ private struct ChartSettingsContent: View {
     }
 }
 
-private struct ChartConfigurationCard: View {
-    let preferences: UserDefaultsAppPreferences
-    @Bindable var store: UsageStore
-    let configurationID: UUID
-    let canMoveUp: Bool
-    let canMoveDown: Bool
-    let onMoveUp: () -> Void
-    let onMoveDown: () -> Void
-    let onRequestDelete: () -> Void
+// MARK: - Drag preview card
 
-    @State private var isExpanded = false
-
-    private var configurationBinding: Binding<ChartConfiguration>? {
-        SettingsConfigurationBindings.chartConfiguration(preferences: preferences, configurationID: configurationID)
-    }
+private struct ChartDragPreviewCard: View {
+    let configuration: ChartConfiguration
 
     var body: some View {
-        if let configurationBinding {
-            DisclosureGroup(isExpanded: $isExpanded) {
-                ChartConfigurationEditor(
-                    store: store,
-                    configuration: configurationBinding
-                )
-                .padding(.top, 8)
-            } label: {
-                header(for: configurationBinding.wrappedValue)
-            }
-            .padding(.vertical, 4)
-        }
-    }
-
-    private func header(for configuration: ChartConfiguration) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+            Image(systemName: "chart.xyaxis.line")
+                .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
-                Text(configuration.title)
+                Text(configuration.title.isEmpty ? "Untitled chart" : configuration.title)
                     .font(.body)
+                    .fontWeight(.semibold)
                     .lineLimit(1)
-                Text(summary(for: configuration))
+                Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            HStack(spacing: 4) {
-                Button(action: onMoveUp) {
-                    Image(systemName: "arrow.up")
+            Spacer(minLength: 0)
+            if case .custom(let series) = configuration.selection, !series.isEmpty {
+                HStack(spacing: 2) {
+                    ForEach(series.prefix(4)) { item in
+                        Circle()
+                            .fill(item.style.color.swiftUIColor)
+                            .frame(width: 8, height: 8)
+                    }
                 }
-                .buttonStyle(.borderless)
-                .disabled(!canMoveUp)
-                .help("Move up")
-
-                Button(action: onMoveDown) {
-                    Image(systemName: "arrow.down")
-                }
-                .buttonStyle(.borderless)
-                .disabled(!canMoveDown)
-                .help("Move down")
-
-                Button(action: onRequestDelete) {
-                    Image(systemName: "trash")
-                        .foregroundStyle(.red)
-                }
-                .buttonStyle(.borderless)
-                .help("Delete chart")
             }
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(.background)
+                .shadow(color: .black.opacity(0.28), radius: 14, x: 0, y: 6)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.accentColor.opacity(0.5), lineWidth: 1)
+        )
+        .rotationEffect(.degrees(-1.2))
+        .scaleEffect(1.02)
     }
 
-    private func summary(for configuration: ChartConfiguration) -> String {
+    private var subtitle: String {
         switch configuration.selection {
-        case .allAvailable:
-            return "All available metrics"
-        case .custom(let series):
-            return "\(series.count) custom series"
+        case .allAvailable: return "All available metrics"
+        case .custom(let series): return series.isEmpty ? "No series" : "\(series.count) series"
         }
     }
 }
 
-private struct ChartConfigurationEditor: View {
-    @Bindable var store: UsageStore
-    @Binding var configuration: ChartConfiguration
+private struct ChartListFloatingDragPreview: View {
+    @ObservedObject var tracker: ChartListDragCursorTracker
+    let configuration: ChartConfiguration
+    let frame: CGRect
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Name")
-                    .frame(width: 80, alignment: .leading)
-                TextField("", text: $configuration.title)
-                    .textFieldStyle(.roundedBorder)
-            }
-
-            Picker("Series", selection: selectionModeBinding) {
-                Text("All available metrics").tag(ChartSelectionMode.allAvailable)
-                Text("Custom").tag(ChartSelectionMode.custom)
-            }
-            .pickerStyle(.segmented)
-
-            if case .custom = configuration.selection {
-                customSeriesList
-            }
-        }
+        ChartDragPreviewCard(configuration: configuration)
+            .frame(width: max(frame.width, 240))
+            .offset(x: frame.minX, y: tracker.y - frame.height / 2)
+            .allowsHitTesting(false)
     }
-
-    private var customSeriesList: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Series")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-                Spacer()
-                Button {
-                    addSeries()
-                } label: {
-                    Label("Add series", systemImage: "plus")
-                }
-                .disabled(availableVendors.isEmpty)
-            }
-
-            let series = customSeries
-            if series.isEmpty {
-                Text("No custom series configured")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 6)
-            } else {
-                ForEach(Array(series.enumerated()), id: \.element.id) { index, _ in
-                    ChartSeriesEditor(
-                        store: store,
-                        series: customSeriesBinding(at: index),
-                        onDelete: { deleteSeries(at: index) }
-                    )
-                    .padding(10)
-                    .background(Color(NSColor.controlBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
-                }
-            }
-        }
-    }
-
-    private var selectionModeBinding: Binding<ChartSelectionMode> {
-        Binding(
-            get: {
-                switch configuration.selection {
-                case .allAvailable: .allAvailable
-                case .custom: .custom
-                }
-            },
-            set: { mode in
-                switch mode {
-                case .allAvailable:
-                    configuration.selection = .allAvailable
-                    if configuration.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        configuration.title = "All available metrics"
-                    }
-                case .custom:
-                    configuration.selection = .custom(customSeries)
-                }
-            }
-        )
-    }
-
-    private var customSeries: [ChartSeriesConfig] {
-        if case .custom(let series) = configuration.selection {
-            return series
-        }
-        return []
-    }
-
-    private func customSeriesBinding(at index: Int) -> Binding<ChartSeriesConfig> {
-        Binding(
-            get: { customSeries[index] },
-            set: { newValue in
-                var series = customSeries
-                guard series.indices.contains(index) else { return }
-                series[index] = newValue
-                configuration.selection = .custom(series)
-            }
-        )
-    }
-
-    private func addSeries() {
-        guard let vendor = availableVendors.first else { return }
-        let metricName = firstAvailableMetricName(for: vendor, account: .currentlyActive) ?? ""
-        var series = customSeries
-        series.append(
-            ChartSeriesConfig(
-                vendor: vendor,
-                account: .currentlyActive,
-                metricName: metricName,
-                style: ChartSeriesStyle(
-                    color: ChartSeriesColor.allCases[series.count % ChartSeriesColor.allCases.count],
-                    lineStyle: .solid
-                )
-            )
-        )
-        configuration.selection = .custom(series)
-    }
-
-    private func deleteSeries(at index: Int) {
-        var series = customSeries
-        guard series.indices.contains(index) else { return }
-        series.remove(at: index)
-        configuration.selection = .custom(series)
-    }
-
-    private var availableVendors: [Vendor] {
-        Array(Set(store.entries.map(\.vendor))).sorted { $0.rawValue < $1.rawValue }
-    }
-
-    private func firstAvailableMetricName(for vendor: Vendor, account: AccountSelection) -> String? {
-        let vendorEntries = store.entries.filter { $0.vendor == vendor }
-        let entry: VendorUsageEntry?
-        switch account {
-        case .currentlyActive:
-            entry = vendorEntries.first(where: { $0.isActive })
-        case .specific(let email):
-            entry = vendorEntries.first(where: { $0.account == email })
-        }
-        return entry?.metrics.compactMap(SegmentEditingHelpers.metricName).first
-    }
-}
-
-private struct ChartSeriesEditor: View {
-    @Bindable var store: UsageStore
-    @Binding var series: ChartSeriesConfig
-    let onDelete: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Series name")
-                    .frame(width: 80, alignment: .leading)
-                TextField("", text: seriesLabelBinding)
-                    .textFieldStyle(.roundedBorder)
-            }
-
-            HStack(alignment: .top) {
-                MetricSelectionEditor(
-                    store: store,
-                    vendor: $series.vendor,
-                    account: $series.account,
-                    metricName: $series.metricName
-                )
-
-                Spacer(minLength: 8)
-
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .foregroundStyle(.red)
-                }
-                .buttonStyle(.borderless)
-                .help("Delete series")
-            }
-
-            HStack {
-                Text("Style")
-                    .frame(width: 80, alignment: .leading)
-
-                Picker("Color", selection: $series.style.color) {
-                    ForEach(ChartSeriesColor.allCases) { color in
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(color.swiftUIColor)
-                                .frame(width: 10, height: 10)
-                            Text(color.displayName)
-                        }
-                        .tag(color)
-                    }
-                }
-                .labelsHidden()
-                .frame(width: 120)
-
-                Picker("Line", selection: $series.style.lineStyle) {
-                    ForEach(ChartLineStyle.allCases) { lineStyle in
-                        Text(lineStyle.displayName).tag(lineStyle)
-                    }
-                }
-                .labelsHidden()
-                .frame(width: 120)
-            }
-        }
-    }
-
-    private var seriesLabelBinding: Binding<String> {
-        Binding(
-            get: {
-                let customLabel = series.label.trimmingCharacters(in: .whitespacesAndNewlines)
-                return customLabel.isEmpty ? defaultSeriesLabel : series.label
-            },
-            set: { series.label = $0 }
-        )
-    }
-
-    private var defaultSeriesLabel: String {
-        let accountLabel: String
-        switch series.account {
-        case .currentlyActive:
-            if let entry = store.entries.first(where: { $0.vendor == series.vendor && $0.isActive }) {
-                accountLabel = entry.account.rawValue
-            } else {
-                accountLabel = "currently active"
-            }
-        case .specific(let email):
-            accountLabel = email.rawValue
-        }
-        return "\(series.vendor.rawValue) / \(accountLabel) / \(series.metricName)"
-    }
-}
-
-private enum ChartSelectionMode: Hashable {
-    case allAvailable
-    case custom
 }
