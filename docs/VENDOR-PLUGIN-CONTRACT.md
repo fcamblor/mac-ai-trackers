@@ -136,10 +136,12 @@ Every external dependency is constructor-injected:
 
 - `environment: [String: String]`
 - `fileManager: FileManager`
-- `processRunner: ProcessRunning`
-- `keychainAccessor: KeychainReading` (when applicable)
+- `processRunner: ProcessRunning` — for locators that shell out to the
+  vendor's CLI (e.g. `gh`, `security`)
+- `keychainQuerying: KeychainQuerying` — for locators that read the macOS
+  Keychain directly via `SecItemCopyMatching`
 
-No locator may call `ProcessInfo.processInfo`, `SecKeychain*`, or
+No locator may call `ProcessInfo.processInfo`, `SecItemCopyMatching`, or
 `/usr/bin/security` directly — every such call goes through an injectable
 collaborator.
 
