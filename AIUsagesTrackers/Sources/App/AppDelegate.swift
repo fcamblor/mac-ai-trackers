@@ -144,6 +144,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         )
         let copilotMonitor = CopilotActiveAccountMonitor(
+            usagesFileManager: fileManager,
             onActiveAccountChanged: { [weak copilotConnector, weak poller] _ in
                 await copilotConnector?.invalidateLoginCache()
                 await poller?.pollOnce(force: true)

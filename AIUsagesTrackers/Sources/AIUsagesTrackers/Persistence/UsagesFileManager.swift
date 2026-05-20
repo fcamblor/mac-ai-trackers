@@ -161,7 +161,9 @@ public actor UsagesFileManager {
             }
             let key = "\(entry.vendor.rawValue)|\(entry.account.rawValue)"
             if let idx = indexByKey[key] {
-                if entry.lastError != nil {
+                if entry.lastError?.type == UsageErrorType.tokenError {
+                    usages[idx] = entry
+                } else if entry.lastError != nil {
                     // Errors must not erase previously acquired data: the file may hold good
                     // metrics from a prior successful fetch while the connector's in-memory
                     // lastKnownMetrics is empty (e.g. after an app restart).

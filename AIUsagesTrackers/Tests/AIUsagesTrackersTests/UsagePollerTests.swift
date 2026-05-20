@@ -8,16 +8,27 @@ actor MockConnector: UsageConnector {
     nonisolated let vendor: Vendor
     private let entries: [VendorUsageEntry]
     private let shouldThrow: Bool
+    private nonisolated let knownAccountsOverride: [AccountEmail]?
     private(set) var fetchCount = 0
 
-    init(vendor: Vendor, entries: [VendorUsageEntry], shouldThrow: Bool = false) {
+    init(
+        vendor: Vendor,
+        entries: [VendorUsageEntry],
+        shouldThrow: Bool = false,
+        knownAccounts: [AccountEmail]? = nil
+    ) {
         self.vendor = vendor
         self.entries = entries
         self.shouldThrow = shouldThrow
+        self.knownAccountsOverride = knownAccounts
     }
 
     nonisolated func resolveActiveAccount() -> AccountEmail? {
         entries.first?.account
+    }
+
+    nonisolated func knownAccounts() -> [AccountEmail] {
+        knownAccountsOverride ?? (resolveActiveAccount().map { [$0] } ?? [])
     }
 
     func fetchUsages() async throws -> [VendorUsageEntry] {
@@ -217,6 +228,83 @@ struct UsagePollerTests {
 
         let fetchCount = await connector.fetchCount
         #expect(fetchCount == 1)
+    }
+
+    @Test("pollOnce polls multi-account connector when one known account is missing from fresh cache")
+    func pollOnceMultiAccountOneMissingFetched() async {
+        let dir = makeTempDir()
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
+
+        let now = Date()
+        let alice = AccountEmail(rawValue: "alice")
+        let bob = AccountEmail(rawValue: "bob")
+        await fm.update(with: [
+            VendorUsageEntry(
+                vendor: .copilot,
+                account: alice,
+                isActive: true,
+                lastAcquiredOn: ISODate(date: now.addingTimeInterval(-60)),
+                metrics: []
+            ),
+        ])
+
+        let connector = MockConnector(
+            vendor: .copilot,
+            entries: [
+                VendorUsageEntry(vendor: .copilot, account: alice, isActive: true),
+                VendorUsageEntry(vendor: .copilot, account: bob, isActive: false),
+            ],
+            knownAccounts: [alice, bob]
+        )
+        let poller = UsagePoller(connectors: [connector], interval: .seconds(180), fileManager: fm, logger: logger)
+
+        await poller.pollOnce(now: now)
+
+        let fetchCount = await connector.fetchCount
+        #expect(fetchCount == 1)
+    }
+
+    @Test("pollOnce skips multi-account connector when every known account is fresh")
+    func pollOnceMultiAccountAllFreshSkipped() async {
+        let dir = makeTempDir()
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
+
+        let now = Date()
+        let alice = AccountEmail(rawValue: "alice")
+        let bob = AccountEmail(rawValue: "bob")
+        await fm.update(with: [
+            VendorUsageEntry(
+                vendor: .copilot,
+                account: alice,
+                isActive: true,
+                lastAcquiredOn: ISODate(date: now.addingTimeInterval(-60)),
+                metrics: []
+            ),
+            VendorUsageEntry(
+                vendor: .copilot,
+                account: bob,
+                isActive: false,
+                lastAcquiredOn: ISODate(date: now.addingTimeInterval(-90)),
+                metrics: []
+            ),
+        ])
+
+        let connector = MockConnector(
+            vendor: .copilot,
+            entries: [
+                VendorUsageEntry(vendor: .copilot, account: alice, isActive: true),
+                VendorUsageEntry(vendor: .copilot, account: bob, isActive: false),
+            ],
+            knownAccounts: [alice, bob]
+        )
+        let poller = UsagePoller(connectors: [connector], interval: .seconds(180), fileManager: fm, logger: logger)
+
+        await poller.pollOnce(now: now)
+
+        let fetchCount = await connector.fetchCount
+        #expect(fetchCount == 0)
     }
 
     @Test("pollOnce fetches when cached data exceeds interval")

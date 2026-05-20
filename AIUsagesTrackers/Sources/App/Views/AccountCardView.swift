@@ -116,6 +116,8 @@ struct AccountCardView: View {
             "Usage unavailable with API key auth"
         case "token_error":
             "Authentication unavailable"
+        case "credential_error":
+            "Credential lookup failed"
         case "token_expired":
             "Session expired"
         case "api_error":
@@ -140,7 +142,9 @@ struct AccountCardView: View {
         case "api_key_usage_unsupported":
             "Claude standard API keys cannot expose usage here. Claude Code OAuth credentials are required."
         case "token_error":
-            "Credentials could not be read from the expected local source."
+            "No usable local credentials were found."
+        case "credential_error":
+            "Credentials could not be read from the expected local source. Last known metrics may be stale."
         case "token_expired":
             "Re-authenticate with the vendor CLI, then refresh."
         case "api_error":

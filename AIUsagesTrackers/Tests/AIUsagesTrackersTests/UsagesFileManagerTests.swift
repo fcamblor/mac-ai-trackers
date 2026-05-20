@@ -276,6 +276,29 @@ struct UsagesFileManagerTests {
         #expect(result.usages[0].metrics == existingMetrics)
     }
 
+    @Test("merge clears existing metrics when token_error entry has empty metrics")
+    func mergeClearsMetricsOnTokenError() async {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+        await mgr.update(with: [VendorUsageEntry(
+            vendor: "copilot", account: "LivioGama", isActive: true,
+            lastAcquiredOn: "2026-04-17T14:00:00+00:00",
+            metrics: [.timeWindow(name: "Premium", resetAt: "2026-06-01T00:00:00Z",
+                                  windowDuration: 43200, usagePercent: 100)]
+        )])
+
+        let errorEntry = VendorUsageEntry(
+            vendor: "copilot", account: "LivioGama", isActive: true,
+            lastError: UsageError(timestamp: "2026-04-17T15:00:00+00:00", type: UsageErrorType.tokenError),
+            metrics: []
+        )
+        await mgr.update(with: [errorEntry])
+
+        let result = await mgr.read()
+        #expect(result.usages[0].lastError?.type == UsageErrorType.tokenError)
+        #expect(result.usages[0].metrics.isEmpty)
+    }
+
     @Test("merge preserves lastAcquiredOn when error entry has nil lastAcquiredOn")
     func mergePreservesLastAcquiredOnOnError() async {
         let dir = makeTempDir()

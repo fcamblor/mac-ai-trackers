@@ -35,12 +35,56 @@ final class CopilotMockURLProtocol: URLProtocol, @unchecked Sendable {
 // MARK: - Auth mock
 
 private struct MockCopilotAuth: CopilotCredentialLocating {
-    let credentials: CopilotCredentials?
+    let credentials: [CopilotCredentials]
     let error: Error?
+
+    init(credentials: CopilotCredentials, error: Error? = nil) {
+        self.credentials = [credentials]
+        self.error = error
+    }
+
+    init(credentialsList: [CopilotCredentials], error: Error? = nil) {
+        self.credentials = credentialsList
+        self.error = error
+    }
 
     func locate() async throws -> CopilotCredentials {
         if let error { throw error }
-        return credentials!
+        if let active = credentials.first(where: \.isActive) {
+            return active
+        }
+        return credentials[0]
+    }
+
+    func locateAll() async throws -> (activeLogin: AccountEmail, credentials: [CopilotCredentials]) {
+        if let error { throw error }
+        let active = credentials.first(where: \.isActive)?.login ?? credentials[0].login
+        return (active, credentials)
+    }
+}
+
+private actor SwitchingCopilotAuth: CopilotCredentialLocating {
+    let credentials: [CopilotCredentials]
+    let secondError: Error
+    private var locateAllCalls = 0
+
+    init(credentials: CopilotCredentials, secondError: Error) {
+        self.credentials = [credentials]
+        self.secondError = secondError
+    }
+
+    func locate() async throws -> CopilotCredentials {
+        let batch = try await locateAll()
+        return batch.credentials[0]
+    }
+
+    func locateAll() async throws -> (activeLogin: AccountEmail, credentials: [CopilotCredentials]) {
+        defer { locateAllCalls += 1 }
+        if locateAllCalls > 0 {
+            throw secondError
+        }
+        let active = credentials.first(where: \.isActive)?.login ?? credentials[0].login
+        return (active, credentials)
     }
 }
 
@@ -58,11 +102,12 @@ private func mockSession() -> URLSession {
     return URLSession(configuration: config)
 }
 
-private func validCredentials(login: String = "fcamblor") -> CopilotCredentials {
+private func validCredentials(login: String = "fcamblor", token: String = "fake-token", isActive: Bool = true) -> CopilotCredentials {
     CopilotCredentials(
-        accessToken: "fake-token",
-        activeLogin: AccountEmail(rawValue: login),
-        tokenSource: .keychain
+        accessToken: token,
+        login: AccountEmail(rawValue: login),
+        tokenSource: .keychain,
+        isActive: isActive
     )
 }
 
@@ -269,9 +314,9 @@ struct CopilotConnectorFetchTests {
 
         let entries = try await connector.fetchUsages()
         let entry = try #require(entries.first)
-        #expect(entry.lastError?.type == "token_expired")
+        #expect(entry.lastError?.type == UsageErrorType.tokenExpired)
         #expect(entry.account.rawValue == "fcamblor")
-        #expect(entry.isActive == false)
+        #expect(entry.isActive == true)
         #expect(entry.metrics.isEmpty)
     }
 
@@ -280,7 +325,7 @@ struct CopilotConnectorFetchTests {
         let dir = try makeTempDir()
         let connector = makeConnector(dir: dir)
 
-        // First call: 200 to populate lastKnownMetrics
+        // First call: 200 to populate per-account metrics cache
         mockHTTP(status: 200, json: """
         {
           "quota_snapshots": {
@@ -295,6 +340,28 @@ struct CopilotConnectorFetchTests {
         let entries = try await connector.fetchUsages()
         let entry = try #require(entries.first)
         #expect(entry.lastError?.type == "http_429")
+        #expect(entry.isActive == true)
+        #expect(entry.metrics.count == 1)
+    }
+
+    @Test("HTTP 401 preserves last known metrics for the active login")
+    func http401PreservesMetrics() async throws {
+        let dir = try makeTempDir()
+        let connector = makeConnector(dir: dir)
+
+        mockHTTP(status: 200, json: """
+        {
+          "quota_snapshots": {
+            "premium_interactions": { "percent_remaining": 70, "unlimited": false }
+          }
+        }
+        """)
+        _ = try await connector.fetchUsages()
+
+        mockHTTP(status: 401, json: "{\"message\":\"Bad credentials\"}")
+        let entries = try await connector.fetchUsages()
+        let entry = try #require(entries.first)
+        #expect(entry.lastError?.type == UsageErrorType.tokenExpired)
         #expect(entry.isActive == true)
         #expect(entry.metrics.count == 1)
     }
@@ -339,6 +406,32 @@ struct CopilotConnectorFetchTests {
         #expect(entries.isEmpty)
     }
 
+    @Test("Transient credential lookup error uses credential_error and preserves metrics")
+    func transientCredentialErrorPreservesMetrics() async throws {
+        let dir = try makeTempDir()
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let auth = SwitchingCopilotAuth(
+            credentials: validCredentials(),
+            secondError: CopilotCredentialLocatorError.keychainTimeout(timeoutSeconds: 10)
+        )
+        let connector = CopilotConnector(auth: auth, logger: logger, session: mockSession())
+
+        mockHTTP(status: 200, json: """
+        {
+          "quota_snapshots": {
+            "premium_interactions": { "percent_remaining": 70, "unlimited": false }
+          }
+        }
+        """)
+        _ = try await connector.fetchUsages()
+
+        let entries = try await connector.fetchUsages()
+        let entry = try #require(entries.first)
+        #expect(entry.lastError?.type == UsageErrorType.credentialError)
+        #expect(entry.isActive == true)
+        #expect(entry.metrics.count == 1)
+    }
+
     @Test("invalidateLoginCache clears resolveActiveAccount")
     func invalidateClearsCache() async throws {
         let dir = try makeTempDir()
@@ -351,5 +444,94 @@ struct CopilotConnectorFetchTests {
 
         await connector.invalidateLoginCache()
         #expect(connector.resolveActiveAccount() == nil)
+    }
+
+    @Test("Multi-account: each login gets its own quota from the API")
+    func multiAccountDistinctQuotas() async throws {
+        let dir = try makeTempDir()
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let auth = MockCopilotAuth(credentialsList: [
+            validCredentials(login: "alice", token: "token-alice", isActive: true),
+            validCredentials(login: "bob", token: "token-bob", isActive: false),
+        ])
+        let multiConnector = CopilotConnector(auth: auth, logger: logger, session: mockSession())
+
+        CopilotMockURLProtocol.errorToThrow = nil
+        CopilotMockURLProtocol.handler = { request in
+            let authHeader = request.value(forHTTPHeaderField: "Authorization") ?? ""
+            let json: String
+            if authHeader.contains("token-alice") {
+                json = """
+                {
+                  "quota_snapshots": {
+                    "premium_interactions": { "percent_remaining": 80, "unlimited": false }
+                  }
+                }
+                """
+            } else {
+                json = """
+                {
+                  "quota_snapshots": {
+                    "premium_interactions": { "percent_remaining": 40, "unlimited": false }
+                  }
+                }
+                """
+            }
+            let data = json.data(using: .utf8)!
+            let resp = HTTPURLResponse(
+                url: URL(string: "https://api.github.com/copilot_internal/user")!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            return (data, resp)
+        }
+
+        let entries = try await multiConnector.fetchUsages()
+        #expect(entries.count == 2)
+
+        let alice = try #require(entries.first { $0.account.rawValue == "alice" })
+        let bob = try #require(entries.first { $0.account.rawValue == "bob" })
+        #expect(alice.isActive == true)
+        #expect(bob.isActive == false)
+
+        guard case let .timeWindow(_, _, _, alicePercent) = alice.metrics[0] else {
+            Issue.record("Expected timeWindow for alice")
+            return
+        }
+        guard case let .timeWindow(_, _, _, bobPercent) = bob.metrics[0] else {
+            Issue.record("Expected timeWindow for bob")
+            return
+        }
+        #expect(alicePercent.rawValue == 20)
+        #expect(bobPercent.rawValue == 60)
+    }
+
+    @Test("API login field wins over credential login for account attribution")
+    func apiLoginFieldWinsOverCredentialLogin() async throws {
+        let dir = try makeTempDir()
+        let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
+        let auth = MockCopilotAuth(credentialsList: [
+            validCredentials(login: "LivioGama", token: "liviomnc_token", isActive: true),
+        ])
+        let connector = CopilotConnector(auth: auth, logger: logger, session: mockSession())
+
+        mockHTTP(status: 200, json: """
+        {
+          "login": "LivioMNC",
+          "quota_snapshots": {
+            "premium_interactions": { "percent_remaining": 53.2, "unlimited": false }
+          }
+        }
+        """)
+
+        let entries = try await connector.fetchUsages()
+        let entry = try #require(entries.first { $0.account.rawValue == "LivioMNC" })
+        #expect(entry.isActive == false)
+        guard case let .timeWindow(_, _, _, percent) = entry.metrics[0] else {
+            Issue.record("Expected timeWindow")
+            return
+        }
+        #expect(percent.rawValue == 47)
     }
 }

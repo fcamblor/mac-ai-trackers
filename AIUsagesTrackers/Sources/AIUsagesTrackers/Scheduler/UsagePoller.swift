@@ -93,20 +93,46 @@ public actor UsagePoller {
         let log = self.logger
 
         let refreshState = self.refreshState
+        let usagesByVendor = Dictionary(grouping: existingFile.usages, by: \.vendor)
         let entries: [VendorUsageEntry] = await withTaskGroup(of: [VendorUsageEntry].self) { group in
             for connector in connectors {
-                let account = connector.resolveActiveAccount()
-                if !force,
-                   let account,
-                   let cached = existingFile.usages.first(where: { $0.vendor == connector.vendor && $0.account == account }),
-                   let acquiredDate = cached.lastAcquiredOn?.date,
-                   now.timeIntervalSince(acquiredDate) < intervalSeconds {
-                    let age = Int(now.timeIntervalSince(acquiredDate))
-                    logger.log(.debug, "Skipping \(connector.vendor)/\(account) — fresh (age \(age)s < \(Int(intervalSeconds))s)")
+                let cachedForVendor = usagesByVendor[connector.vendor] ?? []
+                var cacheByAccount: [AccountEmail: VendorUsageEntry] = [:]
+                for entry in cachedForVendor {
+                    cacheByAccount[entry.account] = entry
+                }
+                let knownAccounts = connector.knownAccounts()
+                let accountsToCheck: [AccountEmail]
+                if knownAccounts.isEmpty {
+                    accountsToCheck = connector.resolveActiveAccount().map { [$0] } ?? []
+                } else {
+                    accountsToCheck = Array(Set(knownAccounts + cachedForVendor.map(\.account)))
+                }
+                let shouldSkip: Bool
+                if force || accountsToCheck.isEmpty {
+                    shouldSkip = false
+                } else {
+                    shouldSkip = accountsToCheck.allSatisfy { account in
+                        guard let acquiredDate = cacheByAccount[account]?.lastAcquiredOn?.date else {
+                            return false
+                        }
+                        return now.timeIntervalSince(acquiredDate) < intervalSeconds
+                    }
+                }
+                if shouldSkip {
+                    let age = accountsToCheck.compactMap { account in
+                        cacheByAccount[account]?.lastAcquiredOn?.date
+                    }.map { Int(now.timeIntervalSince($0)) }.max()
+                    logger.log(
+                        .debug,
+                        "Skipping \(connector.vendor) — all \(accountsToCheck.count) account(s) fresh (max age \(age ?? -1)s < \(Int(intervalSeconds))s)"
+                    )
                     skippedCount += 1
                     continue
                 }
-                let refreshKey = account.map { AccountKey(vendor: connector.vendor, account: $0) }
+                let refreshKey = connector.resolveActiveAccount().map {
+                    AccountKey(vendor: connector.vendor, account: $0)
+                }
                 if let refreshKey {
                     await refreshState?.begin(refreshKey)
                 }

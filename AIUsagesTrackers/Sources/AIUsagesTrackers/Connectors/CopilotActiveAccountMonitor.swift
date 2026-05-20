@@ -10,6 +10,7 @@ public actor CopilotActiveAccountMonitor: ActiveAccountMonitoring {
     private let environment: [String: String]
     private let hostsFilePathOverride: String?
     private let fileManager: FileManager
+    private let usagesFileManager: UsagesFileManager
     private let logger: FileLogger
     private let interval: Duration
     /// Emits the new active GitHub login so callers can invalidate any cached
@@ -19,10 +20,13 @@ public actor CopilotActiveAccountMonitor: ActiveAccountMonitoring {
     private var monitorTask: Task<Void, Never>?
     private var lastObservedLogin: AccountEmail?
 
+    private static let monitoredVendor: Vendor = .copilot
+
     public init(
         environment: [String: String] = ProcessInfo.processInfo.environment,
         hostsFilePathOverride: String? = nil,
         fileManager: FileManager = .default,
+        usagesFileManager: UsagesFileManager = .shared,
         logger: FileLogger = Loggers.copilot,
         interval: Duration = CopilotActiveAccountMonitor.defaultInterval,
         onActiveAccountChanged: (@Sendable (AccountEmail) async -> Void)? = nil
@@ -30,6 +34,7 @@ public actor CopilotActiveAccountMonitor: ActiveAccountMonitoring {
         self.environment = environment
         self.hostsFilePathOverride = hostsFilePathOverride
         self.fileManager = fileManager
+        self.usagesFileManager = usagesFileManager
         self.logger = logger
         self.interval = interval
         self.onActiveAccountChanged = onActiveAccountChanged
@@ -65,6 +70,9 @@ public actor CopilotActiveAccountMonitor: ActiveAccountMonitoring {
             return
         }
 
+        await usagesFileManager.updateIsActive(vendor: Self.monitoredVendor, activeAccount: login)
+        logger.log(.debug, "Copilot isActive updated: activeAccount=\(login.rawValue)")
+
         let previous = lastObservedLogin
         lastObservedLogin = login
         // Skip the first resolution (startup) to avoid a redundant forced poll
@@ -91,18 +99,10 @@ public actor CopilotActiveAccountMonitor: ActiveAccountMonitoring {
     }
 
     private func hostsFileCandidatePaths() -> [String] {
-        if let override = hostsFilePathOverride {
-            return [override]
-        }
-        let home = fileManager.homeDirectoryForCurrentUser.path
-        var paths: [String] = []
-        if let ghConfigDir = environment["GH_CONFIG_DIR"], !ghConfigDir.isEmpty {
-            paths.append("\(ghConfigDir)/hosts.yml")
-        }
-        if let xdg = environment["XDG_CONFIG_HOME"], !xdg.isEmpty {
-            paths.append("\(xdg)/gh/hosts.yml")
-        }
-        paths.append("\(home)/.config/gh/hosts.yml")
-        return paths
+        CopilotCredentialLocator.candidatePaths(
+            environment: environment,
+            hostsFilePathOverride: hostsFilePathOverride,
+            fileManager: fileManager
+        )
     }
 }
