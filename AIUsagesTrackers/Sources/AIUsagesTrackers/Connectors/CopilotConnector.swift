@@ -4,7 +4,7 @@ import os
 public actor CopilotConnector: UsageConnector {
     nonisolated public let vendor: Vendor = .copilot
 
-    private let auth: CopilotCredentialLocating
+    private let auth: any CopilotCredentialLocating
     private let logger: FileLogger
     private let session: URLSession
 
@@ -21,7 +21,7 @@ public actor CopilotConnector: UsageConnector {
     private static let apiURL = URL(string: "https://api.github.com/copilot_internal/user")! // known-valid literal
 
     public init(
-        auth: CopilotCredentialLocating = CopilotCredentialLocator(),
+        auth: any CopilotCredentialLocating = CopilotCredentialLocator(),
         logger: FileLogger = Loggers.copilot,
         session: URLSession = .shared
     ) {
