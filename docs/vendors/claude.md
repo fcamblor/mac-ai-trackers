@@ -32,8 +32,14 @@ _verified: 2026-05-19_
 Cascade (read-only — the app never writes any of these):
 
 1. **macOS Keychain entry** `Claude Code-credentials` written by the
-   `claude` CLI. Value is JSON of the form
+   `claude` CLI. The CLI stores usage OAuth under the macOS login name
+   (`security find-generic-password -a "$USER" …`). Value is JSON of the form
    `{"claudeAiOauth":{"accessToken":"sk-ant-oat01-...","refreshToken":"...","expiresAt":1715000000000}}`.
+   A second entry with the same service name but a different account (often
+   `acct=unknown`) may exist and hold MCP plugin OAuth state (`mcpOAuth`
+   only). That entry is **not** the usage bearer — the locator reads
+   `claudeAiOauth` from the username-scoped item first, then falls back to
+   an unscoped lookup for older installs.
    `expiresAt` is a Unix millisecond timestamp (Node.js `Date.now()`
    convention — Claude Code CLI is a Node/Bun program).
 2. **Unsupported diagnostic only:** macOS Keychain entry `Claude Code`
@@ -287,3 +293,7 @@ incident `shortlink` becomes the clickable href in the UI.
   Stale-token failure mode that motivated the change.
 - 2026-05-20 — document standard API-key auth limitation and parse
   `extra_usage` as a pay-as-you-go metric.
+- 2026-05-20 — document duplicate `Claude Code-credentials` keychain items:
+  usage OAuth lives under the macOS username account; a separate
+  `acct=unknown` item may hold MCP plugin state only. Locator tries the
+  username account first.

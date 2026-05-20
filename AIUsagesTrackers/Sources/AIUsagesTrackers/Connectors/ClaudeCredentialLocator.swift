@@ -57,17 +57,20 @@ public actor ClaudeCredentialLocator: CredentialLocator {
     public static let expirySkewSeconds: TimeInterval = 60
 
     private let keychainServiceName: String
+    private let keychainAccountCandidates: [String?]
     private let processRunner: ProcessRunning
     private let logger: FileLogger
     private let clock: @Sendable () -> Date
 
     public init(
         keychainServiceName: String = ClaudeCredentialLocator.defaultKeychainService,
+        keychainAccountCandidates: [String?]? = nil,
         processRunner: ProcessRunning = FoundationProcessRunner(),
         logger: FileLogger = Loggers.claude,
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.keychainServiceName = keychainServiceName
+        self.keychainAccountCandidates = keychainAccountCandidates ?? Self.defaultKeychainAccountCandidates()
         self.processRunner = processRunner
         self.logger = logger
         self.clock = clock
@@ -76,28 +79,48 @@ public actor ClaudeCredentialLocator: CredentialLocator {
     public func locate() async throws -> ClaudeCredentials {
         let serviceName = keychainServiceName
         let timeoutSecs = Self.keychainTimeoutSeconds
+        var lastDeniedExitCode: Int32 = -1
 
-        let result = try await processRunner.run(
-            executablePath: "/usr/bin/security",
-            arguments: ["find-generic-password", "-s", serviceName, "-w"],
-            timeoutSeconds: timeoutSecs
-        )
-        if result.timedOut {
-            throw ClaudeAuthError.keychainTimeout(serviceName: serviceName, timeoutSeconds: timeoutSecs)
-        }
-        guard result.terminationStatus == 0 else {
-            if serviceName == Self.defaultKeychainService,
-               try await hasStandardAPIKey(timeoutSeconds: timeoutSecs) {
-                throw ClaudeAuthError.apiKeyOnlyUnsupported(serviceName: Self.apiKeyKeychainService)
+        for account in keychainAccountCandidates {
+            let result = try await processRunner.run(
+                executablePath: "/usr/bin/security",
+                arguments: Self.keychainLookupArguments(serviceName: serviceName, account: account),
+                timeoutSeconds: timeoutSecs
+            )
+            if result.timedOut {
+                throw ClaudeAuthError.keychainTimeout(serviceName: serviceName, timeoutSeconds: timeoutSecs)
             }
-            throw ClaudeAuthError.keychainAccessDenied(serviceName: serviceName, exitCode: result.terminationStatus)
+            guard result.terminationStatus == 0 else {
+                lastDeniedExitCode = result.terminationStatus
+                continue
+            }
+
+            guard let raw = String(data: result.stdout, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                !raw.isEmpty else {
+                continue
+            }
+
+            do {
+                return try parseOAuthCredentials(raw: raw, serviceName: serviceName)
+            } catch let error as ClaudeAuthError {
+                switch error {
+                case .keychainParseFailed, .keychainEmpty:
+                    continue
+                default:
+                    throw error
+                }
+            }
         }
 
-        guard let raw = String(data: result.stdout, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !raw.isEmpty else {
-            throw ClaudeAuthError.keychainEmpty(serviceName: serviceName)
+        if serviceName == Self.defaultKeychainService,
+           try await hasStandardAPIKey(timeoutSeconds: timeoutSecs) {
+            throw ClaudeAuthError.apiKeyOnlyUnsupported(serviceName: Self.apiKeyKeychainService)
         }
+        throw ClaudeAuthError.keychainAccessDenied(serviceName: serviceName, exitCode: lastDeniedExitCode)
+    }
 
+    private func parseOAuthCredentials(raw: String, serviceName: String) throws -> ClaudeCredentials {
         guard let jsonData = raw.data(using: .utf8) else {
             throw ClaudeAuthError.keychainParseFailed(serviceName: serviceName, rawPreview: raw)
         }
@@ -140,6 +163,21 @@ public actor ClaudeCredentialLocator: CredentialLocator {
             return false
         }
         return raw.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("sk-ant-api")
+    }
+
+    private static func defaultKeychainAccountCandidates() -> [String?] {
+        // Matches the `claude` CLI: `security find-generic-password -a "$USER" -w -s "Claude Code-credentials"`.
+        // A separate entry (often acct=unknown) may hold MCP plugin OAuth state only — not usage credentials.
+        [NSUserName(), nil]
+    }
+
+    private static func keychainLookupArguments(serviceName: String, account: String?) -> [String] {
+        var arguments = ["find-generic-password", "-s", serviceName]
+        if let account {
+            arguments += ["-a", account]
+        }
+        arguments.append("-w")
+        return arguments
     }
 
     /// Accepts `Double`, `Int`, or numeric `String` (millisecond epoch).
