@@ -10,6 +10,7 @@ struct UsageDetailsView: View {
     let updateState: UpdateState
     let onRefresh: () async -> Void
     let onOpenSettings: () -> Void
+    let onOpenAssistantsSettings: () -> Void
     let onQuit: () -> Void
     let onInstallUpdate: () -> Void
     let onRestartUpdate: () -> Void
@@ -159,7 +160,8 @@ struct UsageDetailsView: View {
                                 if !prefs.ignoredAccounts.contains(ignored) {
                                     prefs.ignoredAccounts.append(ignored)
                                 }
-                            }
+                            },
+                            onOpenAssistantsSettings: onOpenAssistantsSettings
                         )
                     }
                 }

@@ -19,4 +19,13 @@ public enum AppPreferenceKeys: String {
     /// Default is ON for any component not explicitly stored, including those
     /// newly discovered on a future refresh.
     case statusComponentSubscriptions = "ai-tracker.statusComponentSubscriptions"
+    /// `kSecAttrAccount` of the Keychain entry to use when reading Claude
+    /// credentials. The `claude` CLI sometimes leaves several generic-password
+    /// items under the `Claude Code-credentials` service — typically one
+    /// holding MCP plugin OAuth state under `account=unknown` and the actual
+    /// `claudeAiOauth` bearer under `account=$USER`. An unscoped lookup picks
+    /// the first match returned by the keychain, which may be the wrong one.
+    /// The Coding Assistants diagnostic writes this preference so the runtime
+    /// targets a specific entry instead of guessing.
+    case claudeKeychainAccount = "ai-tracker.claudeKeychainAccount"
 }

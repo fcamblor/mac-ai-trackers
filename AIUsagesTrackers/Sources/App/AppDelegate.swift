@@ -107,7 +107,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let fileManager = UsagesFileManager.shared
         let refreshState = RefreshState()
-        let claudeConnector = ClaudeCodeConnector()
+        // Read the override from UserDefaults directly so we stay off the
+        // @MainActor-isolated AppPreferences from the connector's actor — the
+        // poller reads from a background context every refresh tick.
+        let claudeKeychainAccountKey = AppPreferenceKeys.claudeKeychainAccount.rawValue
+        let claudeLocator = ClaudeCredentialLocator(
+            accountOverride: {
+                let raw = UserDefaults.standard.string(forKey: claudeKeychainAccountKey)
+                guard let raw, !raw.isEmpty else { return nil }
+                return raw
+            }
+        )
+        let claudeConnector = ClaudeCodeConnector(credentialLocator: claudeLocator)
         let claudeStatus = ClaudeStatusConnector()
         let codexConnector = CodexConnector()
         let codexStatusRegistry = StatusComponentRegistry(
@@ -267,6 +278,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 onOpenSettings: { [weak self] in
                     self?.openSettings()
                 },
+                onOpenAssistantsSettings: { [weak self] in
+                    self?.openSettings(targetTab: .codingAssistants)
+                },
                 onQuit: { [weak self] in
                     self?.quit()
                 },
@@ -384,7 +398,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Settings
 
-    private func openSettings() {
+    func openSettings(targetTab: SettingsTab? = nil) {
+        if let targetTab {
+            SettingsRouter.shared.selectedTab = targetTab
+        }
         popover?.performClose(nil)
         // .accessory apps have no dock presence; showSettingsWindow: silently fails
         // unless we temporarily switch to .regular so AppKit can make the window key.

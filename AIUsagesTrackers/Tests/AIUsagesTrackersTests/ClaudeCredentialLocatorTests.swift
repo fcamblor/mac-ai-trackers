@@ -4,6 +4,13 @@ import Testing
 
 @Suite("ClaudeCredentialLocator")
 struct ClaudeCredentialLocatorTests {
+    private struct MockProcessRunner: ProcessRunning {
+        let result: ProcessExecutionResult
+
+        func run(executablePath: String, arguments: [String], timeoutSeconds: Int) async throws -> ProcessExecutionResult {
+            result
+        }
+    }
 
     private func makeTempLogger() -> FileLogger {
         let dir = NSTemporaryDirectory() + "ai-tracker-claude-locator-\(UUID().uuidString)"
@@ -11,10 +18,8 @@ struct ClaudeCredentialLocatorTests {
         return FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
     }
 
-    private func singleEntry(json: String) -> MockKeychainQuery {
-        MockKeychainQuery(passwordsByService: [
-            ClaudeCredentialLocator.defaultKeychainService: [Data(json.utf8)],
-        ])
+    private func keychainResult(json: String) -> ProcessExecutionResult {
+        ProcessExecutionResult(stdout: Data(json.utf8), terminationStatus: 0, timedOut: false)
     }
 
     private static let fixedNow = Date(timeIntervalSince1970: 1_715_000_000)
@@ -24,7 +29,7 @@ struct ClaudeCredentialLocatorTests {
     func validToken() async throws {
         let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
         let locator = ClaudeCredentialLocator(
-            keychainQuerying: singleEntry(json: #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":\#(futureMillis)}}"#),
+            processRunner: MockProcessRunner(result: keychainResult(json: #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":\#(futureMillis)}}"#)),
             logger: makeTempLogger(),
             clock: fixedClock
         )
@@ -37,7 +42,7 @@ struct ClaudeCredentialLocatorTests {
     func expiredToken() async throws {
         let pastMillis = Int((Self.fixedNow.timeIntervalSince1970 - 10) * 1000)
         let locator = ClaudeCredentialLocator(
-            keychainQuerying: singleEntry(json: #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":\#(pastMillis)}}"#),
+            processRunner: MockProcessRunner(result: keychainResult(json: #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":\#(pastMillis)}}"#)),
             logger: makeTempLogger(),
             clock: fixedClock
         )
@@ -52,7 +57,7 @@ struct ClaudeCredentialLocatorTests {
         // 30s in the future — under the 60s skew margin, so should be considered expired.
         let nearFutureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 30) * 1000)
         let locator = ClaudeCredentialLocator(
-            keychainQuerying: singleEntry(json: #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":\#(nearFutureMillis)}}"#),
+            processRunner: MockProcessRunner(result: keychainResult(json: #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":\#(nearFutureMillis)}}"#)),
             logger: makeTempLogger(),
             clock: fixedClock
         )
@@ -65,7 +70,7 @@ struct ClaudeCredentialLocatorTests {
     @Test("missing expiresAt skips local check and returns token")
     func missingExpiresAt() async throws {
         let locator = ClaudeCredentialLocator(
-            keychainQuerying: singleEntry(json: #"{"claudeAiOauth":{"accessToken":"tok-abc"}}"#),
+            processRunner: MockProcessRunner(result: keychainResult(json: #"{"claudeAiOauth":{"accessToken":"tok-abc"}}"#)),
             logger: makeTempLogger(),
             clock: fixedClock
         )
@@ -78,7 +83,7 @@ struct ClaudeCredentialLocatorTests {
     func expiresAtAsString() async throws {
         let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
         let locator = ClaudeCredentialLocator(
-            keychainQuerying: singleEntry(json: #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":"\#(futureMillis)"}}"#),
+            processRunner: MockProcessRunner(result: keychainResult(json: #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":"\#(futureMillis)"}}"#)),
             logger: makeTempLogger(),
             clock: fixedClock
         )
@@ -90,7 +95,7 @@ struct ClaudeCredentialLocatorTests {
     @Test("expiresAt as malformed value skips local check and returns token")
     func malformedExpiresAt() async throws {
         let locator = ClaudeCredentialLocator(
-            keychainQuerying: singleEntry(json: #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":"not-a-number"}}"#),
+            processRunner: MockProcessRunner(result: keychainResult(json: #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":"not-a-number"}}"#)),
             logger: makeTempLogger(),
             clock: fixedClock
         )
@@ -99,16 +104,10 @@ struct ClaudeCredentialLocatorTests {
         #expect(creds.accessToken == "tok-abc")
     }
 
-    @Test("keychain access denied surfaces keychainAccessDenied")
+    @Test("non-zero security exit code surfaces keychainAccessDenied")
     func keychainDenied() async throws {
         let locator = ClaudeCredentialLocator(
-            keychainQuerying: MockKeychainQuery(
-                passwordsByService: [:],
-                errorsByService: [
-                    ClaudeCredentialLocator.defaultKeychainService:
-                        KeychainQueryError.accessDenied(service: ClaudeCredentialLocator.defaultKeychainService, status: 44),
-                ]
-            ),
+            processRunner: MockProcessRunner(result: ProcessExecutionResult(stdout: Data(), terminationStatus: 44, timedOut: false)),
             logger: makeTempLogger(),
             clock: fixedClock
         )
@@ -118,10 +117,10 @@ struct ClaudeCredentialLocatorTests {
         }
     }
 
-    @Test("no keychain entries surfaces keychainEmpty")
+    @Test("empty stdout surfaces keychainEmpty")
     func keychainEmpty() async throws {
         let locator = ClaudeCredentialLocator(
-            keychainQuerying: MockKeychainQuery(passwordsByService: [:]),
+            processRunner: MockProcessRunner(result: ProcessExecutionResult(stdout: Data(), terminationStatus: 0, timedOut: false)),
             logger: makeTempLogger(),
             clock: fixedClock
         )
@@ -129,87 +128,5 @@ struct ClaudeCredentialLocatorTests {
         await #expect(throws: ClaudeAuthError.self) {
             try await locator.locate()
         }
-    }
-
-    // MARK: - Multiple keychain entries
-
-    @Test("skips mcpOAuth-only entry and picks the valid claudeAiOauth entry")
-    func skipsMcpOnlyEntry() async throws {
-        let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
-        let mcpOnlyJSON = #"{"mcpOAuth":{"plugin:vercel:vercel|abc":{"accessToken":"mcp-tok","expiresAt":0}}}"#
-        let validJSON = #"{"claudeAiOauth":{"accessToken":"tok-user","expiresAt":\#(futureMillis)}}"#
-        let locator = ClaudeCredentialLocator(
-            keychainQuerying: MockKeychainQuery(passwordsByService: [
-                ClaudeCredentialLocator.defaultKeychainService: [
-                    Data(mcpOnlyJSON.utf8),
-                    Data(validJSON.utf8),
-                ],
-            ]),
-            logger: makeTempLogger(),
-            clock: fixedClock
-        )
-
-        let creds = try await locator.locate()
-        #expect(creds.accessToken == "tok-user")
-    }
-
-    @Test("picks non-expired entry when first candidate is expired")
-    func picksNonExpiredFromMultipleCandidates() async throws {
-        let pastMillis = Int((Self.fixedNow.timeIntervalSince1970 - 3600) * 1000)
-        let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
-        let expiredJSON = #"{"claudeAiOauth":{"accessToken":"tok-expired","expiresAt":\#(pastMillis)}}"#
-        let validJSON = #"{"claudeAiOauth":{"accessToken":"tok-valid","expiresAt":\#(futureMillis)}}"#
-        let locator = ClaudeCredentialLocator(
-            keychainQuerying: MockKeychainQuery(passwordsByService: [
-                ClaudeCredentialLocator.defaultKeychainService: [
-                    Data(expiredJSON.utf8),
-                    Data(validJSON.utf8),
-                ],
-            ]),
-            logger: makeTempLogger(),
-            clock: fixedClock
-        )
-
-        let creds = try await locator.locate()
-        #expect(creds.accessToken == "tok-valid")
-    }
-
-    @Test("prefers non-expired entry with known expiry over unknown expiry")
-    func prefersKnownNonExpiredCandidate() async throws {
-        let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
-        let unknownExpiryJSON = #"{"claudeAiOauth":{"accessToken":"tok-unknown"}}"#
-        let validJSON = #"{"claudeAiOauth":{"accessToken":"tok-valid","expiresAt":\#(futureMillis)}}"#
-        let locator = ClaudeCredentialLocator(
-            keychainQuerying: MockKeychainQuery(passwordsByService: [
-                ClaudeCredentialLocator.defaultKeychainService: [
-                    Data(unknownExpiryJSON.utf8),
-                    Data(validJSON.utf8),
-                ],
-            ]),
-            logger: makeTempLogger(),
-            clock: fixedClock
-        )
-
-        let creds = try await locator.locate()
-        #expect(creds.accessToken == "tok-valid")
-    }
-
-    @Test("deduplicates entries with identical tokens")
-    func deduplicatesIdenticalTokens() async throws {
-        let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
-        let json = #"{"claudeAiOauth":{"accessToken":"tok-single","expiresAt":\#(futureMillis)}}"#
-        let locator = ClaudeCredentialLocator(
-            keychainQuerying: MockKeychainQuery(passwordsByService: [
-                ClaudeCredentialLocator.defaultKeychainService: [
-                    Data(json.utf8),
-                    Data(json.utf8),
-                ],
-            ]),
-            logger: makeTempLogger(),
-            clock: fixedClock
-        )
-
-        let creds = try await locator.locate()
-        #expect(creds.accessToken == "tok-single")
     }
 }

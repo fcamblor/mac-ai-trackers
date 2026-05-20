@@ -33,6 +33,11 @@ public protocol AppPreferences: AnyObject, Observable, Sendable {
     /// components. Storing the key set explicitly would force a migration
     /// every time the registry discovers a new component.
     var statusComponentSubscriptions: [String: Bool] { get set }
+    /// `kSecAttrAccount` to scope the Claude Keychain lookup to. `nil` means
+    /// "use the first match" (the default `security find-generic-password -s`
+    /// behaviour). Set from the Coding Assistants tab when the diagnostic
+    /// finds multiple entries — we never delete the duplicates ourselves.
+    var claudeKeychainAccount: String? { get set }
 }
 
 // MARK: - UserDefaults-backed implementation
@@ -243,6 +248,26 @@ public final class UserDefaultsAppPreferences: AppPreferences {
             }
         }
     }
+
+    public var claudeKeychainAccount: String? {
+        get {
+            access(keyPath: \.claudeKeychainAccount)
+            let raw = defaults.string(forKey: AppPreferenceKeys.claudeKeychainAccount.rawValue)
+            // Treat the empty string the same as "no override" so the user can
+            // clear the override by writing "" without leaving the key dangling.
+            guard let raw, !raw.isEmpty else { return nil }
+            return raw
+        }
+        set {
+            withMutation(keyPath: \.claudeKeychainAccount) {
+                if let newValue, !newValue.isEmpty {
+                    defaults.set(newValue, forKey: AppPreferenceKeys.claudeKeychainAccount.rawValue)
+                } else {
+                    defaults.removeObject(forKey: AppPreferenceKeys.claudeKeychainAccount.rawValue)
+                }
+            }
+        }
+    }
 }
 
 // MARK: - In-memory test double
@@ -263,6 +288,7 @@ public final class InMemoryAppPreferences: AppPreferences {
     public var updatesAutoCheckEnabled: Bool
     public var updatesDismissedVersions: [String]
     public var statusComponentSubscriptions: [String: Bool]
+    public var claudeKeychainAccount: String?
 
     public init(
         refreshInterval: RefreshInterval = .default,
@@ -276,7 +302,8 @@ public final class InMemoryAppPreferences: AppPreferences {
         ignoredAccounts: [IgnoredAccount] = [],
         updatesAutoCheckEnabled: Bool = true,
         updatesDismissedVersions: [String] = [],
-        statusComponentSubscriptions: [String: Bool] = [:]
+        statusComponentSubscriptions: [String: Bool] = [:],
+        claudeKeychainAccount: String? = nil
     ) {
         self.refreshInterval = refreshInterval
         self.launchAtLogin = launchAtLogin
@@ -290,5 +317,6 @@ public final class InMemoryAppPreferences: AppPreferences {
         self.updatesAutoCheckEnabled = updatesAutoCheckEnabled
         self.updatesDismissedVersions = updatesDismissedVersions
         self.statusComponentSubscriptions = statusComponentSubscriptions
+        self.claudeKeychainAccount = claudeKeychainAccount
     }
 }

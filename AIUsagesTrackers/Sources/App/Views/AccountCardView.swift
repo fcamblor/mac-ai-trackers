@@ -5,6 +5,10 @@ struct AccountCardView: View {
     let entry: VendorUsageEntry
     let isRefreshing: Bool
     var onIgnore: (() -> Void)? = nil
+    /// Surfaced for Claude rows whose last error points at the Keychain lookup —
+    /// clicking it routes the user to the Coding Assistants settings tab where
+    /// the duplicate-entry diagnostic can pick a specific `kSecAttrAccount`.
+    var onOpenAssistantsSettings: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -84,21 +88,38 @@ struct AccountCardView: View {
     }
 
     private func errorRow(for error: UsageError) -> some View {
-        HStack(alignment: .top, spacing: 6) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.orange)
-                .frame(width: 12, height: 12)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(errorTitle(for: error.type))
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(errorDetail(for: error.type))
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(.orange)
+                    .frame(width: 12, height: 12)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(errorTitle(for: error.type))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(errorDetail(for: error.type))
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            if showsAssistantsCTA(for: error.type), let onOpenAssistantsSettings {
+                Button {
+                    onOpenAssistantsSettings()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "stethoscope")
+                            .font(.system(size: 9, weight: .semibold))
+                        Text("Open Coding Assistants diagnostic")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.orange)
             }
         }
         .padding(8)
@@ -108,6 +129,18 @@ struct AccountCardView: View {
             RoundedRectangle(cornerRadius: 6)
                 .strokeBorder(Color.orange.opacity(0.35), lineWidth: 1)
         )
+    }
+
+    /// Only Claude rows benefit from the diagnostic — the same error types on
+    /// Codex/Copilot would route to the wrong panel.
+    private func showsAssistantsCTA(for type: String) -> Bool {
+        guard entry.vendor == .claude else { return false }
+        switch type {
+        case "token_error", "credential_error", "api_key_usage_unsupported", "token_expired":
+            return true
+        default:
+            return false
+        }
     }
 
     private func errorTitle(for type: String) -> String {
