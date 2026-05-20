@@ -12,6 +12,21 @@ struct ClaudeCredentialLocatorTests {
         }
     }
 
+    private struct AccountAwareMockProcessRunner: ProcessRunning {
+        let results: [String?: ProcessExecutionResult]
+
+        func run(executablePath: String, arguments: [String], timeoutSeconds: Int) async throws -> ProcessExecutionResult {
+            let account: String?
+            if let accountFlagIndex = arguments.firstIndex(of: "-a"),
+               accountFlagIndex + 1 < arguments.count {
+                account = arguments[accountFlagIndex + 1]
+            } else {
+                account = nil
+            }
+            return results[account] ?? ProcessExecutionResult(stdout: Data(), terminationStatus: 44, timedOut: false)
+        }
+    }
+
     private func makeTempLogger() -> FileLogger {
         let dir = NSTemporaryDirectory() + "ai-tracker-claude-locator-\(UUID().uuidString)"
         try! FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
@@ -107,6 +122,7 @@ struct ClaudeCredentialLocatorTests {
     @Test("non-zero security exit code surfaces keychainAccessDenied")
     func keychainDenied() async throws {
         let locator = ClaudeCredentialLocator(
+            keychainAccountCandidates: ["testuser", nil],
             processRunner: MockProcessRunner(result: ProcessExecutionResult(stdout: Data(), terminationStatus: 44, timedOut: false)),
             logger: makeTempLogger(),
             clock: fixedClock
@@ -117,9 +133,65 @@ struct ClaudeCredentialLocatorTests {
         }
     }
 
-    @Test("empty stdout surfaces keychainEmpty")
+    @Test("reads claudeAiOauth from username account before unscoped entry")
+    func prefersUsernameAccount() async throws {
+        let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
+        let usernameJSON = #"{"claudeAiOauth":{"accessToken":"tok-user","expiresAt":\#(futureMillis)}}"#
+        let mcpOnlyJSON = #"{"mcpOAuth":{"plugin:vercel:vercel|abc":{"accessToken":"","expiresAt":0}}}"#
+        let locator = ClaudeCredentialLocator(
+            keychainAccountCandidates: ["livio", nil],
+            processRunner: AccountAwareMockProcessRunner(results: [
+                "livio": keychainResult(json: usernameJSON),
+                nil: keychainResult(json: mcpOnlyJSON),
+            ]),
+            logger: makeTempLogger(),
+            clock: fixedClock
+        )
+
+        let creds = try await locator.locate()
+        #expect(creds.accessToken == "tok-user")
+    }
+
+    @Test("falls back to unscoped lookup when username account is missing")
+    func fallsBackToUnscopedAccount() async throws {
+        let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
+        let oauthJSON = #"{"claudeAiOauth":{"accessToken":"tok-fallback","expiresAt":\#(futureMillis)}}"#
+        let locator = ClaudeCredentialLocator(
+            keychainAccountCandidates: ["livio", nil],
+            processRunner: AccountAwareMockProcessRunner(results: [
+                "livio": ProcessExecutionResult(stdout: Data(), terminationStatus: 44, timedOut: false),
+                nil: keychainResult(json: oauthJSON),
+            ]),
+            logger: makeTempLogger(),
+            clock: fixedClock
+        )
+
+        let creds = try await locator.locate()
+        #expect(creds.accessToken == "tok-fallback")
+    }
+
+    @Test("skips mcpOAuth-only unscoped entry when username account is missing")
+    func skipsMcpOAuthOnlyEntry() async throws {
+        let mcpOnlyJSON = #"{"mcpOAuth":{"plugin:vercel:vercel|abc":{"accessToken":"","expiresAt":0}}}"#
+        let locator = ClaudeCredentialLocator(
+            keychainAccountCandidates: ["livio", nil],
+            processRunner: AccountAwareMockProcessRunner(results: [
+                "livio": ProcessExecutionResult(stdout: Data(), terminationStatus: 44, timedOut: false),
+                nil: keychainResult(json: mcpOnlyJSON),
+            ]),
+            logger: makeTempLogger(),
+            clock: fixedClock
+        )
+
+        await #expect(throws: ClaudeAuthError.self) {
+            try await locator.locate()
+        }
+    }
+
+    @Test("empty stdout surfaces keychainAccessDenied after exhausting accounts")
     func keychainEmpty() async throws {
         let locator = ClaudeCredentialLocator(
+            keychainAccountCandidates: ["testuser", nil],
             processRunner: MockProcessRunner(result: ProcessExecutionResult(stdout: Data(), terminationStatus: 0, timedOut: false)),
             logger: makeTempLogger(),
             clock: fixedClock
