@@ -40,20 +40,6 @@ private func mockSession() -> URLSession {
     return URLSession(configuration: config)
 }
 
-private struct RoutingProcessRunner: ProcessRunning {
-    let resultsByService: [String: ProcessExecutionResult]
-
-    func run(executablePath: String, arguments: [String], timeoutSeconds: Int) async throws -> ProcessExecutionResult {
-        guard let serviceFlagIndex = arguments.firstIndex(of: "-s"),
-              arguments.indices.contains(arguments.index(after: serviceFlagIndex)) else {
-            return ProcessExecutionResult(stdout: Data(), terminationStatus: 44, timedOut: false)
-        }
-        let service = arguments[arguments.index(after: serviceFlagIndex)]
-        return resultsByService[service]
-            ?? ProcessExecutionResult(stdout: Data(), terminationStatus: 44, timedOut: false)
-    }
-}
-
 // MARK: - Account resolution tests
 
 @Suite("ClaudeCodeConnector — account resolution")
@@ -193,19 +179,20 @@ struct ClaudeCodeConnectorFetchTests {
         try! #"{"oauthAccount":{"emailAddress":"user@example.com"}}"#
             .write(toFile: configPath, atomically: true, encoding: .utf8)
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
-        let runner = RoutingProcessRunner(resultsByService: [
-            ClaudeCredentialLocator.defaultKeychainService: ProcessExecutionResult(
-                stdout: Data(), terminationStatus: 44, timedOut: false
-            ),
-            ClaudeCredentialLocator.apiKeyKeychainService: ProcessExecutionResult(
-                stdout: Data("sk-ant-api03-test-key\n".utf8), terminationStatus: 0, timedOut: false
-            ),
-        ])
+        let keychainQuery = MockKeychainQuery(
+            passwordsByService: [
+                ClaudeCredentialLocator.apiKeyKeychainService: [Data("sk-ant-api03-test-key\n".utf8)],
+            ],
+            errorsByService: [
+                ClaudeCredentialLocator.defaultKeychainService:
+                    KeychainQueryError.accessDenied(service: ClaudeCredentialLocator.defaultKeychainService, status: 44),
+            ]
+        )
         let connector = ClaudeCodeConnector(
             claudeConfigPath: configPath,
             logger: logger,
             session: mockSession(),
-            credentialLocator: ClaudeCredentialLocator(processRunner: runner, logger: logger)
+            credentialLocator: ClaudeCredentialLocator(keychainQuerying: keychainQuery, logger: logger)
         )
 
         let entries = try await connector.fetchUsages()

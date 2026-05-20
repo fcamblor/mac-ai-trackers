@@ -50,79 +50,63 @@ public actor ClaudeCredentialLocator: CredentialLocator {
     public static let apiKeyKeychainService = "Claude Code"
     /// Long enough for a cached keychain lookup; short enough to avoid
     /// stalling the poller.
-    public static let keychainTimeoutSeconds = 10
+    public static let keychainTimeoutSeconds = SystemKeychainQuery.timeoutSeconds
     /// Treat the token as expired this many seconds before the actual
     /// `expiresAt` to avoid the race where we send a request just as the
     /// token flips invalid and burn a 401 we could have skipped.
     public static let expirySkewSeconds: TimeInterval = 60
 
     private let keychainServiceName: String
-    private let processRunner: ProcessRunning
+    private let keychainQuerying: any KeychainQuerying
     private let logger: FileLogger
     private let clock: @Sendable () -> Date
 
     public init(
         keychainServiceName: String = ClaudeCredentialLocator.defaultKeychainService,
-        processRunner: ProcessRunning = FoundationProcessRunner(),
+        keychainQuerying: any KeychainQuerying = SystemKeychainQuery(),
         logger: FileLogger = Loggers.claude,
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.keychainServiceName = keychainServiceName
-        self.processRunner = processRunner
+        self.keychainQuerying = keychainQuerying
         self.logger = logger
         self.clock = clock
     }
 
     public func locate() async throws -> ClaudeCredentials {
         let serviceName = keychainServiceName
-        let timeoutSecs = Self.keychainTimeoutSeconds
         let now = clock()
 
+        let allEntries: [Data]
+        do {
+            allEntries = try await keychainQuerying.allPasswords(service: serviceName)
+        } catch {
+            throw try await mapKeychainError(error, serviceName: serviceName)
+        }
+
+        guard !allEntries.isEmpty else {
+            if serviceName == Self.defaultKeychainService, try await hasStandardAPIKey() {
+                throw ClaudeAuthError.apiKeyOnlyUnsupported(serviceName: Self.apiKeyKeychainService)
+            }
+            throw ClaudeAuthError.keychainEmpty(serviceName: serviceName)
+        }
+
+        // Parse every entry; keep those with a non-empty claudeAiOauth.accessToken.
+        // Multiple entries for the same service arise when one holds MCP plugin OAuth
+        // state (acct=unknown) and another holds the actual usage bearer (acct=$USER).
         var candidates: [(token: String, expiryDate: Date?)] = []
-        var allLookupsFailed = true
-        var lastFailedExitCode: Int32 = -1
         var lastRawPreview = ""
 
-        // Try username-scoped entry first (matches the `claude` CLI convention:
-        // `security find-generic-password -a "$USER" -s "..." -w`).
-        // A second entry with the same service but a different account (often
-        // `acct=unknown`) may hold only MCP plugin OAuth state and no `claudeAiOauth`.
-        // The unscoped fallback covers older installs and reordered keychain entries.
-        // Duplicates across both lookups are skipped by token value.
-        let lookupArgSets: [[String]] = [
-            ["find-generic-password", "-a", NSUserName(), "-s", serviceName, "-w"],
-            ["find-generic-password", "-s", serviceName, "-w"],
-        ]
-
-        for args in lookupArgSets {
-            let result = try await processRunner.run(
-                executablePath: "/usr/bin/security",
-                arguments: args,
-                timeoutSeconds: timeoutSecs
-            )
-            if result.timedOut {
-                throw ClaudeAuthError.keychainTimeout(serviceName: serviceName, timeoutSeconds: timeoutSecs)
-            }
-            guard result.terminationStatus == 0 else {
-                lastFailedExitCode = result.terminationStatus
-                continue
-            }
-            allLookupsFailed = false
-
-            guard let raw = String(data: result.stdout, encoding: .utf8)?
+        for data in allEntries {
+            guard let raw = String(data: data, encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines),
                   !raw.isEmpty else {
                 continue
             }
 
-            guard let jsonData = raw.data(using: .utf8) else {
-                lastRawPreview = raw
-                continue
-            }
-
             let parsed: [String: Any]
             do {
-                parsed = (try JSONSerialization.jsonObject(with: jsonData) as? [String: Any]) ?? [:]
+                parsed = (try JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
             } catch {
                 lastRawPreview = raw
                 continue
@@ -154,14 +138,6 @@ public actor ClaudeCredentialLocator: CredentialLocator {
             throw ClaudeAuthError.tokenExpired(serviceName: serviceName, expiredAt: expiredAt)
         }
 
-        if allLookupsFailed {
-            if serviceName == Self.defaultKeychainService,
-               try await hasStandardAPIKey(timeoutSeconds: timeoutSecs) {
-                throw ClaudeAuthError.apiKeyOnlyUnsupported(serviceName: Self.apiKeyKeychainService)
-            }
-            throw ClaudeAuthError.keychainAccessDenied(serviceName: serviceName, exitCode: lastFailedExitCode)
-        }
-
         if !lastRawPreview.isEmpty {
             throw ClaudeAuthError.keychainParseFailed(serviceName: serviceName, rawPreview: lastRawPreview)
         }
@@ -169,17 +145,33 @@ public actor ClaudeCredentialLocator: CredentialLocator {
         throw ClaudeAuthError.keychainEmpty(serviceName: serviceName)
     }
 
-    private func hasStandardAPIKey(timeoutSeconds: Int) async throws -> Bool {
-        let result = try await processRunner.run(
-            executablePath: "/usr/bin/security",
-            arguments: ["find-generic-password", "-s", Self.apiKeyKeychainService, "-w"],
-            timeoutSeconds: timeoutSeconds
-        )
-        guard !result.timedOut, result.terminationStatus == 0,
-              let raw = String(data: result.stdout, encoding: .utf8) else {
+    private func hasStandardAPIKey() async throws -> Bool {
+        let entries: [Data]
+        do {
+            entries = try await keychainQuerying.allPasswords(service: Self.apiKeyKeychainService)
+        } catch {
             return false
         }
-        return raw.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("sk-ant-api")
+        return entries.contains {
+            String(data: $0, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .hasPrefix("sk-ant-api") == true
+        }
+    }
+
+    private func mapKeychainError(_ error: Error, serviceName: String) async throws -> ClaudeAuthError {
+        if let qErr = error as? KeychainQueryError {
+            switch qErr {
+            case let .timeout(_, secs):
+                return ClaudeAuthError.keychainTimeout(serviceName: serviceName, timeoutSeconds: secs)
+            case let .accessDenied(_, status):
+                if serviceName == Self.defaultKeychainService, try await hasStandardAPIKey() {
+                    return ClaudeAuthError.apiKeyOnlyUnsupported(serviceName: Self.apiKeyKeychainService)
+                }
+                return ClaudeAuthError.keychainAccessDenied(serviceName: serviceName, exitCode: status)
+            }
+        }
+        return ClaudeAuthError.keychainAccessDenied(serviceName: serviceName, exitCode: -1)
     }
 
     /// Accepts `Double`, `Int`, or numeric `String` (millisecond epoch).

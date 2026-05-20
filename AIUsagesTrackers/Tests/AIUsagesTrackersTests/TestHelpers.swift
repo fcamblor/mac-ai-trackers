@@ -1,4 +1,18 @@
 import Foundation
+@testable import AIUsagesTrackersLib
+
+// MARK: - Keychain mock
+
+/// Returns all passwords keyed by service name. Throws `error` for any service in `errorsByService`.
+struct MockKeychainQuery: KeychainQuerying {
+    let passwordsByService: [String: [Data]]
+    var errorsByService: [String: Error] = [:]
+
+    func allPasswords(service: String) async throws -> [Data] {
+        if let err = errorsByService[service] { throw err }
+        return passwordsByService[service] ?? []
+    }
+}
 
 // MARK: - Async polling helper
 
