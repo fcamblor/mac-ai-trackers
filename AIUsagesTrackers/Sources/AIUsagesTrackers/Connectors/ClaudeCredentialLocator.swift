@@ -76,57 +76,97 @@ public actor ClaudeCredentialLocator: CredentialLocator {
     public func locate() async throws -> ClaudeCredentials {
         let serviceName = keychainServiceName
         let timeoutSecs = Self.keychainTimeoutSeconds
+        let now = clock()
 
-        let result = try await processRunner.run(
-            executablePath: "/usr/bin/security",
-            arguments: ["find-generic-password", "-s", serviceName, "-w"],
-            timeoutSeconds: timeoutSecs
-        )
-        if result.timedOut {
-            throw ClaudeAuthError.keychainTimeout(serviceName: serviceName, timeoutSeconds: timeoutSecs)
+        var candidates: [(token: String, expiryDate: Date?)] = []
+        var allLookupsFailed = true
+        var lastFailedExitCode: Int32 = -1
+        var lastRawPreview = ""
+
+        // Try username-scoped entry first (matches the `claude` CLI convention:
+        // `security find-generic-password -a "$USER" -s "..." -w`).
+        // A second entry with the same service but a different account (often
+        // `acct=unknown`) may hold only MCP plugin OAuth state and no `claudeAiOauth`.
+        // The unscoped fallback covers older installs and reordered keychain entries.
+        // Duplicates across both lookups are skipped by token value.
+        let lookupArgSets: [[String]] = [
+            ["find-generic-password", "-a", NSUserName(), "-s", serviceName, "-w"],
+            ["find-generic-password", "-s", serviceName, "-w"],
+        ]
+
+        for args in lookupArgSets {
+            let result = try await processRunner.run(
+                executablePath: "/usr/bin/security",
+                arguments: args,
+                timeoutSeconds: timeoutSecs
+            )
+            if result.timedOut {
+                throw ClaudeAuthError.keychainTimeout(serviceName: serviceName, timeoutSeconds: timeoutSecs)
+            }
+            guard result.terminationStatus == 0 else {
+                lastFailedExitCode = result.terminationStatus
+                continue
+            }
+            allLookupsFailed = false
+
+            guard let raw = String(data: result.stdout, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                  !raw.isEmpty else {
+                continue
+            }
+
+            guard let jsonData = raw.data(using: .utf8) else {
+                lastRawPreview = raw
+                continue
+            }
+
+            let parsed: [String: Any]
+            do {
+                parsed = (try JSONSerialization.jsonObject(with: jsonData) as? [String: Any]) ?? [:]
+            } catch {
+                lastRawPreview = raw
+                continue
+            }
+
+            guard let oauth = parsed["claudeAiOauth"] as? [String: Any],
+                  let token = oauth["accessToken"] as? String,
+                  !token.isEmpty else {
+                lastRawPreview = raw
+                continue
+            }
+
+            guard !candidates.contains(where: { $0.token == token }) else { continue }
+
+            // expiresAt is a Unix millisecond timestamp written by the `claude` CLI
+            // (Node.js convention — `Date.now()`). A missing or unparseable value
+            // skips the local check: the API call still happens and a 401 will
+            // surface as token_expired downstream.
+            let expiryDate = oauth["expiresAt"].flatMap { Self.parseExpiresAt($0) }
+            candidates.append((token: token, expiryDate: expiryDate))
         }
-        guard result.terminationStatus == 0 else {
+
+        let skewedNow = now.addingTimeInterval(Self.expirySkewSeconds)
+        if let best = candidates.first(where: { $0.expiryDate == nil || skewedNow < $0.expiryDate! }) {
+            return ClaudeCredentials(accessToken: best.token)
+        }
+
+        if let expired = candidates.first, let expiredAt = expired.expiryDate {
+            throw ClaudeAuthError.tokenExpired(serviceName: serviceName, expiredAt: expiredAt)
+        }
+
+        if allLookupsFailed {
             if serviceName == Self.defaultKeychainService,
                try await hasStandardAPIKey(timeoutSeconds: timeoutSecs) {
                 throw ClaudeAuthError.apiKeyOnlyUnsupported(serviceName: Self.apiKeyKeychainService)
             }
-            throw ClaudeAuthError.keychainAccessDenied(serviceName: serviceName, exitCode: result.terminationStatus)
+            throw ClaudeAuthError.keychainAccessDenied(serviceName: serviceName, exitCode: lastFailedExitCode)
         }
 
-        guard let raw = String(data: result.stdout, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !raw.isEmpty else {
-            throw ClaudeAuthError.keychainEmpty(serviceName: serviceName)
+        if !lastRawPreview.isEmpty {
+            throw ClaudeAuthError.keychainParseFailed(serviceName: serviceName, rawPreview: lastRawPreview)
         }
 
-        guard let jsonData = raw.data(using: .utf8) else {
-            throw ClaudeAuthError.keychainParseFailed(serviceName: serviceName, rawPreview: raw)
-        }
-
-        let parsed: [String: Any]
-        do {
-            parsed = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] ?? [:]
-        } catch {
-            throw ClaudeAuthError.keychainParseFailed(serviceName: serviceName, rawPreview: raw)
-        }
-
-        guard let oauth = parsed["claudeAiOauth"] as? [String: Any],
-              let token = oauth["accessToken"] as? String,
-              !token.isEmpty else {
-            throw ClaudeAuthError.keychainParseFailed(serviceName: serviceName, rawPreview: raw)
-        }
-
-        // expiresAt is a Unix millisecond timestamp written by the `claude` CLI
-        // (Node.js convention — `Date.now()`). A missing or unparseable value
-        // skips the local check: the API call still happens and a 401 will
-        // surface as token_expired downstream.
-        if let expiresAtRaw = oauth["expiresAt"], let expiryDate = Self.parseExpiresAt(expiresAtRaw) {
-            let now = clock()
-            if now.addingTimeInterval(Self.expirySkewSeconds) >= expiryDate {
-                throw ClaudeAuthError.tokenExpired(serviceName: serviceName, expiredAt: expiryDate)
-            }
-        }
-
-        return ClaudeCredentials(accessToken: token)
+        throw ClaudeAuthError.keychainEmpty(serviceName: serviceName)
     }
 
     private func hasStandardAPIKey(timeoutSeconds: Int) async throws -> Bool {

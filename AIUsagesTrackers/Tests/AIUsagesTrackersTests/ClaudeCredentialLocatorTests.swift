@@ -12,6 +12,23 @@ struct ClaudeCredentialLocatorTests {
         }
     }
 
+    /// Dispatches keychain results by the account value passed via `-a <account>`,
+    /// or to the `nil` key for unscoped lookups (no `-a` flag).
+    private struct AccountDispatchMockRunner: ProcessRunning {
+        let resultsByAccount: [String?: ProcessExecutionResult]
+
+        func run(executablePath: String, arguments: [String], timeoutSeconds: Int) async throws -> ProcessExecutionResult {
+            let account: String?
+            if let idx = arguments.firstIndex(of: "-a"), idx + 1 < arguments.count {
+                account = arguments[idx + 1]
+            } else {
+                account = nil
+            }
+            return resultsByAccount[account]
+                ?? ProcessExecutionResult(stdout: Data(), terminationStatus: 44, timedOut: false)
+        }
+    }
+
     private func makeTempLogger() -> FileLogger {
         let dir = NSTemporaryDirectory() + "ai-tracker-claude-locator-\(UUID().uuidString)"
         try! FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
@@ -128,5 +145,78 @@ struct ClaudeCredentialLocatorTests {
         await #expect(throws: ClaudeAuthError.self) {
             try await locator.locate()
         }
+    }
+
+    // MARK: - Multiple keychain entries
+
+    @Test("prefers username-scoped claudeAiOauth entry over mcpOAuth-only unscoped entry")
+    func prefersUsernameAccountOverMcpOnlyEntry() async throws {
+        let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
+        let usernameJSON = #"{"claudeAiOauth":{"accessToken":"tok-user","expiresAt":\#(futureMillis)}}"#
+        let mcpOnlyJSON = #"{"mcpOAuth":{"plugin:vercel:vercel|abc":{"accessToken":"mcp-tok","expiresAt":0}}}"#
+        let locator = ClaudeCredentialLocator(
+            processRunner: AccountDispatchMockRunner(resultsByAccount: [
+                NSUserName(): keychainResult(json: usernameJSON),
+                nil: keychainResult(json: mcpOnlyJSON),
+            ]),
+            logger: makeTempLogger(),
+            clock: fixedClock
+        )
+
+        let creds = try await locator.locate()
+        #expect(creds.accessToken == "tok-user")
+    }
+
+    @Test("falls back to unscoped entry when username-scoped lookup is absent")
+    func fallsBackToUnscopedWhenUsernameEntryAbsent() async throws {
+        let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
+        let oauthJSON = #"{"claudeAiOauth":{"accessToken":"tok-fallback","expiresAt":\#(futureMillis)}}"#
+        let locator = ClaudeCredentialLocator(
+            processRunner: AccountDispatchMockRunner(resultsByAccount: [
+                // username-scoped entry absent (exit 44)
+                nil: keychainResult(json: oauthJSON),
+            ]),
+            logger: makeTempLogger(),
+            clock: fixedClock
+        )
+
+        let creds = try await locator.locate()
+        #expect(creds.accessToken == "tok-fallback")
+    }
+
+    @Test("picks non-expired entry when username entry is expired and unscoped entry is valid")
+    func picksNonExpiredFromMultipleCandidates() async throws {
+        let pastMillis = Int((Self.fixedNow.timeIntervalSince1970 - 3600) * 1000)
+        let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
+        let expiredJSON = #"{"claudeAiOauth":{"accessToken":"tok-expired","expiresAt":\#(pastMillis)}}"#
+        let validJSON = #"{"claudeAiOauth":{"accessToken":"tok-valid","expiresAt":\#(futureMillis)}}"#
+        let locator = ClaudeCredentialLocator(
+            processRunner: AccountDispatchMockRunner(resultsByAccount: [
+                NSUserName(): keychainResult(json: expiredJSON),
+                nil: keychainResult(json: validJSON),
+            ]),
+            logger: makeTempLogger(),
+            clock: fixedClock
+        )
+
+        let creds = try await locator.locate()
+        #expect(creds.accessToken == "tok-valid")
+    }
+
+    @Test("deduplicates identical tokens returned by both lookups")
+    func deduplicatesIdenticalTokens() async throws {
+        let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
+        let json = #"{"claudeAiOauth":{"accessToken":"tok-single","expiresAt":\#(futureMillis)}}"#
+        let locator = ClaudeCredentialLocator(
+            processRunner: AccountDispatchMockRunner(resultsByAccount: [
+                NSUserName(): keychainResult(json: json),
+                nil: keychainResult(json: json),
+            ]),
+            logger: makeTempLogger(),
+            clock: fixedClock
+        )
+
+        let creds = try await locator.locate()
+        #expect(creds.accessToken == "tok-single")
     }
 }
