@@ -28,40 +28,53 @@ public struct SystemKeychainQuery: KeychainQuerying {
     public init() {}
 
     public func allPasswords(service: String) async throws -> [Data] {
-        try await withThrowingTaskGroup(of: [Data].self) { group in
-            group.addTask { try await Self.queryKeychain(service: service) }
-            group.addTask {
-                try await Task.sleep(nanoseconds: UInt64(Self.timeoutSeconds) * 1_000_000_000)
-                throw KeychainQueryError.timeout(service: service, timeoutSeconds: Self.timeoutSeconds)
+        try await withCheckedThrowingContinuation { continuation in
+            let callback = OneShotKeychainCallback()
+
+            DispatchQueue.global(qos: .userInitiated).async {
+                callback.resume(continuation, with: Self.queryKeychain(service: service))
             }
-            for try await result in group {
-                group.cancelAll()
-                return result
+
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + .seconds(Self.timeoutSeconds)) {
+                callback.resume(
+                    continuation,
+                    with: .failure(KeychainQueryError.timeout(service: service, timeoutSeconds: Self.timeoutSeconds))
+                )
             }
-            return []
         }
     }
 
-    private static func queryKeychain(service: String) async throws -> [Data] {
-        try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let query: [CFString: Any] = [
-                    kSecClass: kSecClassGenericPassword,
-                    kSecAttrService: service,
-                    kSecMatchLimit: kSecMatchLimitAll,
-                    kSecReturnData: true,
-                ]
-                var result: CFTypeRef?
-                let status = SecItemCopyMatching(query as CFDictionary, &result)
-                switch status {
-                case errSecSuccess:
-                    continuation.resume(returning: (result as? [Data]) ?? [])
-                case errSecItemNotFound:
-                    continuation.resume(returning: [])
-                default:
-                    continuation.resume(throwing: KeychainQueryError.accessDenied(service: service, status: status))
-                }
-            }
+    private static func queryKeychain(service: String) -> Result<[Data], Error> {
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecMatchLimit: kSecMatchLimitAll,
+            kSecReturnData: true,
+        ]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        switch status {
+        case errSecSuccess:
+            return .success((result as? [Data]) ?? [])
+        case errSecItemNotFound:
+            return .success([])
+        default:
+            return .failure(KeychainQueryError.accessDenied(service: service, status: status))
         }
+    }
+}
+
+private final class OneShotKeychainCallback: @unchecked Sendable {
+    private let lock = NSLock()
+    private var didResume = false
+
+    func resume(_ continuation: CheckedContinuation<[Data], Error>, with result: Result<[Data], Error>) {
+        lock.lock()
+        let shouldResume = !didResume
+        didResume = true
+        lock.unlock()
+
+        guard shouldResume else { return }
+        continuation.resume(with: result)
     }
 }

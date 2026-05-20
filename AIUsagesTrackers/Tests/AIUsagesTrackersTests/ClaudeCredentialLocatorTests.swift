@@ -174,6 +174,26 @@ struct ClaudeCredentialLocatorTests {
         #expect(creds.accessToken == "tok-valid")
     }
 
+    @Test("prefers non-expired entry with known expiry over unknown expiry")
+    func prefersKnownNonExpiredCandidate() async throws {
+        let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
+        let unknownExpiryJSON = #"{"claudeAiOauth":{"accessToken":"tok-unknown"}}"#
+        let validJSON = #"{"claudeAiOauth":{"accessToken":"tok-valid","expiresAt":\#(futureMillis)}}"#
+        let locator = ClaudeCredentialLocator(
+            keychainQuerying: MockKeychainQuery(passwordsByService: [
+                ClaudeCredentialLocator.defaultKeychainService: [
+                    Data(unknownExpiryJSON.utf8),
+                    Data(validJSON.utf8),
+                ],
+            ]),
+            logger: makeTempLogger(),
+            clock: fixedClock
+        )
+
+        let creds = try await locator.locate()
+        #expect(creds.accessToken == "tok-valid")
+    }
+
     @Test("deduplicates entries with identical tokens")
     func deduplicatesIdenticalTokens() async throws {
         let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)

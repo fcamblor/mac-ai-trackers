@@ -41,9 +41,10 @@ Cascade (read-only — the app never writes any of these):
    A second entry with the same service name but a different account
    (often `acct=unknown`) may exist and hold only MCP plugin OAuth state
    (`mcpOAuth`) — that entry is **not** the usage bearer. The locator
-   always attempts both a username-scoped lookup and an unscoped lookup,
-   collects all entries that contain a valid `claudeAiOauth` block, and
-   picks the best candidate (non-expired first).
+   enumerates every entry for the service with
+   `SecItemCopyMatching(kSecMatchLimitAll)`, collects entries that contain
+   a valid `claudeAiOauth` block, and picks the best candidate
+   (known non-expired first).
 2. **Unsupported diagnostic only:** macOS Keychain entry `Claude Code`
    may contain a standard Claude API key (`sk-ant-api...`) when Claude Code
    is configured for API-key auth. The tracker detects this state so it can
@@ -298,6 +299,6 @@ incident `shortlink` becomes the clickable href in the UI.
 - 2026-05-20 — document duplicate `Claude Code-credentials` keychain
   entries: usage OAuth lives under the macOS username account; a
   separate `acct=unknown` entry may hold MCP plugin OAuth state only.
-  Locator now attempts both username-scoped and unscoped lookups,
-  collects all valid `claudeAiOauth` candidates, and picks the
-  best non-expired one.
+  Locator now enumerates all entries for the service with
+  `SecItemCopyMatching(kSecMatchLimitAll)`, collects all valid
+  `claudeAiOauth` candidates, and picks the best non-expired one.

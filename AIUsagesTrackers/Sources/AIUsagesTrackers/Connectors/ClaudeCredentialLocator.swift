@@ -130,8 +130,15 @@ public actor ClaudeCredentialLocator: CredentialLocator {
         }
 
         let skewedNow = now.addingTimeInterval(Self.expirySkewSeconds)
-        if let best = candidates.first(where: { $0.expiryDate == nil || skewedNow < $0.expiryDate! }) {
-            return ClaudeCredentials(accessToken: best.token)
+        if let bestKnownExpiry = candidates.first(where: { candidate in
+            guard let expiryDate = candidate.expiryDate else { return false }
+            return skewedNow < expiryDate
+        }) {
+            return ClaudeCredentials(accessToken: bestKnownExpiry.token)
+        }
+
+        if let fallbackUnknownExpiry = candidates.first(where: { $0.expiryDate == nil }) {
+            return ClaudeCredentials(accessToken: fallbackUnknownExpiry.token)
         }
 
         if let expired = candidates.first, let expiredAt = expired.expiryDate {
