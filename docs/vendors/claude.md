@@ -32,8 +32,10 @@ _verified: 2026-05-19_
 Cascade (read-only — the app never writes any of these):
 
 1. **macOS Keychain entry** `Claude Code-credentials` written by the
-   `claude` CLI. Value is JSON of the form
-   `{"claudeAiOauth":{"accessToken":"sk-ant-oat01-...","refreshToken":"...","expiresAt":1715000000000}}`.
+   `claude` CLI. Value is JSON. Two formats are supported:
+   - **Old format (pre-2026):** `{"claudeAiOauth":{"accessToken":"sk-ant-oat01-...","refreshToken":"...","expiresAt":1715000000000}}`
+   - **New format (2026+):** `{"mcpOAuth":{"plugin:claude:claude|<id>":{"serverName":"plugin:claude:claude","accessToken":"sk-ant-oat01-...","expiresAt":1715000000000}}}`
+   The new format stores OAuth credentials per MCP plugin. The locator specifically targets the Claude plugin entry by checking for `serverName` prefix `plugin:claude:` and returns its `accessToken`.
    `expiresAt` is a Unix millisecond timestamp (Node.js `Date.now()`
    convention — Claude Code CLI is a Node/Bun program).
 2. **Unsupported diagnostic only:** macOS Keychain entry `Claude Code`

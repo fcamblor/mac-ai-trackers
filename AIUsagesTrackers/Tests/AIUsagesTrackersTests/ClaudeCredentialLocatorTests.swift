@@ -117,6 +117,72 @@ struct ClaudeCredentialLocatorTests {
         }
     }
 
+    @Test("returns token from new mcpOAuth format")
+    func mcpOAuthFormat() async throws {
+        let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
+        let locator = ClaudeCredentialLocator(
+            processRunner: MockProcessRunner(result: keychainResult(json: #"{"mcpOAuth":{"plugin:claude:claude|abc123":{"serverName":"plugin:claude:claude","accessToken":"tok-xyz","expiresAt":\#(futureMillis)}}}"#)),
+            logger: makeTempLogger(),
+            clock: fixedClock
+        )
+
+        let creds = try await locator.locate()
+        #expect(creds.accessToken == "tok-xyz")
+    }
+
+    @Test("throws tokenExpired when mcpOAuth token is expired")
+    func mcpOAuthExpiredToken() async throws {
+        let pastMillis = Int((Self.fixedNow.timeIntervalSince1970 - 10) * 1000)
+        let locator = ClaudeCredentialLocator(
+            processRunner: MockProcessRunner(result: keychainResult(json: #"{"mcpOAuth":{"plugin:claude:claude|abc123":{"serverName":"plugin:claude:claude","accessToken":"tok-xyz","expiresAt":\#(pastMillis)}}}"#)),
+            logger: makeTempLogger(),
+            clock: fixedClock
+        )
+
+        await #expect(throws: ClaudeAuthError.self) {
+            try await locator.locate()
+        }
+    }
+
+    @Test("skips mcpOAuth entries with empty accessToken and continues searching")
+    func mcpOAuthSkipsEmptyTokens() async throws {
+        let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
+        let locator = ClaudeCredentialLocator(
+            processRunner: MockProcessRunner(result: keychainResult(json: #"{"mcpOAuth":{"plugin:vercel:vercel|abc":{"accessToken":"","expiresAt":0},"plugin:claude:claude|xyz":{"accessToken":"tok-abc","expiresAt":\#(futureMillis)}}}"#)),
+            logger: makeTempLogger(),
+            clock: fixedClock
+        )
+
+        let creds = try await locator.locate()
+        #expect(creds.accessToken == "tok-abc")
+    }
+
+    @Test("throws parseFailed when mcpOAuth has no valid tokens")
+    func mcpOAuthNoValidTokens() async throws {
+        let locator = ClaudeCredentialLocator(
+            processRunner: MockProcessRunner(result: keychainResult(json: #"{"mcpOAuth":{"plugin:vercel:vercel|abc":{"accessToken":"","expiresAt":0}}}"#)),
+            logger: makeTempLogger(),
+            clock: fixedClock
+        )
+
+        await #expect(throws: ClaudeAuthError.self) {
+            try await locator.locate()
+        }
+    }
+
+    @Test("selects Claude plugin token when multiple plugins have non-empty tokens")
+    func mcpOAuthSelectsClaudePlugin() async throws {
+        let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
+        let locator = ClaudeCredentialLocator(
+            processRunner: MockProcessRunner(result: keychainResult(json: #"{"mcpOAuth":{"plugin:vercel:vercel|abc":{"serverName":"plugin:vercel:vercel","accessToken":"vercel-tok","expiresAt":\#(futureMillis)},"plugin:claude:claude|xyz":{"serverName":"plugin:claude:claude","accessToken":"claude-tok","expiresAt":\#(futureMillis)}}}"#)),
+            logger: makeTempLogger(),
+            clock: fixedClock
+        )
+
+        let creds = try await locator.locate()
+        #expect(creds.accessToken == "claude-tok")
+    }
+
     @Test("empty stdout surfaces keychainEmpty")
     func keychainEmpty() async throws {
         let locator = ClaudeCredentialLocator(

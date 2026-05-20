@@ -77,30 +77,49 @@ public actor ClaudeCredentialLocator: CredentialLocator {
         let serviceName = keychainServiceName
         let timeoutSecs = Self.keychainTimeoutSeconds
 
-        let result = try await processRunner.run(
-            executablePath: "/usr/bin/security",
-            arguments: ["find-generic-password", "-s", serviceName, "-w"],
-            timeoutSeconds: timeoutSecs
-        )
-        if result.timedOut {
-            throw ClaudeAuthError.keychainTimeout(serviceName: serviceName, timeoutSeconds: timeoutSecs)
-        }
-        guard result.terminationStatus == 0 else {
-            if serviceName == Self.defaultKeychainService,
-               try await hasStandardAPIKey(timeoutSeconds: timeoutSecs) {
-                throw ClaudeAuthError.apiKeyOnlyUnsupported(serviceName: Self.apiKeyKeychainService)
+        // Try default account first (no -a flag)
+        var lastError: Error?
+        do {
+            let result = try await processRunner.run(
+                executablePath: "/usr/bin/security",
+                arguments: ["find-generic-password", "-s", serviceName, "-w"],
+                timeoutSeconds: timeoutSecs
+            )
+            if !result.timedOut && result.terminationStatus == 0 {
+                if let raw = String(data: result.stdout, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !raw.isEmpty,
+                   let jsonData = raw.data(using: .utf8) {
+                    return try parseKeychainData(jsonData, raw: raw, serviceName: serviceName)
+                }
             }
-            throw ClaudeAuthError.keychainAccessDenied(serviceName: serviceName, exitCode: result.terminationStatus)
+        } catch {
+            lastError = error
         }
 
-        guard let raw = String(data: result.stdout, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !raw.isEmpty else {
-            throw ClaudeAuthError.keychainEmpty(serviceName: serviceName)
+        // If default fails, try system username as fallback
+        let username = NSUserName()
+        do {
+            let result = try await processRunner.run(
+                executablePath: "/usr/bin/security",
+                arguments: ["find-generic-password", "-s", serviceName, "-a", username, "-w"],
+                timeoutSeconds: timeoutSecs
+            )
+            
+            if !result.timedOut && result.terminationStatus == 0 {
+                if let raw = String(data: result.stdout, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !raw.isEmpty,
+                   let jsonData = raw.data(using: .utf8) {
+                    return try parseKeychainData(jsonData, raw: raw, serviceName: serviceName)
+                }
+            }
+        } catch {
+            lastError = error
         }
-
-        guard let jsonData = raw.data(using: .utf8) else {
-            throw ClaudeAuthError.keychainParseFailed(serviceName: serviceName, rawPreview: raw)
-        }
+        
+        throw lastError ?? ClaudeAuthError.keychainAccessDenied(serviceName: serviceName, exitCode: -1)
+    }
+    
+    private func parseKeychainData(_ jsonData: Data, raw: String, serviceName: String) throws -> ClaudeCredentials {
 
         let parsed: [String: Any]
         do {
@@ -109,9 +128,33 @@ public actor ClaudeCredentialLocator: CredentialLocator {
             throw ClaudeAuthError.keychainParseFailed(serviceName: serviceName, rawPreview: raw)
         }
 
-        guard let oauth = parsed["claudeAiOauth"] as? [String: Any],
-              let token = oauth["accessToken"] as? String,
-              !token.isEmpty else {
+        // Support both old claudeAiOauth format and new mcpOAuth format
+        var token: String?
+        var expiresAtRaw: Any?
+
+        // Try old format first for backward compatibility
+        if let oldOauth = parsed["claudeAiOauth"] as? [String: Any] {
+            token = oldOauth["accessToken"] as? String
+            expiresAtRaw = oldOauth["expiresAt"]
+        }
+        // Try new mcpOAuth format
+        else if let mcpOauth = parsed["mcpOAuth"] as? [String: Any] {
+            // The new format stores credentials per-plugin. We need to find the Claude OAuth entry.
+            // Look specifically for the Claude plugin by checking serverName
+            for (_, pluginData) in mcpOauth {
+                if let pluginDict = pluginData as? [String: Any],
+                   let serverName = pluginDict["serverName"] as? String,
+                   serverName.hasPrefix("plugin:claude:"),
+                   let pluginToken = pluginDict["accessToken"] as? String,
+                   !pluginToken.isEmpty {
+                    token = pluginToken
+                    expiresAtRaw = pluginDict["expiresAt"]
+                    break
+                }
+            }
+        }
+
+        guard let token = token, !token.isEmpty else {
             throw ClaudeAuthError.keychainParseFailed(serviceName: serviceName, rawPreview: raw)
         }
 
@@ -119,7 +162,7 @@ public actor ClaudeCredentialLocator: CredentialLocator {
         // (Node.js convention — `Date.now()`). A missing or unparseable value
         // skips the local check: the API call still happens and a 401 will
         // surface as token_expired downstream.
-        if let expiresAtRaw = oauth["expiresAt"], let expiryDate = Self.parseExpiresAt(expiresAtRaw) {
+        if let expiresAtRaw = expiresAtRaw, let expiryDate = Self.parseExpiresAt(expiresAtRaw) {
             let now = clock()
             if now.addingTimeInterval(Self.expirySkewSeconds) >= expiryDate {
                 throw ClaudeAuthError.tokenExpired(serviceName: serviceName, expiredAt: expiryDate)
