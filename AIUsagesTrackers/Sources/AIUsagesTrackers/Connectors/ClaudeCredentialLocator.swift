@@ -109,12 +109,17 @@ public actor ClaudeCredentialLocator: CredentialLocator {
     }
 
     public func locate() async throws -> ClaudeCredentials {
-        try await locate(allowResetRetry: true)
+        try await locate(overrideAccount: accountOverride(), allowResetRetry: true)
     }
 
-    private func locate(allowResetRetry: Bool) async throws -> ClaudeCredentials {
-        let resolvedAccount = accountOverride()
-        let effectiveAccount = try await resolveEffectiveAccount(explicit: resolvedAccount)
+    /// The reset path must not re-read `accountOverride()` to learn about the
+    /// freshly-cleared pin: in production the persistor hops to `@MainActor`
+    /// and the override is backed by `UserDefaults`, so the write is not
+    /// guaranteed to be visible by the time the retry runs. Passing the
+    /// desired override explicitly keeps the retry deterministic regardless
+    /// of how the persistor propagates to the override source.
+    private func locate(overrideAccount: String?, allowResetRetry: Bool) async throws -> ClaudeCredentials {
+        let effectiveAccount = try await resolveEffectiveAccount(explicit: overrideAccount)
 
         let token: String
         do {
@@ -124,10 +129,10 @@ public actor ClaudeCredentialLocator: CredentialLocator {
             // entry is the recoverable "logout + re-login moved the MCP entry
             // in front" case. Reset the pin and re-run the lookup once with no
             // override so the next attempt can re-pin a different acct.
-            if resolvedAccount != nil, allowResetRetry, shouldResetPinnedAccount(for: error) {
-                logger.log(.warning, "Pinned Claude keychain account '\(Self.maskIdentifier(resolvedAccount ?? ""))' no longer carries claudeAiOauth — resetting and retrying without override")
+            if overrideAccount != nil, allowResetRetry, shouldResetPinnedAccount(for: error) {
+                logger.log(.warning, "Pinned Claude keychain account '\(Self.maskIdentifier(overrideAccount ?? ""))' no longer carries claudeAiOauth — resetting and retrying without override")
                 accountPersistor(nil)
-                return try await locate(allowResetRetry: false)
+                return try await locate(overrideAccount: nil, allowResetRetry: false)
             }
             throw error
         }
@@ -204,22 +209,20 @@ public actor ClaudeCredentialLocator: CredentialLocator {
     }
 
     /// Masks a free-form identifier (typically an email-shaped account) for
-    /// log lines: keeps 2 leading and 2 trailing characters, masks the middle
-    /// with `*`. Identifiers shorter than 4 characters keep just 1 char on
-    /// each side. Avoids leaking PII while staying recognisable in diagnostics.
+    /// log lines. Guarantees that at least one character is masked for any
+    /// non-empty input — short identifiers (≤ 2 chars) are masked entirely
+    /// because revealing any character would leak the whole value. Identifiers
+    /// of 3–4 chars reveal 1 char on each side; 5+ chars reveal 2 on each side.
     static func maskIdentifier(_ value: String) -> String {
         guard !value.isEmpty else { return value }
         let count = value.count
-        if count < 4 {
-            let first = String(value.prefix(1))
-            guard count > 1 else { return first }
-            let last = String(value.suffix(1))
-            let masked = String(repeating: "*", count: max(0, count - 2))
-            return first + masked + last
+        if count <= 2 {
+            return String(repeating: "*", count: count)
         }
-        let first = String(value.prefix(2))
-        let last = String(value.suffix(2))
-        let masked = String(repeating: "*", count: count - 4)
+        let revealCount = count >= 5 ? 2 : 1
+        let first = String(value.prefix(revealCount))
+        let last = String(value.suffix(revealCount))
+        let masked = String(repeating: "*", count: count - revealCount * 2)
         return first + masked + last
     }
 

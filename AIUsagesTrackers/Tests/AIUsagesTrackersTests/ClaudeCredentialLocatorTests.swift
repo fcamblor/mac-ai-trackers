@@ -316,6 +316,43 @@ struct ClaudeCredentialLocatorTests {
         #expect(runner.capturedArguments.count == 2)
     }
 
+    @Test("reset+retry succeeds even when accountOverride does not reflect the persistor write")
+    func resetSurvivesAsyncPersistor() async throws {
+        // Reproduces the production race: the app routes the persistor through
+        // a `Task { @MainActor }` and `accountOverride` reads UserDefaults
+        // directly, so a reset+retry happening inside a single `locate()`
+        // call cannot rely on the override having flipped to `nil` yet. We
+        // simulate that by leaving `accountOverride` stuck on the stale pin
+        // for the whole call and asserting that the retry still re-discovers
+        // the valid account through the attribute lookup.
+        let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
+        let runner = TwoStageRunner(
+            attributeStdout: Data(Self.attributesDump.utf8),
+            passwordResultsByAccount: [
+                "unknown": keychainResult(json: #"{"mcpOAuth":{"foo":"bar"}}"#),
+                "juherr": keychainResult(json: #"{"claudeAiOauth":{"accessToken":"tok-new","expiresAt":\#(futureMillis)}}"#),
+            ]
+        )
+        let persistorCalls = LockBox<[String?]>([])
+        let locator = ClaudeCredentialLocator(
+            processRunner: runner,
+            logger: makeTempLogger(),
+            clock: fixedClock,
+            accountOverride: { "unknown" },
+            accountPersistor: { value in
+                var current = persistorCalls.get()
+                current.append(value)
+                persistorCalls.set(current)
+            }
+        )
+
+        let creds = try await locator.locate()
+        #expect(creds.accessToken == "tok-new")
+        // The persistor is called twice: first to clear the stale pin, then
+        // to re-pin the freshly-discovered account.
+        #expect(persistorCalls.get() == [nil, "juherr"])
+    }
+
     @Test("missingOAuthBlock surfaces when JSON has no claudeAiOauth and override is unset")
     func missingOAuthBlockWithoutOverride() async throws {
         let runner = TwoStageRunner(
@@ -352,16 +389,18 @@ struct ClaudeCredentialLocatorTests {
         #expect(ClaudeCredentialLocator.parseAccountAttribute(from: dump) == "juherr")
     }
 
-    @Test("maskIdentifier preserves first and last chars, masks the middle")
+    @Test("maskIdentifier always masks at least one character for non-empty input")
     func maskIdentifierShapes() {
-        // Length >= 4: keep first 2 and last 2, mask the middle.
+        // Length >= 5: keep first 2 and last 2, mask the middle.
         #expect(ClaudeCredentialLocator.maskIdentifier("juherr") == "ju**rr")
         #expect(ClaudeCredentialLocator.maskIdentifier("frederic.camblor@4sh.fr") == "fr*******************fr")
-        #expect(ClaudeCredentialLocator.maskIdentifier("abcd") == "abcd")
-        // Length < 4: reduce window to first 1 and last 1 so we don't over-overlap.
+        #expect(ClaudeCredentialLocator.maskIdentifier("abcde") == "ab*de")
+        // Length 3–4: reveal only 1 char on each side so at least one char is masked.
+        #expect(ClaudeCredentialLocator.maskIdentifier("abcd") == "a**d")
         #expect(ClaudeCredentialLocator.maskIdentifier("abc") == "a*c")
-        #expect(ClaudeCredentialLocator.maskIdentifier("ab") == "ab")
-        #expect(ClaudeCredentialLocator.maskIdentifier("a") == "a")
+        // Length <= 2: revealing any char would leak the whole identifier — mask everything.
+        #expect(ClaudeCredentialLocator.maskIdentifier("ab") == "**")
+        #expect(ClaudeCredentialLocator.maskIdentifier("a") == "*")
         #expect(ClaudeCredentialLocator.maskIdentifier("") == "")
     }
 }
