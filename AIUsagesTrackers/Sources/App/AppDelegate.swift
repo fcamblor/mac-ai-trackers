@@ -107,15 +107,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let fileManager = UsagesFileManager.shared
         let refreshState = RefreshState()
-        // Read the override from UserDefaults directly so we stay off the
-        // @MainActor-isolated AppPreferences from the connector's actor — the
-        // poller reads from a background context every refresh tick.
+        // The pref is held by an @Observable @MainActor type, but the locator
+        // runs on a background actor. We read raw UserDefaults for the override
+        // (thread-safe, no Observation read needed off the @MainActor) and
+        // hop to @MainActor for the write so SwiftUI views observing the pref
+        // refresh as soon as the auto-pin fires.
+        let preferences: any AppPreferences = Self.sharedPreferences
         let claudeKeychainAccountKey = AppPreferenceKeys.claudeKeychainAccount.rawValue
         let claudeLocator = ClaudeCredentialLocator(
             accountOverride: {
                 let raw = UserDefaults.standard.string(forKey: claudeKeychainAccountKey)
                 guard let raw, !raw.isEmpty else { return nil }
                 return raw
+            },
+            accountPersistor: { account in
+                Task { @MainActor in
+                    preferences.claudeKeychainAccount = account
+                }
             }
         )
         let claudeConnector = ClaudeCodeConnector(credentialLocator: claudeLocator)

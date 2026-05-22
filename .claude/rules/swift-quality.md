@@ -32,6 +32,8 @@ Before writing or modifying any Swift code, load and follow these docs:
 
 8. **Wrap domain primitives in value objects** — never use raw `String` or `Int` for fields with a distinct identity (emails, vendor names, ISO dates, percentages, durations). See `docs/SWIFT-VALUE-OBJECTS.md` for the pattern.
 
+9. **The bootstrap path must never trigger a Keychain authorisation prompt the user hasn't already approved for the steady-state poll** — `SecItemCopyMatching` against secret data, and `security … -w` / `security … -g` invocations, are only allowed (a) inside the steady-state vendor poll on an ACL slot the user has previously approved, or (b) inside a code path explicitly initiated by the user (Coding Assistants diagnostic, manual refresh button). Attribute-only lookups (`security find-generic-password -s <service>` with no `-w` / `-g`) are safe and do not count as prompts. Anything that scans multiple entries or asks for new ACL approval at app launch — i.e. before any user interaction — is forbidden.
+
 ## Automated check via SwiftLint
 
 `AIUsagesTrackers/.swiftlint.yml` declares custom rules enforced by

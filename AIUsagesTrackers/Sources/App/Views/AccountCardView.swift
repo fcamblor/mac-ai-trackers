@@ -136,8 +136,12 @@ struct AccountCardView: View {
     private func showsAssistantsCTA(for type: String) -> Bool {
         guard entry.vendor == .claude else { return false }
         switch type {
-        case "token_error", "credential_error", "api_key_usage_unsupported", "token_expired":
+        case "token_error", "credential_error", "api_key_usage_unsupported":
             return true
+        case "token_expired":
+            // Re-running the diagnostic on an expired token wouldn't help — the
+            // entry is already pinned and the only fix is `claude` CLI refresh.
+            return false
         default:
             return false
         }
@@ -179,7 +183,7 @@ struct AccountCardView: View {
         case "credential_error":
             "Credentials could not be read from the expected local source. Last known metrics may be stale."
         case "token_expired":
-            "Re-authenticate with the vendor CLI, then refresh."
+            "Re-authenticate with the vendor CLI — the next refresh will pick up the new token."
         case "api_error":
             "Network or API request failed. Last known metrics may be stale."
         case "parse_error":
