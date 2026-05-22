@@ -189,7 +189,11 @@ private struct ReportView: View {
         if report.totalEntries == 0 {
             badge(systemImage: "info.circle.fill", color: .secondary,
                   title: "No Keychain entry found for \"\(report.credentialsServiceName)\".",
-                  subtitle: "Run the `claude` CLI to sign in.")
+                  subtitle: "If you only use Claude through a UI (Cowork, Claude Code Desktop, " +
+                            "Claude Chat… anything other than the CLI), you still need to sign in " +
+                            "at least once with the `claude` CLI so that your credentials get " +
+                            "written to the macOS Keychain — that is the only place this app can " +
+                            "read them from.")
         } else if report.hasDuplicates {
             badge(systemImage: "exclamationmark.octagon.fill", color: .orange,
                   title: "Several entries found under the same service.",
