@@ -277,6 +277,55 @@ struct ClaudeCredentialLocatorTests {
         #expect(pinned.get() == "juherr")
     }
 
+    @Test("resets stale pin when selected account is no longer found")
+    func resetStalePinWhenSelectedAccountMissing() async throws {
+        let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
+        let runner = TwoStageRunner(
+            attributeStdout: Data(Self.attributesDump.utf8),
+            passwordResultsByAccount: [
+                "unknown": ProcessExecutionResult(stdout: Data(), terminationStatus: 44, timedOut: false),
+                "juherr": keychainResult(json: #"{"claudeAiOauth":{"accessToken":"tok-new","expiresAt":\#(futureMillis)}}"#),
+            ]
+        )
+        let pinned = LockBox<String?>("unknown")
+        let locator = ClaudeCredentialLocator(
+            processRunner: runner,
+            logger: makeTempLogger(),
+            clock: fixedClock,
+            accountOverride: { pinned.get() },
+            accountPersistor: { value in pinned.set(value) }
+        )
+
+        let creds = try await locator.locate()
+        #expect(creds.accessToken == "tok-new")
+        #expect(pinned.get() == "juherr")
+    }
+
+    @Test("does not reset explicit pin on non-not-found keychain access failure")
+    func preservesPinOnAccessDenied() async throws {
+        let deniedExitCode: Int32 = 51
+        let runner = TwoStageRunner(
+            attributeStdout: Data(Self.attributesDump.utf8),
+            passwordResultsByAccount: [
+                "juherr": ProcessExecutionResult(stdout: Data(), terminationStatus: deniedExitCode, timedOut: false),
+            ]
+        )
+        let pinned = LockBox<String?>("juherr")
+        let locator = ClaudeCredentialLocator(
+            processRunner: runner,
+            logger: makeTempLogger(),
+            clock: fixedClock,
+            accountOverride: { pinned.get() },
+            accountPersistor: { value in pinned.set(value) }
+        )
+
+        await #expect(throws: ClaudeAuthError.self) {
+            try await locator.locate()
+        }
+        #expect(pinned.get() == "juherr")
+        #expect(runner.capturedArguments.count == 2)
+    }
+
     @Test("missingOAuthBlock surfaces when JSON has no claudeAiOauth and override is unset")
     func missingOAuthBlockWithoutOverride() async throws {
         let runner = TwoStageRunner(

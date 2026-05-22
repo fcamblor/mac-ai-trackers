@@ -69,6 +69,7 @@ public actor ClaudeCredentialLocator: CredentialLocator {
     /// `expiresAt` to avoid the race where we send a request just as the
     /// token flips invalid and burn a 401 we could have skipped.
     public static let expirySkewSeconds: TimeInterval = 60
+    private static let securityItemNotFoundExitCode: Int32 = 44
 
     private let keychainServiceName: String
     private let processRunner: ProcessRunning
@@ -245,8 +246,13 @@ public actor ClaudeCredentialLocator: CredentialLocator {
     /// preference should be reset so the next lookup can re-pin.
     private func shouldResetPinnedAccount(for error: ClaudeAuthError) -> Bool {
         switch error {
-        case .missingOAuthBlock, .keychainEmpty, .keychainParseFailed, .keychainAccessDenied:
+        case .missingOAuthBlock, .keychainEmpty, .keychainParseFailed:
             return true
+        case let .keychainAccessDenied(_, exitCode):
+            // Exit 44 is the `security` CLI's "item not found" path. Other
+            // failures can be transient permission/keychain state and must not
+            // erase an explicit user selection.
+            return exitCode == Self.securityItemNotFoundExitCode
         case .tokenExpired, .apiKeyOnlyUnsupported, .keychainTimeout:
             return false
         }

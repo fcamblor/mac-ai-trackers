@@ -62,7 +62,8 @@ public struct KeychainDiagnosticReport: Sendable, Equatable {
     /// makes sense because a `claude` CLI refresh will revive it in place.
     public var hasPinnableOAuthEntry: Bool {
         entries.contains { entry in
-            switch entry.status {
+            guard let account = entry.account, !account.isEmpty else { return false }
+            return switch entry.status {
             case .validOAuthToken, .expiredOAuthToken: true
             default: false
             }

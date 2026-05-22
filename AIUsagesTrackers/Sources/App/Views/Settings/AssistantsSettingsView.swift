@@ -221,7 +221,7 @@ private struct ReportView: View {
                   title: "Several entries found under the same service.",
                   subtitle: "The runtime has been pinned to the first entry that carries " +
                             "`claudeAiOauth.accessToken`. Use \"Use this entry\" below if you " +
-                            "want to target a different one — entries without a usable token " +
+                            "want to target a different one — entries without a Claude OAuth block " +
                             "cannot be selected.")
         } else if report.hasUsableOAuthToken {
             badge(systemImage: "checkmark.seal.fill", color: .green,
