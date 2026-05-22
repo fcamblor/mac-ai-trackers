@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import AIUsagesTrackersLib
+@testable import AIUsagesTrackers
 
 // MARK: - AppVersion
 
@@ -101,6 +102,7 @@ struct UpdateCheckerTests {
       "tag_name": "v1.5.0",
       "html_url": "https://github.com/test/test/releases/tag/v1.5.0",
       "published_at": "2026-04-22T10:15:00Z",
+      "body": "## What's new\\n\\n- Bug fixes\\n- Performance",
       "assets": [
         {"name": "AI-Usages-Tracker.zip", "browser_download_url": "https://example.com/zip"},
         {"name": "AI-Usages-Tracker.zip.sha256", "browser_download_url": "https://example.com/sha"}
@@ -118,6 +120,25 @@ struct UpdateCheckerTests {
         #expect(result.update?.downloadURL.absoluteString == "https://example.com/zip")
         #expect(result.update?.sha256URL?.absoluteString == "https://example.com/sha")
         #expect(result.update?.releaseURL.absoluteString == "https://github.com/test/test/releases/tag/v1.5.0")
+        #expect(result.update?.releaseNotes == "## What's new\n\n- Bug fixes\n- Performance")
+    }
+
+    @Test("missing or whitespace-only body decodes to nil release notes")
+    func emptyBody() async throws {
+        mockJSON("""
+        {
+          "tag_name": "v1.5.0",
+          "html_url": "https://github.com/test/test/releases/tag/v1.5.0",
+          "published_at": null,
+          "body": "   \\n  ",
+          "assets": [
+            {"name": "AI-Usages-Tracker.zip", "browser_download_url": "https://example.com/zip"}
+          ]
+        }
+        """)
+        let checker = makeChecker(session: makeSession())
+        let result = try await checker.checkForUpdate(currentVersion: AppVersion(string: "1.0.0")!)
+        #expect(result.update?.releaseNotes == nil)
     }
 
     @Test("returns nil update when remote equals current but exposes latest version")
@@ -172,6 +193,63 @@ struct UpdateCheckerTests {
         await #expect(throws: UpdateCheckerError.self) {
             try await checker.checkForUpdate(currentVersion: AppVersion(string: "1.0.0")!)
         }
+    }
+}
+
+// MARK: - MarkdownBlockParser
+
+@Suite("MarkdownBlockParser")
+struct MarkdownBlockParserTests {
+    @Test("parses headings, paragraphs and bullet lists")
+    func mixedBlocks() {
+        let md = """
+        ## What's new
+
+        Fixes and tweaks.
+
+        - First item
+        - Second item
+
+        # Major
+        """
+        let blocks = MarkdownBlockParser.parse(md)
+        #expect(blocks == [
+            .heading(level: 2, text: "What's new"),
+            .paragraph("Fixes and tweaks."),
+            .bullet(["First item", "Second item"]),
+            .heading(level: 1, text: "Major")
+        ])
+    }
+
+    @Test("parses fenced code blocks")
+    func fencedCode() {
+        let md = """
+        Before
+
+        ```
+        let x = 1
+        let y = 2
+        ```
+
+        After
+        """
+        let blocks = MarkdownBlockParser.parse(md)
+        #expect(blocks == [
+            .paragraph("Before"),
+            .code("let x = 1\nlet y = 2"),
+            .paragraph("After")
+        ])
+    }
+
+    @Test("supports * and + bullet markers")
+    func bulletMarkers() {
+        let md = """
+        * a
+        + b
+        - c
+        """
+        let blocks = MarkdownBlockParser.parse(md)
+        #expect(blocks == [.bullet(["a", "b", "c"])])
     }
 }
 

@@ -10,6 +10,8 @@ struct UpdateAvailableBanner: View {
     let onSkip: () -> Void
     let onLater: () -> Void
 
+    @State private var showingReleaseNotes = false
+
     private var primaryActionLabel: String {
         switch installationKind {
         case .homebrewCask: return "Update via Homebrew"
@@ -59,6 +61,17 @@ struct UpdateAvailableBanner: View {
             RoundedRectangle(cornerRadius: 6)
                 .strokeBorder(Color.accentColor.opacity(0.30), lineWidth: 1)
         )
+        .sheet(isPresented: $showingReleaseNotes) {
+            if let notes = update.releaseNotes, !notes.isEmpty {
+                ReleaseNotesSheet(
+                    version: update.version,
+                    publishedAt: update.publishedAt,
+                    markdown: notes,
+                    releaseURL: update.releaseURL,
+                    onDismiss: { showingReleaseNotes = false }
+                )
+            }
+        }
     }
 
     // MARK: - Sections
@@ -69,6 +82,17 @@ struct UpdateAvailableBanner: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            if hasReleaseNotes {
+                Button {
+                    showingReleaseNotes = true
+                } label: {
+                    Text("View release notes")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.link)
+                .help("View release notes for this version")
+            }
 
             HStack(spacing: 8) {
                 Button(primaryActionLabel) { onInstall() }
@@ -87,7 +111,7 @@ struct UpdateAvailableBanner: View {
                     Image(systemName: "arrow.up.right.square")
                 }
                 .buttonStyle(.borderless)
-                .help("Open release notes")
+                .help("Open release on GitHub")
 
                 Button {
                     onSkip()
@@ -99,6 +123,11 @@ struct UpdateAvailableBanner: View {
                 .help("Skip this version")
             }
         }
+    }
+
+    private var hasReleaseNotes: Bool {
+        guard let notes = update.releaseNotes else { return false }
+        return !notes.isEmpty
     }
 
     private var inProgressSection: some View {

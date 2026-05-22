@@ -16,13 +16,25 @@ public struct AvailableUpdate: Sendable, Equatable {
     public let downloadURL: URL
     public let sha256URL: URL?
     public let publishedAt: Date?
+    /// Raw Markdown body of the GitHub release. `nil` when the release has no
+    /// description, or an empty string after trimming. UI layers render this
+    /// in a scrollable Markdown view.
+    public let releaseNotes: String?
 
-    public init(version: AppVersion, releaseURL: URL, downloadURL: URL, sha256URL: URL?, publishedAt: Date?) {
+    public init(
+        version: AppVersion,
+        releaseURL: URL,
+        downloadURL: URL,
+        sha256URL: URL?,
+        publishedAt: Date?,
+        releaseNotes: String? = nil
+    ) {
         self.version = version
         self.releaseURL = releaseURL
         self.downloadURL = downloadURL
         self.sha256URL = sha256URL
         self.publishedAt = publishedAt
+        self.releaseNotes = releaseNotes
     }
 }
 
@@ -117,12 +129,16 @@ public actor UpdateChecker {
             formatter.formatOptions = [.withInternetDateTime]
             return formatter.date(from: raw)
         }
+        let trimmedBody: String? = release.body
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .flatMap { $0.isEmpty ? nil : $0 }
         let update = AvailableUpdate(
             version: version,
             releaseURL: releaseURL,
             downloadURL: zipURL,
             sha256URL: shaURL,
-            publishedAt: publishedAt
+            publishedAt: publishedAt,
+            releaseNotes: trimmedBody
         )
         return UpdateCheckResult(latestVersion: version, update: update)
     }
@@ -131,6 +147,7 @@ public actor UpdateChecker {
         let tag_name: String
         let html_url: String
         let published_at: String?
+        let body: String?
         let assets: [Asset]
 
         struct Asset: Decodable {
