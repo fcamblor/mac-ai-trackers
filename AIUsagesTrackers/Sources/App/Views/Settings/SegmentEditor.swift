@@ -122,6 +122,21 @@ struct SegmentEditor: View {
             chipConnector
 
             chip(
+                caption: "Color",
+                isOn: display.wrappedValue.colorizeText,
+                toggle: { display.wrappedValue.colorizeText.toggle() }
+            ) {
+                // Mirror the rendered effect: tier-coloured glyph with a thin
+                // outline of the chip's foreground. The "Aa" reads as text
+                // colorisation at a glance even before the user enables it.
+                Text("Aa")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color.green)
+            }
+
+            chipConnector
+
+            chip(
                 caption: "Label",
                 isOn: display.wrappedValue.showLetter,
                 toggle: { display.wrappedValue.showLetter.toggle() }

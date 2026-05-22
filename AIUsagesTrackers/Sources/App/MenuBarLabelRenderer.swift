@@ -22,6 +22,11 @@ enum MenuBarLabelRenderer {
     private static let dotStrokeLineWidth: CGFloat = 1.0
     // Horizontal whitespace after the dot, before the segment's text.
     private static let dotTrailingGap: String = " "
+    // Negative `.strokeWidth` tells NSStringDrawing to fill AND stroke each
+    // glyph. The value is a percentage of font point size, so −3 ≈ 0.4pt on
+    // the menu bar's ~13pt font — visually balanced against the dot's 1pt
+    // border without making small text feel bolded.
+    private static let colorizedTextStrokeWidth: CGFloat = -3.0
     static let unconfiguredCallToAction = "Configure AI Metrics"
 
     static func render(
@@ -122,6 +127,24 @@ enum MenuBarLabelRenderer {
         return image
     }
 
+    /// Returns the attributes used for the visible content of a segment when
+    /// `colorizeText` is on and the segment carries a tier. The fill matches
+    /// the dot's fill (so the text reads as the same identity as the dot),
+    /// and a thin outline in the surrounding `textColor` matches the dot's
+    /// stroke — same role: keep the colored shape legible against arbitrary
+    /// menu-bar wallpapers.
+    private static func colorizedAttributes(
+        tierColor: NSColor,
+        outlineColor: NSColor
+    ) -> [NSAttributedString.Key: Any] {
+        [
+            .font: font,
+            .foregroundColor: tierColor,
+            .strokeColor: outlineColor,
+            .strokeWidth: colorizedTextStrokeWidth
+        ]
+    }
+
     private static func attributedString(
         segments: [MenuBarSegment],
         separator: String,
@@ -196,9 +219,18 @@ enum MenuBarLabelRenderer {
                     attributes: [.font: font, .foregroundColor: textColor]
                 ))
             }
+            let textAttributes: [NSAttributedString.Key: Any]
+            if segment.colorizeText, let tier = segment.tier {
+                textAttributes = colorizedAttributes(
+                    tierColor: tier.nsColor,
+                    outlineColor: textColor
+                )
+            } else {
+                textAttributes = [.font: font, .foregroundColor: textColor]
+            }
             result.append(NSAttributedString(
                 string: segment.text,
-                attributes: [.font: font, .foregroundColor: textColor]
+                attributes: textAttributes
             ))
         }
         return result
