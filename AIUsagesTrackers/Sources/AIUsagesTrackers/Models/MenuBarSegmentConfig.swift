@@ -97,6 +97,12 @@ public struct TimeWindowDisplay: Codable, Equatable, Hashable, Sendable {
     public var showReset: Bool
     public var hideResetMinutesWhenOverOneDay: Bool
     public var showVendorIcon: Bool
+    /// When true and the segment carries a tier, the rendered text picks up
+    /// the dot's tier color (with the menu-bar text color as a thin outline
+    /// matching the dot's stroke). Independent from `showDot`: users can hide
+    /// the dot while keeping tier-coloured text.
+    /// Default true so the feature is opt-out as requested.
+    public var colorizeText: Bool
 
     public init(
         showDot: Bool = true,
@@ -106,7 +112,8 @@ public struct TimeWindowDisplay: Codable, Equatable, Hashable, Sendable {
         percentDisplayMode: UsagePercentDisplayMode = .consumed,
         showReset: Bool = true,
         hideResetMinutesWhenOverOneDay: Bool = true,
-        showVendorIcon: Bool = false
+        showVendorIcon: Bool = false,
+        colorizeText: Bool = true
     ) {
         self.showDot = showDot
         self.showLetter = showLetter
@@ -116,11 +123,12 @@ public struct TimeWindowDisplay: Codable, Equatable, Hashable, Sendable {
         self.showReset = showReset
         self.hideResetMinutesWhenOverOneDay = hideResetMinutesWhenOverOneDay
         self.showVendorIcon = showVendorIcon
+        self.colorizeText = colorizeText
     }
 
     private enum CodingKeys: String, CodingKey {
         case showDot, showLetter, letter, showPercent, percentDisplayMode, showReset
-        case hideResetMinutesWhenOverOneDay, showVendorIcon
+        case hideResetMinutesWhenOverOneDay, showVendorIcon, colorizeText
     }
 
     public init(from decoder: Decoder) throws {
@@ -139,6 +147,9 @@ public struct TimeWindowDisplay: Codable, Equatable, Hashable, Sendable {
             forKey: .hideResetMinutesWhenOverOneDay
         ) ?? true
         showVendorIcon = try c.decodeIfPresent(Bool.self, forKey: .showVendorIcon) ?? false
+        // Missing key on existing JSON means a pre-feature config — default ON
+        // so the user immediately sees the new behaviour without re-editing.
+        colorizeText = try c.decodeIfPresent(Bool.self, forKey: .colorizeText) ?? true
     }
 }
 

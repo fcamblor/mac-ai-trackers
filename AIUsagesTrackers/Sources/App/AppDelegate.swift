@@ -390,6 +390,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         withObservationTracking {
             _ = store.menuBarSegments
             _ = store.menuBarText
+            // The separator is read on each refresh too — track it so toggling
+            // it in Settings refreshes the status item immediately instead of
+            // waiting for the next data event. (Per-segment options live in
+            // store.menuBarSegments above; the resolver already re-resolves
+            // when segment configs change.)
+            _ = Self.sharedPreferences.menuBarSeparator
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self, let store = self.usageStore else { return }

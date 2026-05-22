@@ -28,19 +28,25 @@ public struct MenuBarSegment: Sendable, Equatable {
     /// `UsageStore.applyFormat` when the segment's config opts in and the
     /// vendor currently has an active outage.
     public let outageWarningText: String?
+    /// Resolved from `TimeWindowDisplay.colorizeText`. When true and `tier`
+    /// is non-nil, the renderer tints the segment text with the tier color
+    /// (and adds a thin outline matching the dot's stroke).
+    public let colorizeText: Bool
 
     public init(
         text: String,
         tier: ConsumptionTier?,
         showDot: Bool,
         vendorIcon: Vendor? = nil,
-        outageWarningText: String? = nil
+        outageWarningText: String? = nil,
+        colorizeText: Bool = false
     ) {
         self.text = text
         self.tier = tier
         self.showDot = showDot
         self.vendorIcon = vendorIcon
         self.outageWarningText = outageWarningText
+        self.colorizeText = colorizeText
     }
 
     public func withOutageWarning(_ text: String?) -> MenuBarSegment {
@@ -49,7 +55,8 @@ public struct MenuBarSegment: Sendable, Equatable {
             tier: tier,
             showDot: showDot,
             vendorIcon: vendorIcon,
-            outageWarningText: text
+            outageWarningText: text,
+            colorizeText: colorizeText
         )
     }
 }

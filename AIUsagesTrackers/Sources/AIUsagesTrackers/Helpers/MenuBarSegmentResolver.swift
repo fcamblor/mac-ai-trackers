@@ -152,7 +152,11 @@ public enum MenuBarSegmentResolver {
         }
         let text = parts.joined(separator: " ")
 
-        let tier: ConsumptionTier? = display.showDot ? state.tier : nil
+        // The tier reflects the underlying usage state and is exposed
+        // independently of `showDot` — the dot is just one consumer of it.
+        // Text colorisation (see TimeWindowDisplay.colorizeText) also reads
+        // the tier, so a user who hides the dot can still tint the text.
+        let tier: ConsumptionTier? = state.tier
 
         // If the user turned every visible element off, there's nothing to render
         if text.isEmpty, !display.showDot, !display.showVendorIcon {
@@ -160,7 +164,13 @@ public enum MenuBarSegmentResolver {
         }
 
         let vendorIcon: Vendor? = display.showVendorIcon ? vendor : nil
-        return MenuBarSegment(text: text, tier: tier, showDot: display.showDot, vendorIcon: vendorIcon)
+        return MenuBarSegment(
+            text: text,
+            tier: tier,
+            showDot: display.showDot,
+            vendorIcon: vendorIcon,
+            colorizeText: display.colorizeText
+        )
     }
 
     private static func formatUsagePercent(_ usagePercent: UsagePercent, mode: UsagePercentDisplayMode) -> String {

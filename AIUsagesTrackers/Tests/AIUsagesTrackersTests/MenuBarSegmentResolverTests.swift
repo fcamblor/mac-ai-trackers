@@ -248,14 +248,18 @@ struct ResolverTimeWindowTogglesTests {
         #expect(segment?.text == "48% 2h 13m")
     }
 
-    @Test("dot off clears tier and showDot")
+    @Test("dot off clears showDot but preserves tier — colorizeText still needs the tier when the dot is hidden")
     func dotOff() {
         let segment = resolveWith(TimeWindowDisplay(
             showDot: false, showLetter: true, letter: "S",
             showPercent: true, showReset: true
         ))
         #expect(segment?.showDot == false)
-        #expect(segment?.tier == nil)
+        // referenceDate puts the time-window mid-flight with usagePercent 48
+        // → state.tier is non-nil (approaching). The resolver no longer
+        // clears it just because the dot is hidden, so text colorisation
+        // remains available.
+        #expect(segment?.tier != nil)
     }
 
     @Test("reset can hide minutes when duration is over one day")

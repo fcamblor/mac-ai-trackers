@@ -113,6 +113,21 @@ struct MenuBarRefreshControllerTests {
         )
     }
 
+    @Test("Toggling colorizeText on a segment invalidates dedup")
+    func colorizeTextChangeInvalidates() {
+        let k = makeKey(segments: [
+            MenuBarSegment(text: "S", tier: .comfortable, showDot: true, colorizeText: false)
+        ])
+        let colorized = [
+            MenuBarSegment(text: "S", tier: .comfortable, showDot: true, colorizeText: true)
+        ]
+        assertFieldInvalidatesDedup(
+            field: "colorizeText",
+            original: k,
+            mutated: MenuBarRenderKey(segments: colorized, text: k.text, separator: k.separator, isDark: k.isDark, isUnconfigured: k.isUnconfigured)
+        )
+    }
+
     @Test("Appearance KVO filter ignores fires that don't move dark/aqua")
     func appearanceFilterIgnoresUnchangedFlag() {
         let sut = MenuBarRefreshController { _ in }
