@@ -206,9 +206,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupUpdateScheduler() {
-        // Skip update checks for dev/debug builds — no Info.plist version means
-        // we can't meaningfully compare against published releases.
-        guard let effectiveVersion = Self.currentAppVersion() else { return }
+        // Skip update checks for builds that are not meant to compare against
+        // stable GitHub releases: swift-run dev builds and tester-debug DMGs.
+        guard !Self.areUpdateChecksUnavailable(),
+              let effectiveVersion = Self.currentAppVersion() else { return }
         let bundlePath = Bundle.main.bundleURL.path
         let detector = InstallationDetector(bundlePath: bundlePath)
         self.installationDetector = detector
@@ -235,11 +236,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    static func currentAppVersion() -> AppVersion? {
-        guard let raw = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String else {
+    static func currentAppVersion(bundle: Bundle = .main) -> AppVersion? {
+        guard let raw = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String else {
             return nil
         }
         return AppVersion(string: raw)
+    }
+
+    static func areUpdateChecksUnavailable(bundle: Bundle = .main) -> Bool {
+        currentAppVersion(bundle: bundle) == nil || TesterFeedbackContext.resolve(bundle: bundle) != nil
     }
 
     /// Human-readable label for the running app version, falling back to a
