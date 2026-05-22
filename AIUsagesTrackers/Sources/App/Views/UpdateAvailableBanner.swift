@@ -10,6 +10,8 @@ struct UpdateAvailableBanner: View {
     let onSkip: () -> Void
     let onLater: () -> Void
 
+    @State private var showingReleaseNotes = false
+
     private var primaryActionLabel: String {
         switch installationKind {
         case .homebrewCask: return "Update via Homebrew"
@@ -59,6 +61,17 @@ struct UpdateAvailableBanner: View {
             RoundedRectangle(cornerRadius: 6)
                 .strokeBorder(Color.accentColor.opacity(0.30), lineWidth: 1)
         )
+        .sheet(isPresented: $showingReleaseNotes) {
+            if let notes = update.releaseNotes, !notes.isEmpty {
+                ReleaseNotesSheet(
+                    version: update.version,
+                    publishedAt: update.publishedAt,
+                    markdown: notes,
+                    releaseURL: update.releaseURL,
+                    onDismiss: { showingReleaseNotes = false }
+                )
+            }
+        }
     }
 
     // MARK: - Sections
@@ -70,8 +83,15 @@ struct UpdateAvailableBanner: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if let notes = update.releaseNotes, !notes.isEmpty {
-                releaseNotesSection(notes)
+            if hasReleaseNotes {
+                Button {
+                    showingReleaseNotes = true
+                } label: {
+                    Text("View release notes")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.link)
+                .help("View release notes for this version")
             }
 
             HStack(spacing: 8) {
@@ -91,7 +111,7 @@ struct UpdateAvailableBanner: View {
                     Image(systemName: "arrow.up.right.square")
                 }
                 .buttonStyle(.borderless)
-                .help("Open release notes")
+                .help("Open release on GitHub")
 
                 Button {
                     onSkip()
@@ -105,34 +125,10 @@ struct UpdateAvailableBanner: View {
         }
     }
 
-    /// Renders the release notes Markdown body inside a bounded scrollable
-    /// region so long release notes don't blow up the banner. The container
-    /// shrinks to fit short notes (a couple of lines) and caps at
-    /// `maxHeight` for anything longer.
-    private func releaseNotesSection(_ notes: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Release notes")
-                .font(.system(size: 10, weight: .semibold))
-                .textCase(.uppercase)
-                .foregroundStyle(.secondary)
-
-            ScrollView(.vertical, showsIndicators: true) {
-                ReleaseNotesMarkdownView(markdown: notes)
-                    .padding(8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(maxHeight: Self.releaseNotesMaxHeight)
-            .background(Color(nsColor: .textBackgroundColor).opacity(0.6), in: RoundedRectangle(cornerRadius: 4))
-            .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .strokeBorder(Color.secondary.opacity(0.20), lineWidth: 1)
-            )
-        }
+    private var hasReleaseNotes: Bool {
+        guard let notes = update.releaseNotes else { return false }
+        return !notes.isEmpty
     }
-
-    /// Cap the release notes block to a few lines worth of space so the
-    /// banner stays compact even when the notes are long.
-    private static let releaseNotesMaxHeight: CGFloat = 180
 
     private var inProgressSection: some View {
         VStack(alignment: .leading, spacing: 6) {
