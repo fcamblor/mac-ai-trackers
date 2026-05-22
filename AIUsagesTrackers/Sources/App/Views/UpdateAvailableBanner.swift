@@ -70,6 +70,10 @@ struct UpdateAvailableBanner: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
+            if let notes = update.releaseNotes, !notes.isEmpty {
+                releaseNotesSection(notes)
+            }
+
             HStack(spacing: 8) {
                 Button(primaryActionLabel) { onInstall() }
                     .buttonStyle(.borderedProminent)
@@ -100,6 +104,35 @@ struct UpdateAvailableBanner: View {
             }
         }
     }
+
+    /// Renders the release notes Markdown body inside a bounded scrollable
+    /// region so long release notes don't blow up the banner. The container
+    /// shrinks to fit short notes (a couple of lines) and caps at
+    /// `maxHeight` for anything longer.
+    private func releaseNotesSection(_ notes: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Release notes")
+                .font(.system(size: 10, weight: .semibold))
+                .textCase(.uppercase)
+                .foregroundStyle(.secondary)
+
+            ScrollView(.vertical, showsIndicators: true) {
+                ReleaseNotesMarkdownView(markdown: notes)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: Self.releaseNotesMaxHeight)
+            .background(Color(nsColor: .textBackgroundColor).opacity(0.6), in: RoundedRectangle(cornerRadius: 4))
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .strokeBorder(Color.secondary.opacity(0.20), lineWidth: 1)
+            )
+        }
+    }
+
+    /// Cap the release notes block to a few lines worth of space so the
+    /// banner stays compact even when the notes are long.
+    private static let releaseNotesMaxHeight: CGFloat = 180
 
     private var inProgressSection: some View {
         VStack(alignment: .leading, spacing: 6) {
