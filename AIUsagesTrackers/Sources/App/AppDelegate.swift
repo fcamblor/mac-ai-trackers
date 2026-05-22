@@ -116,6 +116,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let raw = UserDefaults.standard.string(forKey: claudeKeychainAccountKey)
                 guard let raw, !raw.isEmpty else { return nil }
                 return raw
+            },
+            // Auto-pin / reset writes go straight through UserDefaults to stay
+            // off the @MainActor — the connector runs from a background actor.
+            // UserDefaults is thread-safe for primitive reads/writes.
+            accountPersistor: { account in
+                if let account, !account.isEmpty {
+                    UserDefaults.standard.set(account, forKey: claudeKeychainAccountKey)
+                } else {
+                    UserDefaults.standard.removeObject(forKey: claudeKeychainAccountKey)
+                }
             }
         )
         let claudeConnector = ClaudeCodeConnector(credentialLocator: claudeLocator)

@@ -136,8 +136,12 @@ struct AccountCardView: View {
     private func showsAssistantsCTA(for type: String) -> Bool {
         guard entry.vendor == .claude else { return false }
         switch type {
-        case "token_error", "credential_error", "api_key_usage_unsupported", "token_expired":
+        case "token_error", "credential_error", "api_key_usage_unsupported":
             return true
+        case "token_expired":
+            // Re-running the diagnostic on an expired token wouldn't help — the
+            // entry is already pinned and the only fix is `claude` CLI refresh.
+            return false
         default:
             return false
         }

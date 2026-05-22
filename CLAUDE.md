@@ -16,3 +16,7 @@ When writing or modifying Swift code, you **must** load and follow all five Swif
 - `docs/SWIFT-TESTABILITY.md` — dependency injection, test coverage, force-unwrap, comments, magic numbers
 - `docs/SWIFT-VALUE-OBJECTS.md` — value objects for domain fields, struct vs enum, ExpressibleByXxx, Codable
 - `docs/SWIFT-MENUBAR.md` — menu bar UI: why we use `NSStatusItem` (not `MenuBarExtra`), non-template `NSImage`, menu bar appearance detection
+
+## Bootstrap must not trigger Keychain prompts
+
+App launch must not raise a macOS Keychain authorisation prompt beyond the one the user has already approved for the steady-state vendor poll. Attribute-only `security find-generic-password -s <service>` lookups (no `-w`, no `-g`) are safe. `SecItemCopyMatching` against secret data, `security … -w`, and `security … -g` are reserved for the existing connector poll path or for code initiated by an explicit user action (Coding Assistants diagnostic, manual refresh). See `.claude/rules/swift-quality.md` rule §9.

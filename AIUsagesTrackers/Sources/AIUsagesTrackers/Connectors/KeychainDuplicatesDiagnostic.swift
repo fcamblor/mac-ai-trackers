@@ -56,6 +56,18 @@ public struct KeychainDiagnosticReport: Sendable, Equatable {
             if case .validOAuthToken = entry.status { true } else { false }
         }
     }
+
+    /// `true` when at least one entry carries a `claudeAiOauth` block, even if
+    /// its `accessToken` has expired — pinning the runtime to that entry still
+    /// makes sense because a `claude` CLI refresh will revive it in place.
+    public var hasPinnableOAuthEntry: Bool {
+        entries.contains { entry in
+            switch entry.status {
+            case .validOAuthToken, .expiredOAuthToken: true
+            default: false
+            }
+        }
+    }
 }
 
 public enum KeychainDiagnosticError: Error, CustomStringConvertible, Equatable {

@@ -129,4 +129,194 @@ struct ClaudeCredentialLocatorTests {
             try await locator.locate()
         }
     }
+
+    // MARK: - Account auto-pin / reset
+
+    /// Two-stage runner: an attribute-only call (no `-w`) returns the
+    /// `security` CLI's human-formatted dump, the secret-data call (`-w`)
+    /// returns the JSON payload. Lets tests assert behaviour around the
+    /// no-override → discover acct → pin flow without spinning up a real
+    /// Keychain.
+    private final class TwoStageRunner: ProcessRunning, @unchecked Sendable {
+        // swiftlint:disable:next w4_unchecked_sendable — captured by tests on a single Task; no concurrent mutation.
+        let attributeStdout: Data
+        let attributeStatus: Int32
+        // Keyed by the `-a` argument used at the call site; `nil` covers the
+        // unscoped call (no `-a`). Each entry is the `-w` payload + status.
+        let passwordResultsByAccount: [String?: ProcessExecutionResult]
+        private(set) var capturedArguments: [[String]] = []
+
+        init(
+            attributeStdout: Data,
+            attributeStatus: Int32 = 0,
+            passwordResultsByAccount: [String?: ProcessExecutionResult]
+        ) {
+            self.attributeStdout = attributeStdout
+            self.attributeStatus = attributeStatus
+            self.passwordResultsByAccount = passwordResultsByAccount
+        }
+
+        func run(executablePath: String, arguments: [String], timeoutSeconds: Int) async throws -> ProcessExecutionResult {
+            capturedArguments.append(arguments)
+            if arguments.contains("-w") {
+                let account: String?
+                if let idx = arguments.firstIndex(of: "-a"),
+                   arguments.indices.contains(arguments.index(after: idx)) {
+                    account = arguments[arguments.index(after: idx)]
+                } else {
+                    account = nil
+                }
+                return passwordResultsByAccount[account]
+                    ?? ProcessExecutionResult(stdout: Data(), terminationStatus: 44, timedOut: false)
+            }
+            return ProcessExecutionResult(stdout: attributeStdout, terminationStatus: attributeStatus, timedOut: false)
+        }
+    }
+
+    private static let attributesDump = """
+    keychain: "/Users/foo/Library/Keychains/login.keychain-db"
+    class: "genp"
+    attributes:
+        0x00000007 <blob>="Claude Code-credentials"
+        "acct"<blob>="juherr"
+        "svce"<blob>="Claude Code-credentials"
+    """
+
+    @Test("parses acct attribute out of security CLI dump")
+    func parseAcctAttribute() {
+        #expect(ClaudeCredentialLocator.parseAccountAttribute(from: Self.attributesDump) == "juherr")
+    }
+
+    @Test("ignores hex-encoded acct blob")
+    func parseAcctHexBlob() {
+        let dump = """
+        attributes:
+            "acct"<blob>=0x6A75686572720A  "juherr"
+        """
+        #expect(ClaudeCredentialLocator.parseAccountAttribute(from: dump) == nil)
+    }
+
+    @Test("auto-pins acct of first read when no override is set")
+    func autoPinFirstRead() async throws {
+        let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
+        let runner = TwoStageRunner(
+            attributeStdout: Data(Self.attributesDump.utf8),
+            passwordResultsByAccount: [
+                "juherr": keychainResult(json: #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":\#(futureMillis)}}"#),
+            ]
+        )
+        let pinned = LockBox<String?>(nil)
+        let locator = ClaudeCredentialLocator(
+            processRunner: runner,
+            logger: makeTempLogger(),
+            clock: fixedClock,
+            accountOverride: { nil },
+            accountPersistor: { value in pinned.set(value) }
+        )
+
+        let creds = try await locator.locate()
+        #expect(creds.accessToken == "tok-abc")
+        #expect(pinned.get() == "juherr")
+    }
+
+    @Test("auto-pins acct even when token has expired")
+    func autoPinOnExpired() async throws {
+        let pastMillis = Int((Self.fixedNow.timeIntervalSince1970 - 10) * 1000)
+        let runner = TwoStageRunner(
+            attributeStdout: Data(Self.attributesDump.utf8),
+            passwordResultsByAccount: [
+                "juherr": keychainResult(json: #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":\#(pastMillis)}}"#),
+            ]
+        )
+        let pinned = LockBox<String?>(nil)
+        let locator = ClaudeCredentialLocator(
+            processRunner: runner,
+            logger: makeTempLogger(),
+            clock: fixedClock,
+            accountOverride: { nil },
+            accountPersistor: { value in pinned.set(value) }
+        )
+
+        await #expect(throws: ClaudeAuthError.self) {
+            try await locator.locate()
+        }
+        // Even though we threw tokenExpired, the acct must be pinned so future
+        // refreshes target the same entry once the CLI rotates the token.
+        #expect(pinned.get() == "juherr")
+    }
+
+    @Test("resets stale pin when override points at non-claudeAiOauth entry")
+    func resetStalePin() async throws {
+        let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
+        let runner = TwoStageRunner(
+            attributeStdout: Data(Self.attributesDump.utf8),
+            passwordResultsByAccount: [
+                // Override hit: MCP entry with no claudeAiOauth — triggers reset.
+                "unknown": keychainResult(json: #"{"mcpOAuth":{"foo":"bar"}}"#),
+                // Post-reset retry without `-a` falls through to the unscoped call.
+                nil: keychainResult(json: #"{"claudeAiOauth":{"accessToken":"tok-new","expiresAt":\#(futureMillis)}}"#),
+                // Same retry might also re-discover acct=juherr and pin it.
+                "juherr": keychainResult(json: #"{"claudeAiOauth":{"accessToken":"tok-new","expiresAt":\#(futureMillis)}}"#),
+            ]
+        )
+        let pinned = LockBox<String?>("unknown")
+        let locator = ClaudeCredentialLocator(
+            processRunner: runner,
+            logger: makeTempLogger(),
+            // Override starts as the stale pin "unknown", then the persistor
+            // resets it to nil so the second pass goes through the attribute
+            // discovery path.
+            clock: fixedClock,
+            accountOverride: { pinned.get() },
+            accountPersistor: { value in pinned.set(value) }
+        )
+
+        let creds = try await locator.locate()
+        #expect(creds.accessToken == "tok-new")
+        // After reset + re-discover, the pin should now be "juherr".
+        #expect(pinned.get() == "juherr")
+    }
+
+    @Test("missingOAuthBlock surfaces when JSON has no claudeAiOauth and override is unset")
+    func missingOAuthBlockWithoutOverride() async throws {
+        let runner = TwoStageRunner(
+            attributeStdout: Data(),
+            attributeStatus: 44,
+            passwordResultsByAccount: [
+                nil: keychainResult(json: #"{"mcpOAuth":{"foo":"bar"}}"#),
+            ]
+        )
+        let locator = ClaudeCredentialLocator(
+            processRunner: runner,
+            logger: makeTempLogger(),
+            clock: fixedClock,
+            accountOverride: { nil },
+            accountPersistor: { _ in }
+        )
+
+        await #expect(throws: ClaudeAuthError.self) {
+            try await locator.locate()
+        }
+    }
+}
+
+/// Minimal Sendable mutable cell used by tests that need to observe the
+/// `accountPersistor` callback while also feeding the current pin into the
+/// `accountOverride` closure. Both closures are `@Sendable` so we can't just
+/// share a `var` — wrap it in a lock instead.
+private final class LockBox<Value>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Value
+
+    init(_ initial: Value) { self.value = initial }
+
+    func get() -> Value {
+        lock.lock(); defer { lock.unlock() }
+        return value
+    }
+
+    func set(_ newValue: Value) {
+        lock.lock(); defer { lock.unlock() }
+        value = newValue
+    }
 }

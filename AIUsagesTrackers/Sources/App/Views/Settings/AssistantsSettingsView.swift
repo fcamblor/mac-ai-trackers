@@ -157,22 +157,25 @@ private struct KeychainDiagnosticView: View {
     }
 
     /// After the scan, point the runtime at the first entry that actually holds
-    /// a `claudeAiOauth.accessToken`. Skipped when the existing preference
-    /// already matches a valid entry in this report — the user's explicit
-    /// choice wins over the auto-pick.
+    /// a `claudeAiOauth` block — expired tokens included, since the entry is
+    /// still the right one to read after a `claude` CLI refresh. Skipped when
+    /// the existing preference already matches a pinnable entry in this report
+    /// — the user's explicit choice wins over the auto-pick.
     private func autoSelectValidEntry(in report: KeychainDiagnosticReport) {
-        let validEntries = report.entries.filter { entry in
+        let pinnableEntries = report.entries.filter { entry in
             guard entry.account != nil else { return false }
-            if case .validOAuthToken = entry.status { return true }
-            return false
+            switch entry.status {
+            case .validOAuthToken, .expiredOAuthToken: return true
+            default: return false
+            }
         }
-        guard let firstValid = validEntries.first, let firstValidAccount = firstValid.account else {
+        guard let firstPinnable = pinnableEntries.first, let firstPinnableAccount = firstPinnable.account else {
             return
         }
         let current = preferences.claudeKeychainAccount
-        let currentIsValid = current != nil && validEntries.contains { $0.account == current }
-        guard !currentIsValid else { return }
-        preferences.claudeKeychainAccount = firstValidAccount
+        let currentIsPinnable = current != nil && pinnableEntries.contains { $0.account == current }
+        guard !currentIsPinnable else { return }
+        preferences.claudeKeychainAccount = firstPinnableAccount
         selectedAccountTick &+= 1
     }
 }
@@ -224,10 +227,16 @@ private struct ReportView: View {
             badge(systemImage: "checkmark.seal.fill", color: .green,
                   title: "Claude Code credentials look healthy.",
                   subtitle: nil)
+        } else if report.hasPinnableOAuthEntry {
+            badge(systemImage: "clock.badge.exclamationmark.fill", color: .orange,
+                  title: "Entry pinned, but its OAuth token has expired.",
+                  subtitle: "Re-run the `claude` CLI to refresh the credentials in place — " +
+                            "the runtime is already targeting this entry and will pick up the " +
+                            "new token on the next refresh. No need to re-run the diagnostic.")
         } else {
             badge(systemImage: "exclamationmark.triangle.fill", color: .orange,
-                  title: "No entry carries a usable `claudeAiOauth.accessToken`.",
-                  subtitle: "Re-run the `claude` CLI to refresh the credentials, then run the " +
+                  title: "No entry carries a `claudeAiOauth` block.",
+                  subtitle: "Sign in with the `claude` CLI to populate the credentials, then run the " +
                             "diagnostic again.")
         }
     }
@@ -294,10 +303,12 @@ private struct EntryRow: View {
 
     private var isSelectable: Bool {
         guard let account = entry.account, !account.isEmpty else { return false }
-        // Selecting an entry without `claudeAiOauth.accessToken` would just
-        // shift the runtime to a different broken entry — block it.
-        if case .validOAuthToken = entry.status { return true }
-        return false
+        // Both states carry `claudeAiOauth` — expired entries are pinned now
+        // and will resume working as soon as the `claude` CLI refreshes them.
+        switch entry.status {
+        case .validOAuthToken, .expiredOAuthToken: return true
+        default: return false
+        }
     }
 
     @ViewBuilder
