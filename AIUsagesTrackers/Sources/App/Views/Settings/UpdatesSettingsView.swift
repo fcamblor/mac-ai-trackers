@@ -24,9 +24,19 @@ struct UpdatesSettingsView: View {
         }
     }
 
+    private var isDevBuild: Bool {
+        AppDelegate.currentAppVersion() == nil
+    }
+
     var body: some View {
         let prefs = AppDelegate.sharedPreferences
         Form {
+            if isDevBuild {
+                Section {
+                    Text("Update checks are disabled for development builds.")
+                        .foregroundStyle(.secondary)
+                }
+            }
             Section("Current version") {
                 HStack {
                     Text("Installed version")
@@ -49,6 +59,7 @@ struct UpdatesSettingsView: View {
                     get: { prefs.updatesAutoCheckEnabled },
                     set: { prefs.updatesAutoCheckEnabled = $0 }
                 ))
+                .disabled(isDevBuild)
                 Text("When enabled, AI Usages Tracker checks GitHub for new releases at startup and every six hours.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -61,7 +72,7 @@ struct UpdatesSettingsView: View {
                             await AppDelegate.sharedUpdateScheduler?.checkNow()
                         }
                     }
-                    .disabled(updateState.phase == .checking)
+                    .disabled(updateState.phase == .checking || isDevBuild)
 
                     if updateState.phase == .checking {
                         ProgressView().controlSize(.small).scaleEffect(0.7)

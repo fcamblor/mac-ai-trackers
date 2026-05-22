@@ -206,11 +206,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupUpdateScheduler() {
-        // In a development build (swift run) there's no Info.plist version, so
-        // we fall back to 0.0.0 — every release will then be reported as newer,
-        // but the existing "Skip this version" flow ensures the alert isn't
-        // re-shown until a different version ships.
-        let effectiveVersion = Self.currentAppVersion() ?? AppVersion(string: "0.0.0")!
+        // Skip update checks for dev/debug builds — no Info.plist version means
+        // we can't meaningfully compare against published releases.
+        guard let effectiveVersion = Self.currentAppVersion() else { return }
         let bundlePath = Bundle.main.bundleURL.path
         let detector = InstallationDetector(bundlePath: bundlePath)
         self.installationDetector = detector
