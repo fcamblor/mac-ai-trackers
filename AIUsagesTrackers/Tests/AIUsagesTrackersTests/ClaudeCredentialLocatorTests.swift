@@ -187,15 +187,6 @@ struct ClaudeCredentialLocatorTests {
         #expect(ClaudeCredentialLocator.parseAccountAttribute(from: Self.attributesDump) == "juherr")
     }
 
-    @Test("ignores hex-encoded acct blob")
-    func parseAcctHexBlob() {
-        let dump = """
-        attributes:
-            "acct"<blob>=0x6A75686572720A  "juherr"
-        """
-        #expect(ClaudeCredentialLocator.parseAccountAttribute(from: dump) == nil)
-    }
-
     @Test("auto-pins acct of first read when no override is set")
     func autoPinFirstRead() async throws {
         let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
@@ -253,9 +244,8 @@ struct ClaudeCredentialLocatorTests {
             passwordResultsByAccount: [
                 // Override hit: MCP entry with no claudeAiOauth — triggers reset.
                 "unknown": keychainResult(json: #"{"mcpOAuth":{"foo":"bar"}}"#),
-                // Post-reset retry without `-a` falls through to the unscoped call.
-                nil: keychainResult(json: #"{"claudeAiOauth":{"accessToken":"tok-new","expiresAt":\#(futureMillis)}}"#),
-                // Same retry might also re-discover acct=juherr and pin it.
+                // Post-reset retry: attribute lookup re-discovers acct=juherr,
+                // which then reads successfully and is pinned in its place.
                 "juherr": keychainResult(json: #"{"claudeAiOauth":{"accessToken":"tok-new","expiresAt":\#(futureMillis)}}"#),
             ]
         )
@@ -335,17 +325,44 @@ struct ClaudeCredentialLocatorTests {
                 nil: keychainResult(json: #"{"mcpOAuth":{"foo":"bar"}}"#),
             ]
         )
+        let pinned = LockBox<String?>(nil)
         let locator = ClaudeCredentialLocator(
             processRunner: runner,
             logger: makeTempLogger(),
             clock: fixedClock,
             accountOverride: { nil },
-            accountPersistor: { _ in }
+            accountPersistor: { value in pinned.set(value) }
         )
 
         await #expect(throws: ClaudeAuthError.self) {
             try await locator.locate()
         }
+        // The persistor must not be invoked when the read fails before the
+        // `claudeAiOauth` gate — otherwise a bad entry would silently get
+        // pinned and the next poll would loop on the same failure.
+        #expect(pinned.get() == nil)
+    }
+
+    @Test("parseAccountAttribute decodes hex-encoded acct payloads")
+    func parseAcctHexDecoded() {
+        let dump = """
+        attributes:
+            "acct"<blob>=0x6A75686572720A  "juherr"
+        """
+        #expect(ClaudeCredentialLocator.parseAccountAttribute(from: dump) == "juherr")
+    }
+
+    @Test("maskIdentifier preserves first and last chars, masks the middle")
+    func maskIdentifierShapes() {
+        // Length >= 4: keep first 2 and last 2, mask the middle.
+        #expect(ClaudeCredentialLocator.maskIdentifier("juherr") == "ju**rr")
+        #expect(ClaudeCredentialLocator.maskIdentifier("frederic.camblor@4sh.fr") == "fr*******************fr")
+        #expect(ClaudeCredentialLocator.maskIdentifier("abcd") == "abcd")
+        // Length < 4: reduce window to first 1 and last 1 so we don't over-overlap.
+        #expect(ClaudeCredentialLocator.maskIdentifier("abc") == "a*c")
+        #expect(ClaudeCredentialLocator.maskIdentifier("ab") == "ab")
+        #expect(ClaudeCredentialLocator.maskIdentifier("a") == "a")
+        #expect(ClaudeCredentialLocator.maskIdentifier("") == "")
     }
 }
 

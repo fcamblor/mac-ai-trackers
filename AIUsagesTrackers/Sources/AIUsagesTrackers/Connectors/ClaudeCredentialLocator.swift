@@ -69,6 +69,12 @@ public actor ClaudeCredentialLocator: CredentialLocator {
     /// `expiresAt` to avoid the race where we send a request just as the
     /// token flips invalid and burn a 401 we could have skipped.
     public static let expirySkewSeconds: TimeInterval = 60
+    /// The `security` CLI maps `errSecItemNotFound` (OSStatus -25300) to this
+    /// exit code on macOS. Historically stable since OS X 10.x — see the
+    /// Apple `security` tool sources under
+    /// `Security/SecurityTool/macOS/keychain_find.c`. Other failures use
+    /// different codes (e.g. 51 for ACL denial), so this is the only one we
+    /// treat as "stale pin, the entry simply isn't there anymore".
     private static let securityItemNotFoundExitCode: Int32 = 44
 
     private let keychainServiceName: String
@@ -119,7 +125,7 @@ public actor ClaudeCredentialLocator: CredentialLocator {
             // in front" case. Reset the pin and re-run the lookup once with no
             // override so the next attempt can re-pin a different acct.
             if resolvedAccount != nil, allowResetRetry, shouldResetPinnedAccount(for: error) {
-                logger.log(.warning, "Pinned Claude keychain account '\(resolvedAccount ?? "")' no longer carries claudeAiOauth — resetting and retrying without override")
+                logger.log(.warning, "Pinned Claude keychain account '\(Self.maskIdentifier(resolvedAccount ?? ""))' no longer carries claudeAiOauth — resetting and retrying without override")
                 accountPersistor(nil)
                 return try await locate(allowResetRetry: false)
             }
@@ -157,19 +163,64 @@ public actor ClaudeCredentialLocator: CredentialLocator {
     }
 
     /// Parses lines like `    "acct"<blob>="juherr"` out of the `security`
-    /// CLI's human-formatted attribute dump.
+    /// CLI's human-formatted attribute dump. Hex-encoded blobs (used by the
+    /// CLI for non-ASCII or whitespace-bearing accounts) appear as
+    /// `0x6A75686572720A  "juherr"` — both forms are decoded.
     static func parseAccountAttribute(from raw: String) -> String? {
         for line in raw.split(separator: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard trimmed.hasPrefix("\"acct\"") else { continue }
             guard let equalsIndex = trimmed.firstIndex(of: "=") else { continue }
-            let afterEquals = trimmed[trimmed.index(after: equalsIndex)...]
+            let afterEquals = trimmed[trimmed.index(after: equalsIndex)...].trimmingCharacters(in: .whitespaces)
+            if afterEquals.hasPrefix("0x") {
+                return decodeHexAcct(String(afterEquals.dropFirst(2)))
+            }
             let unquoted = afterEquals.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
-            // `0x` prefix indicates a hex-encoded blob (rare for acct, but be safe).
-            if unquoted.hasPrefix("0x") { return nil }
             return unquoted.isEmpty ? nil : unquoted
         }
         return nil
+    }
+
+    /// Decodes the leading hex token of a `security` attribute dump value
+    /// (e.g. `6A75686572720A  "juherr"` → `juherr\n`, trimmed). Stops at the
+    /// first non-hex character so the trailing quoted form is ignored. Returns
+    /// nil if the bytes don't form a valid UTF-8 string.
+    static func decodeHexAcct(_ raw: String) -> String? {
+        var bytes: [UInt8] = []
+        var iterator = raw.makeIterator()
+        while let high = iterator.next() {
+            guard high.isHexDigit, let low = iterator.next(), low.isHexDigit,
+                  let highValue = UInt8(String(high), radix: 16),
+                  let lowValue = UInt8(String(low), radix: 16) else { break }
+            bytes.append((highValue << 4) | lowValue)
+        }
+        guard !bytes.isEmpty,
+              let decoded = String(bytes: bytes, encoding: .utf8)?
+                  .trimmingCharacters(in: .whitespacesAndNewlines),
+              !decoded.isEmpty else {
+            return nil
+        }
+        return decoded
+    }
+
+    /// Masks a free-form identifier (typically an email-shaped account) for
+    /// log lines: keeps 2 leading and 2 trailing characters, masks the middle
+    /// with `*`. Identifiers shorter than 4 characters keep just 1 char on
+    /// each side. Avoids leaking PII while staying recognisable in diagnostics.
+    static func maskIdentifier(_ value: String) -> String {
+        guard !value.isEmpty else { return value }
+        let count = value.count
+        if count < 4 {
+            let first = String(value.prefix(1))
+            guard count > 1 else { return first }
+            let last = String(value.suffix(1))
+            let masked = String(repeating: "*", count: max(0, count - 2))
+            return first + masked + last
+        }
+        let first = String(value.prefix(2))
+        let last = String(value.suffix(2))
+        let masked = String(repeating: "*", count: count - 4)
+        return first + masked + last
     }
 
     private func readToken(account: String?) async throws -> String {

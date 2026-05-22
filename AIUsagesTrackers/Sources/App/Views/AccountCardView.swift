@@ -183,7 +183,7 @@ struct AccountCardView: View {
         case "credential_error":
             "Credentials could not be read from the expected local source. Last known metrics may be stale."
         case "token_expired":
-            "Re-authenticate with the vendor CLI, then refresh."
+            "Re-authenticate with the vendor CLI — the next refresh will pick up the new token."
         case "api_error":
             "Network or API request failed. Last known metrics may be stale."
         case "parse_error":

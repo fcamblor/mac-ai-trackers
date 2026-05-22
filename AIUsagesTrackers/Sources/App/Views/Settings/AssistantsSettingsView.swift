@@ -19,9 +19,14 @@ struct AssistantsSettingsView: View {
 /// which entry the runtime should read from. The app never deletes or
 /// modifies entries written by the vendor — picking an entry only updates a
 /// local preference so the runtime can target it by `kSecAttrAccount`.
+///
+/// The runtime's own credential locator auto-pins the first readable
+/// `claudeAiOauth` entry it encounters during the background poll, so most
+/// users never need this tab. It exists as a remediation tool for the
+/// multi-entry case where the auto-pin lands on the wrong entry (e.g. an MCP
+/// OAuth state item that the `claude` CLI keeps under the same service).
 private struct KeychainDiagnosticView: View {
     @State private var phase: Phase = .idle
-    @State private var selectedAccountTick: Int = 0
 
     private enum Phase: Equatable {
         case idle
@@ -56,9 +61,10 @@ private struct KeychainDiagnosticView: View {
             selectionStatusRow
 
             Label {
-                Text("Running this scan may trigger a one-off macOS Keychain authorisation prompt. " +
-                     "Approve it only if you want to run the diagnostic now — the app never " +
-                     "inspects these entries on its own.")
+                Text("The runtime already auto-pins the first readable `claudeAiOauth` entry, " +
+                     "so you usually don't need to run this scan. Run it only if usage refreshes " +
+                     "report a credential issue and you suspect the auto-pin landed on the wrong " +
+                     "entry. The scan may trigger a one-off macOS Keychain authorisation prompt.")
                     .font(.caption)
                     .fixedSize(horizontal: false, vertical: true)
             } icon: {
@@ -90,8 +96,6 @@ private struct KeychainDiagnosticView: View {
     }
 
     private var selectionStatusRow: some View {
-        // Bind to the tick so picking from the result list re-renders this row.
-        let _ = selectedAccountTick
         let selected = preferences.claudeKeychainAccount
 
         return HStack(spacing: 8) {
@@ -111,13 +115,6 @@ private struct KeychainDiagnosticView: View {
                 }
             }
             Spacer()
-            if selected != nil {
-                Button("Clear", role: .destructive) {
-                    preferences.claudeKeychainAccount = nil
-                    selectedAccountTick &+= 1
-                }
-                .buttonStyle(.borderless)
-            }
         }
         .padding(8)
         .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
@@ -129,7 +126,7 @@ private struct KeychainDiagnosticView: View {
         case .idle, .running:
             EmptyView()
         case let .success(report):
-            ReportView(report: report, selectionTick: $selectedAccountTick)
+            ReportView(report: report)
         case let .failure(message):
             Label {
                 Text(message)
@@ -148,41 +145,18 @@ private struct KeychainDiagnosticView: View {
         Task { @MainActor in
             do {
                 let report = try await scanner.scan()
-                autoSelectValidEntry(in: report)
                 phase = .success(report)
             } catch {
                 phase = .failure(String(describing: error))
             }
         }
     }
-
-    /// After the scan, point the runtime at the first entry that actually holds
-    /// a `claudeAiOauth` block — expired tokens included, since the entry is
-    /// still the right one to read after a `claude` CLI refresh. Skipped when
-    /// the existing preference already matches a pinnable entry in this report
-    /// — the user's explicit choice wins over the auto-pick.
-    private func autoSelectValidEntry(in report: KeychainDiagnosticReport) {
-        let pinnableEntries = report.entries.filter { entry in
-            guard entry.account != nil else { return false }
-            switch entry.status {
-            case .validOAuthToken, .expiredOAuthToken: return true
-            default: return false
-            }
-        }
-        guard let firstPinnable = pinnableEntries.first, let firstPinnableAccount = firstPinnable.account else {
-            return
-        }
-        let current = preferences.claudeKeychainAccount
-        let currentIsPinnable = current != nil && pinnableEntries.contains { $0.account == current }
-        guard !currentIsPinnable else { return }
-        preferences.claudeKeychainAccount = firstPinnableAccount
-        selectedAccountTick &+= 1
-    }
 }
 
 private struct ReportView: View {
     let report: KeychainDiagnosticReport
-    @Binding var selectionTick: Int
+
+    private var preferences: any AppPreferences { AppDelegate.sharedPreferences }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -191,7 +165,7 @@ private struct ReportView: View {
             if !report.entries.isEmpty {
                 Divider()
                 ForEach(Array(report.entries.enumerated()), id: \.offset) { _, entry in
-                    EntryRow(entry: entry, selectionTick: $selectionTick)
+                    EntryRow(entry: entry)
                 }
             }
             if report.apiKeyDetected {
@@ -227,12 +201,12 @@ private struct ReportView: View {
             badge(systemImage: "checkmark.seal.fill", color: .green,
                   title: "Claude Code credentials look healthy.",
                   subtitle: nil)
-        } else if report.hasPinnableOAuthEntry {
+        } else if report.hasPinnableOAuthEntry, preferences.claudeKeychainAccount != nil {
             badge(systemImage: "clock.badge.exclamationmark.fill", color: .orange,
-                  title: "Entry pinned, but its OAuth token has expired.",
-                  subtitle: "Re-run the `claude` CLI to refresh the credentials in place — " +
+                  title: "Session expired.",
+                  subtitle: "Re-authenticate with the `claude` CLI to refresh the credentials in place — " +
                             "the runtime is already targeting this entry and will pick up the " +
-                            "new token on the next refresh. No need to re-run the diagnostic.")
+                            "new token on the next refresh.")
         } else {
             badge(systemImage: "exclamationmark.triangle.fill", color: .orange,
                   title: "No entry carries a `claudeAiOauth` block.",
@@ -275,14 +249,12 @@ private struct ReportView: View {
 
 private struct EntryRow: View {
     let entry: KeychainDiagnosticReport.Entry
-    @Binding var selectionTick: Int
     @State private var hovering = false
 
     private var preferences: any AppPreferences { AppDelegate.sharedPreferences }
 
     private var isSelected: Bool {
-        let _ = selectionTick
-        return entry.account != nil && preferences.claudeKeychainAccount == entry.account
+        entry.account != nil && preferences.claudeKeychainAccount == entry.account
     }
 
     var body: some View {
@@ -320,7 +292,6 @@ private struct EntryRow: View {
         } else if isSelectable, let account = entry.account {
             Button {
                 preferences.claudeKeychainAccount = account
-                selectionTick &+= 1
             } label: {
                 Text("Use this entry")
                     .font(.caption)
