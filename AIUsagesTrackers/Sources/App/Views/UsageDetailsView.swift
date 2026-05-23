@@ -29,7 +29,7 @@ struct UsageDetailsView: View {
     /// only on tester DMGs; absent on stable releases by construction.
     private let testerFeedbackContext: TesterFeedbackContext? = TesterFeedbackContext.resolved
 
-    private static let popoverWidth: CGFloat = 320
+    private static let popoverWidth: CGFloat = 400
     private static let maxScreenHeightRatio: CGFloat = 0.9
     private static let fallbackScreenHeight: CGFloat = 800
     private static let historyAutoRefreshInterval: Duration = .seconds(60)
