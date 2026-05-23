@@ -10,12 +10,6 @@ struct TimeWindowMetricRow: View {
     let usagePercent: UsagePercent
     let subtitle: String?
 
-    /// Heuristic threshold above which the subtitle is considered "long" and
-    /// gains a toggle. Chosen so a single concatenated model list ("Claude
-    /// Sonnet 4.6 (Thinking), Claude Opus 4.6 (Thinking)") still fits without
-    /// a toggle but Antigravity's three-model cohorts do not.
-    private static let subtitleExpansionThreshold = 60
-
     @State private var isSubtitleExpanded = false
 
     var body: some View {
@@ -83,34 +77,24 @@ struct TimeWindowMetricRow: View {
 
     @ViewBuilder
     private func subtitleView(_ subtitle: String) -> some View {
-        let needsToggle = subtitle.count > Self.subtitleExpansionThreshold
-        // HStack keeps the toggle next to the truncated subtitle on a single
-        // line in the collapsed state. When expanded the Text wraps over
-        // multiple lines and the toggle anchors to the last baseline, which
-        // reads naturally as "the trailing affordance of the now-visible
-        // text".
-        HStack(alignment: .lastTextBaseline, spacing: 4) {
+        // Tap-to-expand: collapsed shows a single ellipsised line, tapping
+        // anywhere on the row (including the trailing empty space) expands
+        // the text over as many lines as it needs. Cheaper than a separate
+        // "Show all" affordance and avoids the toggle reserving space when
+        // the subtitle would have fit on one line anyway.
+        HStack(spacing: 0) {
             Text(subtitle)
                 .font(.system(size: 9, weight: .regular))
                 .italic()
-                .foregroundStyle(.tertiary)
-                .opacity(0.6)
+                .foregroundStyle(.secondary)
                 .lineLimit(isSubtitleExpanded ? nil : 1)
                 .truncationMode(.tail)
                 .fixedSize(horizontal: false, vertical: isSubtitleExpanded)
-            if needsToggle {
-                Button {
-                    isSubtitleExpanded.toggle()
-                } label: {
-                    Text(isSubtitleExpanded ? "Show less" : "Show all")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(.tint)
-                        .underline()
-                }
-                .buttonStyle(.plain)
-                .fixedSize()
-            }
             Spacer(minLength: 0)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            isSubtitleExpanded.toggle()
         }
     }
 }
