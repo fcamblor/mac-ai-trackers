@@ -181,8 +181,24 @@ public struct TimeWindowVisualState: Sendable, Equatable {
 
 extension Array where Element == VendorUsageEntry {
     /// Sorted by vendor name, then active-first within each vendor, then account name.
-    public func sortedForDisplay() -> [VendorUsageEntry] {
-        sorted { lhs, rhs in
+    /// When `order` is non-empty, entries whose `id` is listed there are placed first
+    /// in the given order; the remainder falls back to the alphabetical sort.
+    public func sortedForDisplay(order: [String] = []) -> [VendorUsageEntry] {
+        var orderIndex: [String: Int] = [:]
+        for (index, id) in order.enumerated() where orderIndex[id] == nil {
+            orderIndex[id] = index
+        }
+        return sorted { lhs, rhs in
+            let li = orderIndex[lhs.id]
+            let ri = orderIndex[rhs.id]
+            if li != nil || ri != nil {
+                switch (li, ri) {
+                case let (l?, r?): return l < r
+                case (_?, nil): return true
+                case (nil, _?): return false
+                case (nil, nil): break
+                }
+            }
             if lhs.vendor.rawValue != rhs.vendor.rawValue {
                 return lhs.vendor.rawValue < rhs.vendor.rawValue
             }

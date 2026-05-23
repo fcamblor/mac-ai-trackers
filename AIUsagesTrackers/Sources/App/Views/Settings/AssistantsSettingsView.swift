@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import AIUsagesTrackersLib
 
 struct AssistantsSettingsView: View {
@@ -6,11 +7,356 @@ struct AssistantsSettingsView: View {
 
     var body: some View {
         Form {
+            Section("Accounts") {
+                AccountsOrderingSection()
+            }
+            Section("Ignored accounts") {
+                IgnoredAccountsSection()
+            }
             Section("Claude Code credentials") {
                 KeychainDiagnosticView()
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+// MARK: - Ignored accounts section (relocated from General)
+
+private struct IgnoredAccountsSection: View {
+    private var prefs: UserDefaultsAppPreferences { AppDelegate.sharedPreferences }
+
+    var body: some View {
+        Text("Right-click an account in the popover or use the eye icon in the Accounts list above to ignore it.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        if prefs.ignoredAccounts.isEmpty {
+            Text("No ignored accounts.")
+                .foregroundStyle(.secondary)
+        } else {
+            ForEach(prefs.ignoredAccounts, id: \.self) { ignored in
+                HStack(spacing: 8) {
+                    VendorIconView(vendor: ignored.vendor, size: 13)
+                    Text(ignored.account.rawValue)
+                        .font(.system(size: 12))
+                    Spacer()
+                    Button(role: .destructive) {
+                        prefs.ignoredAccounts.removeAll { $0 == ignored }
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+            Button("Remove all", role: .destructive) {
+                prefs.ignoredAccounts = []
+            }
+        }
+    }
+}
+
+// MARK: - Accounts ordering section
+
+/// Lists every currently-detected, non-ignored account in the user-chosen
+/// order and lets the user drag-reorder them or ignore them. Mirrors the
+/// drag pattern used in `ChartSettingsView` / `SegmentCardView` (gesture on
+/// the handle, named coordinate space, drop indicator capsule). The order is
+/// persisted as `accountsOrder` and applied in the popover via
+/// `sortedForDisplay(order:)`.
+private struct AccountsOrderingSection: View {
+    var body: some View {
+        if let store = AppDelegate.sharedStore {
+            AccountsOrderingContent(store: store)
+        } else {
+            Text("Loading accounts…")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct AccountRowFramePreferenceKey: PreferenceKey {
+    static let defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
+/// Tracks the live drag cursor Y so the floating preview can follow it
+/// without forcing a re-layout of the underlying list on every frame.
+@MainActor
+private final class AccountListDragCursorTracker: ObservableObject {
+    @Published var y: CGFloat = 0
+}
+
+private struct AccountsOrderingContent: View {
+    @Bindable var store: UsageStore
+
+    private static let coordinateSpaceName = "assistants.accountsOrdering"
+
+    private var prefs: UserDefaultsAppPreferences { AppDelegate.sharedPreferences }
+
+    @State private var rowFrames: [String: CGRect] = [:]
+    @State private var draggingID: String?
+    @State private var dropIndex: Int?
+    @StateObject private var cursorTracker = AccountListDragCursorTracker()
+
+    private var visibleEntries: [VendorUsageEntry] {
+        store.entries
+            .excluding(ignoredAccounts: prefs.ignoredAccounts)
+            .sortedForDisplay(order: prefs.accountsOrder)
+    }
+
+    var body: some View {
+        let entries = visibleEntries
+        if entries.isEmpty {
+            Text("No accounts detected yet.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Drag the handle to reorder. The popover displays accounts in this order.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ZStack(alignment: .topLeading) {
+                    LazyVStack(spacing: 2) {
+                        ForEach(entries, id: \.id) { entry in
+                            row(for: entry)
+                        }
+                    }
+                    .animation(.spring(response: 0.34, dampingFraction: 0.85), value: draggingID)
+                    .animation(.spring(response: 0.34, dampingFraction: 0.85), value: dropIndex)
+                    dropIndicator(entries: entries)
+                    floatingPreview(entries: entries)
+                }
+                .coordinateSpace(name: Self.coordinateSpaceName)
+                .onPreferenceChange(AccountRowFramePreferenceKey.self) { rowFrames = $0 }
+            }
+        }
+    }
+
+    private func row(for entry: VendorUsageEntry) -> some View {
+        let isDragging = draggingID == entry.id
+        return AccountOrderingRow(
+            entry: entry,
+            isBeingDragged: isDragging,
+            dragCoordinateSpace: Self.coordinateSpaceName,
+            onIgnore: { ignore(entry: entry) },
+            onDragChanged: { value in handleDragChanged(value: value, entryID: entry.id) },
+            onDragEnded: { value in handleDragEnded(value: value, entryID: entry.id) }
+        )
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: AccountRowFramePreferenceKey.self,
+                    value: [entry.id: geo.frame(in: .named(Self.coordinateSpaceName))]
+                )
+            }
+        )
+        .opacity(isDragging ? 0.0 : 1.0)
+        .frame(maxHeight: isDragging ? 0 : nil)
+        .clipped()
+    }
+
+    @ViewBuilder
+    private func dropIndicator(entries: [VendorUsageEntry]) -> some View {
+        if let dropIndex, let y = dropIndicatorY(entries: entries, atIndex: dropIndex) {
+            Capsule()
+                .fill(Color.accentColor)
+                .frame(height: 2)
+                .padding(.horizontal, 4)
+                .offset(y: y - 1)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private func dropIndicatorY(entries: [VendorUsageEntry], atIndex index: Int) -> CGFloat? {
+        let visible = entries.filter { $0.id != draggingID }
+        guard !visible.isEmpty else { return 0 }
+        let clamped = max(0, min(index, visible.count))
+        if clamped == 0 {
+            return rowFrames[visible[0].id]?.minY
+        }
+        if clamped >= visible.count {
+            return rowFrames[visible.last!.id]?.maxY
+        }
+        let prev = rowFrames[visible[clamped - 1].id]?.maxY ?? 0
+        let next = rowFrames[visible[clamped].id]?.minY ?? prev
+        return (prev + next) / 2
+    }
+
+    @ViewBuilder
+    private func floatingPreview(entries: [VendorUsageEntry]) -> some View {
+        if let id = draggingID,
+           let entry = entries.first(where: { $0.id == id }),
+           let frame = rowFrames[id] {
+            AccountListFloatingDragPreview(
+                tracker: cursorTracker,
+                entry: entry,
+                frame: frame
+            )
+        }
+    }
+
+    private func handleDragChanged(value: DragGesture.Value, entryID: String) {
+        if draggingID == nil {
+            draggingID = entryID
+        }
+        cursorTracker.y = value.location.y
+        let entries = visibleEntries
+        let newDropIndex = computeDropIndex(at: value.location.y, entries: entries)
+        if newDropIndex != dropIndex {
+            dropIndex = newDropIndex
+        }
+    }
+
+    private func handleDragEnded(value: DragGesture.Value, entryID: String) {
+        let entries = visibleEntries
+        let finalIndex = computeDropIndex(at: value.location.y, entries: entries)
+        performDrop(draggedID: entryID, toVisibleIndex: finalIndex, entries: entries)
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
+            draggingID = nil
+            dropIndex = nil
+        }
+    }
+
+    private func computeDropIndex(at y: CGFloat, entries: [VendorUsageEntry]) -> Int {
+        let visible = entries.filter { $0.id != draggingID }
+        for (idx, entry) in visible.enumerated() {
+            guard let frame = rowFrames[entry.id] else { continue }
+            if y < frame.midY { return idx }
+        }
+        return visible.count
+    }
+
+    private func performDrop(draggedID: String, toVisibleIndex visibleIndex: Int, entries: [VendorUsageEntry]) {
+        var ids = entries.map(\.id)
+        guard let sourceIdx = ids.firstIndex(of: draggedID) else { return }
+        let destOffset: Int
+        if visibleIndex >= sourceIdx {
+            destOffset = visibleIndex + 1
+        } else {
+            destOffset = visibleIndex
+        }
+        if destOffset == sourceIdx || destOffset == sourceIdx + 1 { return }
+        ids.move(fromOffsets: IndexSet(integer: sourceIdx), toOffset: destOffset)
+        prefs.accountsOrder = ids
+    }
+
+    private func ignore(entry: VendorUsageEntry) {
+        let ignored = IgnoredAccount(vendor: entry.vendor, account: entry.account)
+        if !prefs.ignoredAccounts.contains(ignored) {
+            prefs.ignoredAccounts.append(ignored)
+        }
+    }
+}
+
+private struct AccountOrderingRow: View {
+    let entry: VendorUsageEntry
+    let isBeingDragged: Bool
+    let dragCoordinateSpace: String
+    let onIgnore: () -> Void
+    let onDragChanged: (DragGesture.Value) -> Void
+    let onDragEnded: (DragGesture.Value) -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            dragHandle
+            VendorIconView(vendor: entry.vendor, size: 13)
+            Text(entry.account.rawValue)
+                .font(.system(size: 12))
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer()
+            Button {
+                onIgnore()
+            } label: {
+                Image(systemName: "eye.slash")
+            }
+            .buttonStyle(.borderless)
+            .help("Ignore this account")
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isHovering ? Color.secondary.opacity(0.07) : Color.clear)
+        )
+        .onHover { isHovering = $0 }
+    }
+
+    private var dragHandle: some View {
+        Image(systemName: "line.3.horizontal")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(isHovering ? Color.secondary : Color.secondary.opacity(0.55))
+            .frame(width: 18, height: 22)
+            .contentShape(Rectangle())
+            .help("Drag to reorder")
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.openHand.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 4, coordinateSpace: .named(dragCoordinateSpace))
+                    .onChanged(onDragChanged)
+                    .onEnded(onDragEnded)
+            )
+    }
+}
+
+/// Static visual of an account row used as the floating drag preview.
+/// Mirrors the in-list row so the user keeps a consistent mental anchor
+/// while dragging, but strips interactive bits (hover, cursor, button).
+private struct AccountDragPreviewCard: View {
+    let entry: VendorUsageEntry
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 18, height: 22)
+            VendorIconView(vendor: entry.vendor, size: 13)
+            Text(entry.account.rawValue)
+                .font(.system(size: 12))
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 0)
+            Image(systemName: "eye.slash")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(.background)
+                .shadow(color: .black.opacity(0.28), radius: 14, x: 0, y: 6)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.accentColor.opacity(0.5), lineWidth: 1)
+        )
+        .rotationEffect(.degrees(-1.2))
+        .scaleEffect(1.02)
+    }
+}
+
+private struct AccountListFloatingDragPreview: View {
+    @ObservedObject var tracker: AccountListDragCursorTracker
+    let entry: VendorUsageEntry
+    let frame: CGRect
+
+    var body: some View {
+        AccountDragPreviewCard(entry: entry)
+            .frame(width: max(frame.width, 240))
+            .offset(x: frame.minX, y: tracker.y - frame.height / 2)
+            .allowsHitTesting(false)
     }
 }
 

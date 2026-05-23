@@ -132,7 +132,7 @@ struct UsageDetailsView: View {
         let prefs = AppDelegate.sharedPreferences
         let sorted = store.entries
             .excluding(ignoredAccounts: prefs.ignoredAccounts)
-            .sortedForDisplay()
+            .sortedForDisplay(order: prefs.accountsOrder)
         if sorted.isEmpty && !store.entries.isEmpty {
             allAccountsIgnoredState
         } else if sorted.isEmpty {
