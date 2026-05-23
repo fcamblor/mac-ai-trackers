@@ -84,11 +84,17 @@ struct TimeWindowMetricRow: View {
     @ViewBuilder
     private func subtitleView(_ subtitle: String) -> some View {
         let needsToggle = subtitle.count > Self.subtitleExpansionThreshold
-        VStack(alignment: .leading, spacing: 2) {
+        // HStack keeps the toggle next to the truncated subtitle on a single
+        // line in the collapsed state. When expanded the Text wraps over
+        // multiple lines and the toggle anchors to the last baseline, which
+        // reads naturally as "the trailing affordance of the now-visible
+        // text".
+        HStack(alignment: .lastTextBaseline, spacing: 4) {
             Text(subtitle)
                 .font(.system(size: 9, weight: .regular))
                 .italic()
                 .foregroundStyle(.tertiary)
+                .opacity(0.6)
                 .lineLimit(isSubtitleExpanded ? nil : 1)
                 .truncationMode(.tail)
                 .fixedSize(horizontal: false, vertical: isSubtitleExpanded)
@@ -102,7 +108,9 @@ struct TimeWindowMetricRow: View {
                         .underline()
                 }
                 .buttonStyle(.plain)
+                .fixedSize()
             }
+            Spacer(minLength: 0)
         }
     }
 }
