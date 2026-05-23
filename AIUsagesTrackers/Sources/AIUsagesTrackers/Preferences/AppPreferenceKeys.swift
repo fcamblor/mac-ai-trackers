@@ -12,6 +12,10 @@ public enum AppPreferenceKeys: String {
     case chartConfigurations = "ai-tracker.chartConfigurations"
     case chartConfigurationsInitialized = "ai-tracker.chartConfigurationsInitialized"
     case ignoredAccounts = "ai-tracker.ignoredAccounts"
+    /// JSON-encoded `[String]` of `"vendor:account"` identifiers in the order
+    /// the user has chosen for the popover account list. Identifiers absent
+    /// from this list fall back to the legacy alphabetical sort.
+    case accountsOrder = "ai-tracker.accountsOrder"
     case updatesAutoCheckEnabled = "ai-tracker.updatesAutoCheckEnabled"
     case updatesAutoCheckEnabledInitialized = "ai-tracker.updatesAutoCheckEnabledInitialized"
     case updatesDismissedVersions = "ai-tracker.updatesDismissedVersions"

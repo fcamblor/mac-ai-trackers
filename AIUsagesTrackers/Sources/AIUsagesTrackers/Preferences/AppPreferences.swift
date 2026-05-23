@@ -21,6 +21,10 @@ public protocol AppPreferences: AnyObject, Observable, Sendable {
     /// configuration list is preserved after first initialization.
     var chartConfigurationsInitialized: Bool { get set }
     var ignoredAccounts: [IgnoredAccount] { get set }
+    /// User-chosen display order for the popover account list. Stored as a
+    /// list of `VendorUsageEntry.id` (`"vendor:account"`). Entries not present
+    /// fall back to the legacy alphabetical sort behind the ordered ones.
+    var accountsOrder: [String] { get set }
     /// When true, the scheduler periodically polls GitHub for new releases.
     /// Defaults to true (opt-out).
     var updatesAutoCheckEnabled: Bool { get set }
@@ -191,6 +195,18 @@ public final class UserDefaultsAppPreferences: AppPreferences {
         }
     }
 
+    public var accountsOrder: [String] {
+        get {
+            access(keyPath: \.accountsOrder)
+            return defaults.stringArray(forKey: AppPreferenceKeys.accountsOrder.rawValue) ?? []
+        }
+        set {
+            withMutation(keyPath: \.accountsOrder) {
+                defaults.set(newValue, forKey: AppPreferenceKeys.accountsOrder.rawValue)
+            }
+        }
+    }
+
     public var updatesAutoCheckEnabled: Bool {
         get {
             access(keyPath: \.updatesAutoCheckEnabled)
@@ -285,6 +301,7 @@ public final class InMemoryAppPreferences: AppPreferences {
     public var chartConfigurations: [ChartConfiguration]
     public var chartConfigurationsInitialized: Bool
     public var ignoredAccounts: [IgnoredAccount]
+    public var accountsOrder: [String]
     public var updatesAutoCheckEnabled: Bool
     public var updatesDismissedVersions: [String]
     public var statusComponentSubscriptions: [String: Bool]
@@ -300,6 +317,7 @@ public final class InMemoryAppPreferences: AppPreferences {
         chartConfigurations: [ChartConfiguration] = [],
         chartConfigurationsInitialized: Bool = false,
         ignoredAccounts: [IgnoredAccount] = [],
+        accountsOrder: [String] = [],
         updatesAutoCheckEnabled: Bool = true,
         updatesDismissedVersions: [String] = [],
         statusComponentSubscriptions: [String: Bool] = [:],
@@ -314,6 +332,7 @@ public final class InMemoryAppPreferences: AppPreferences {
         self.chartConfigurations = chartConfigurations
         self.chartConfigurationsInitialized = chartConfigurationsInitialized
         self.ignoredAccounts = ignoredAccounts
+        self.accountsOrder = accountsOrder
         self.updatesAutoCheckEnabled = updatesAutoCheckEnabled
         self.updatesDismissedVersions = updatesDismissedVersions
         self.statusComponentSubscriptions = statusComponentSubscriptions

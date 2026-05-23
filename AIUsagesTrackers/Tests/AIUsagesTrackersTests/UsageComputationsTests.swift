@@ -243,6 +243,46 @@ struct SortedForDisplayTests {
         #expect(result[1].account.rawValue == "z@b.com")
     }
 
+    @Test("user-supplied order places listed ids first, in that order")
+    func userOrderListedFirst() {
+        let entries = [
+            entry(vendor: "claude", account: "a@b.com"),
+            entry(vendor: "openai", account: "x@y.com"),
+            entry(vendor: "cursor", account: "c@d.com"),
+        ]
+        let order = ["openai:x@y.com", "claude:a@b.com"]
+        let result = entries.sortedForDisplay(order: order)
+        #expect(result[0].id == "openai:x@y.com")
+        #expect(result[1].id == "claude:a@b.com")
+        #expect(result[2].id == "cursor:c@d.com")
+    }
+
+    @Test("entries absent from order list keep alphabetical fallback after ordered ones")
+    func unorderedFallback() {
+        let entries = [
+            entry(vendor: "openai", account: "x@y.com"),
+            entry(vendor: "claude", account: "a@b.com"),
+            entry(vendor: "cursor", account: "c@d.com"),
+        ]
+        let result = entries.sortedForDisplay(order: ["openai:x@y.com"])
+        #expect(result[0].id == "openai:x@y.com")
+        // Remainder falls back to vendor alphabetical: claude < cursor
+        #expect(result[1].id == "claude:a@b.com")
+        #expect(result[2].id == "cursor:c@d.com")
+    }
+
+    @Test("stale ids in order list are ignored without affecting present ones")
+    func staleOrderIdsIgnored() {
+        let entries = [
+            entry(vendor: "claude", account: "a@b.com"),
+            entry(vendor: "openai", account: "x@y.com"),
+        ]
+        let order = ["gone:ghost@x.com", "openai:x@y.com"]
+        let result = entries.sortedForDisplay(order: order)
+        #expect(result[0].id == "openai:x@y.com")
+        #expect(result[1].id == "claude:a@b.com")
+    }
+
     @Test("full three-level sort")
     func threeLevelSort() {
         let entries = [
