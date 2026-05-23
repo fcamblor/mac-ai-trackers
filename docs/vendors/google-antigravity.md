@@ -362,10 +362,41 @@ Cohorts are sorted by `(resetTime ascending, remainingFraction
 ascending)` for deterministic numbering.
 
 When a cadence label corresponds to **a single cohort** in the current
-emit, the label is used as-is (no `#N` suffix). When **multiple
-cohorts** share a cadence label (e.g. the two weekly buckets observed
-on Workspace), they are disambiguated with `"#1"`, `"#2"`, … in
-sort order.
+emit AND no `#N` variant of that label has ever been issued before, the
+label is used as-is (no `#N` suffix). When **multiple cohorts** share a
+cadence label (e.g. the two weekly buckets observed on Workspace), they
+are disambiguated with `"#1"`, `"#2"`, … picking the smallest free
+slot.
+
+#### Name stability across polls
+
+Metric names are identifiers — menu hints and chart configurations
+reference cohorts by name — so they MUST stay stable across polls. The
+connector memoises, per `modelId`, the cohort name last emitted for
+that model. On each subsequent tick:
+
+1. For each new cohort, scan its `modelId`s. The first hit in the
+   memoised map whose previous name shares the cohort's current
+   `baseName` (either `"<baseName>"` or `"<baseName> #N"`) wins and is
+   inherited verbatim. This handles roll-over: when a cohort's
+   `resetTime` elapses and Google opens a fresh window with overlapping
+   models, the new cohort keeps the old name.
+2. Each previously-seen name can be claimed by at most one cohort per
+   tick (first match wins, in sort order). Cohorts that find no
+   inheritable name fall through to fresh assignment.
+3. A previously-issued `#N` slot keeps the increment for that baseName
+   active even if the original cohort has since disappeared — a single
+   surviving "Weekly #1" cohort is still emitted as `"Weekly #1"`, not
+   degraded to bare `"Weekly"`. This matters because charts pinned to
+   that name must continue to resolve.
+4. Inherited `#N` slots are removed from the pool of available
+   increments before fresh assignment runs, so a newly-introduced
+   sibling cohort picks the next free integer.
+
+A cadence-label change (e.g. a model formerly seen in a `"5h session"`
+cohort migrating into a weekly cohort) is treated as a name break:
+inheritance is gated on baseName equality so we never carry a `"5h
+session #2"` name onto a weekly cohort.
 
 ### Subtitle generation
 

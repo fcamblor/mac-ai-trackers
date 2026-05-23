@@ -28,6 +28,15 @@ public actor AntigravityConnector: UsageConnector {
     // model aliases that map to the same display label.
     private var lastKnownWindowByModel: [String: DurationMinutes] = [:]
 
+    // Memoises the cohort metric name last assigned to each `modelId`. Names
+    // must remain stable across polls because they are referenced by id from
+    // menu hints and chart configurations. When a cohort rolls over (its
+    // resetAt elapses and a fresh window opens) the new cohort inherits the
+    // previous name as long as it shares at least one modelId with the old
+    // one. Disjoint cohorts that collide on baseName ("Weekly", "5h sessions")
+    // are disambiguated with a "#N" increment.
+    private var lastKnownCohortNameByModel: [String: String] = [:]
+
     private static let requestTimeoutSeconds = 5.0
     private static let fiveHourWindowMinutes = 5 * 60
     private static let weeklyWindowMinutes = 7 * 24 * 60
@@ -63,6 +72,8 @@ public actor AntigravityConnector: UsageConnector {
         cachedModelCatalogue = [:]
         cachedCatalogueRefresh = nil
         lastKnownMetricsByAccount = [:]
+        lastKnownWindowByModel = [:]
+        lastKnownCohortNameByModel = [:]
         logger.log(.info, "Antigravity credential cache invalidated")
     }
 
@@ -318,20 +329,31 @@ public actor AntigravityConnector: UsageConnector {
             cohorted[resetKey]?.append(bucket)
         }
 
-        var metrics: [UsageMetric] = []
+        // Phase 1: assemble candidates with their baseName and any inherited
+        // name from the previous tick. A name is inheritable only if at least
+        // one modelId of the cohort was previously seen under that name AND
+        // the previous name shares the cohort's current baseName (so we never
+        // inherit "Weekly #1" onto a "5h sessions" cohort after a cadence
+        // change).
+        struct CohortCandidate {
+            let buckets: [QuotaBucket]
+            let resetAt: ISODate?
+            let resolvedWindow: DurationMinutes?
+            let baseName: String
+            let inheritedName: String?
+            let avgRemaining: Double
+            let subtitle: String?
+        }
+
+        var candidates: [CohortCandidate] = []
+        var inheritedNamesClaimed: Set<String> = []
 
         for (_, buckets) in cohorted.sorted(by: { ($0.key) < ($1.key) }) {
             guard !buckets.isEmpty else { continue }
 
-            // Use the first bucket's resetAt as representative
             let resetAt = buckets[0].resetAt
-
-            // Compute average remaining fraction across bucket
             let avgRemaining = buckets.map(\.remainingFraction).reduce(0, +) / Double(buckets.count)
-            let percentRemaining = max(0.0, min(100.0, avgRemaining * 100.0))
-            let percentUsed = 100.0 - percentRemaining
 
-            // Build subtitle from model display names (reverse order, deduplicated)
             let displayNames = buckets
                 .reversed()
                 .compactMap { catalogue[$0.modelId]?.displayName ?? $0.modelId }
@@ -342,33 +364,97 @@ public actor AntigravityConnector: UsageConnector {
                 }
             let subtitle = displayNames.joined(separator: ", ")
 
-            // Resolve the window duration: prefer the cadence implied by
-            // `resetAt`, fall back to the cadence last memoised for any of the
-            // bucket's models. If neither path yields a value the cohort is
-            // emitted as "Unknown" so the UI can degrade explicitly instead
-            // of guessing weekly.
             let resolvedWindow = resolveWindowDuration(resetAt: resetAt, buckets: buckets)
 
-            // Memoise the resolved cadence per `modelId` so future cohorts
-            // missing a `resetTime` can still be named correctly.
             if let resolved = resolvedWindow {
                 for bucket in buckets {
                     lastKnownWindowByModel[bucket.modelId] = resolved
                 }
             }
 
-            let metric = UsageMetric.timeWindow(
-                name: metricName(for: resolvedWindow),
+            let baseName = metricName(for: resolvedWindow)
+
+            var inheritedName: String?
+            for bucket in buckets {
+                guard let previous = lastKnownCohortNameByModel[bucket.modelId] else { continue }
+                guard previous == baseName || previous.hasPrefix(baseName + " #") else { continue }
+                guard !inheritedNamesClaimed.contains(previous) else { continue }
+                inheritedName = previous
+                inheritedNamesClaimed.insert(previous)
+                break
+            }
+
+            candidates.append(CohortCandidate(
+                buckets: buckets,
                 resetAt: resetAt,
-                windowDuration: resolvedWindow ?? DurationMinutes(rawValue: Self.weeklyWindowMinutes),
-                usagePercent: UsagePercent(rawValue: Int(percentUsed.rounded())),
+                resolvedWindow: resolvedWindow,
+                baseName: baseName,
+                inheritedName: inheritedName,
+                avgRemaining: avgRemaining,
                 subtitle: subtitle.isEmpty ? nil : subtitle
+            ))
+        }
+
+        // Phase 2: resolve final names. A cohort that inherited a name keeps
+        // it verbatim. Otherwise we apply a "#N" increment whenever the
+        // baseName is shared by another cohort in this tick, or when an
+        // inherited "#N" name already burns a slot — picking the smallest
+        // available N so growth is monotonic.
+        let baseNameCounts: [String: Int] = candidates.reduce(into: [:]) { $0[$1.baseName, default: 0] += 1 }
+        var usedIncrements: [String: Set<Int>] = [:]
+        for candidate in candidates {
+            guard let inherited = candidate.inheritedName,
+                  let n = Self.parseIncrement(from: inherited, baseName: candidate.baseName) else { continue }
+            usedIncrements[candidate.baseName, default: []].insert(n)
+        }
+
+        var newCohortMapping: [String: String] = [:]
+        var metrics: [UsageMetric] = []
+
+        for candidate in candidates {
+            let finalName: String
+            if let inherited = candidate.inheritedName {
+                finalName = inherited
+            } else {
+                let shares = (baseNameCounts[candidate.baseName] ?? 0) > 1
+                let hasIncrementHistory = !(usedIncrements[candidate.baseName] ?? []).isEmpty
+                if shares || hasIncrementHistory {
+                    var n = 1
+                    while (usedIncrements[candidate.baseName] ?? []).contains(n) { n += 1 }
+                    usedIncrements[candidate.baseName, default: []].insert(n)
+                    finalName = "\(candidate.baseName) #\(n)"
+                } else {
+                    finalName = candidate.baseName
+                }
+            }
+
+            for bucket in candidate.buckets {
+                newCohortMapping[bucket.modelId] = finalName
+            }
+
+            let percentRemaining = max(0.0, min(100.0, candidate.avgRemaining * 100.0))
+            let percentUsed = 100.0 - percentRemaining
+
+            let metric = UsageMetric.timeWindow(
+                name: finalName,
+                resetAt: candidate.resetAt,
+                windowDuration: candidate.resolvedWindow ?? DurationMinutes(rawValue: Self.weeklyWindowMinutes),
+                usagePercent: UsagePercent(rawValue: Int(percentUsed.rounded())),
+                subtitle: candidate.subtitle
             )
 
             metrics.append(metric)
         }
 
+        lastKnownCohortNameByModel = newCohortMapping
+
         return metrics
+    }
+
+    private static func parseIncrement(from name: String, baseName: String) -> Int? {
+        let prefix = baseName + " #"
+        guard name.hasPrefix(prefix) else { return nil }
+        return Int(name.dropFirst(prefix.count))
     }
 
     private func resolveWindowDuration(resetAt: ISODate?, buckets: [QuotaBucket]) -> DurationMinutes? {
