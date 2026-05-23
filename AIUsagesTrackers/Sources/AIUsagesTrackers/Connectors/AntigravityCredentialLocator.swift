@@ -93,6 +93,7 @@ public actor AntigravityCredentialLocator: CredentialLocator {
         }
 
         let keychainQuery = [
+            "find-generic-password",
             "-s", keychainServiceName,
             "-a", Self.keychainAccount
         ]
@@ -135,28 +136,56 @@ public actor AntigravityCredentialLocator: CredentialLocator {
             throw AntigravityAuthError.keychainEmpty(serviceName: keychainServiceName)
         }
 
-        guard let jsonData = passwordStr.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
+        // The `antigravity` CLI uses the Go `keyring` library which wraps values
+        // with a `go-keyring-base64:` prefix before storing. Strip + decode.
+        let jsonData: Data
+        if passwordStr.hasPrefix(Self.goKeyringPrefix) {
+            let base64Part = String(passwordStr.dropFirst(Self.goKeyringPrefix.count))
+            guard let decoded = Data(base64Encoded: base64Part) else {
+                let preview = String(passwordStr.prefix(100))
+                throw AntigravityAuthError.keychainParseFailed(serviceName: keychainServiceName, rawPreview: preview)
+            }
+            jsonData = decoded
+        } else {
+            guard let direct = passwordStr.data(using: .utf8) else {
+                throw AntigravityAuthError.keychainParseFailed(serviceName: keychainServiceName, rawPreview: String(passwordStr.prefix(100)))
+            }
+            jsonData = direct
+        }
+
+        guard let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+              let tokenDict = json["token"] as? [String: Any]
         else {
             let preview = String(passwordStr.prefix(100))
             throw AntigravityAuthError.keychainParseFailed(serviceName: keychainServiceName, rawPreview: preview)
         }
 
-        guard let accessToken = json["access_token"] as? String else {
+        guard let accessToken = tokenDict["access_token"] as? String, !accessToken.isEmpty else {
             let preview = String(passwordStr.prefix(100))
             throw AntigravityAuthError.keychainParseFailed(serviceName: keychainServiceName, rawPreview: preview)
         }
 
-        guard let expiresInStr = json["expires_in"] as? String,
-              let expiresInSeconds = Int(expiresInStr)
-        else {
+        guard let expiryStr = tokenDict["expiry"] as? String else {
             throw AntigravityAuthError.missingExpiresAt(serviceName: keychainServiceName)
         }
 
-        let expiresAt = now.addingTimeInterval(TimeInterval(expiresInSeconds))
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var parsedExpiry = formatter.date(from: expiryStr)
+        if parsedExpiry == nil {
+            // Fallback for values without sub-second precision
+            let plainFormatter = ISO8601DateFormatter()
+            plainFormatter.formatOptions = [.withInternetDateTime]
+            parsedExpiry = plainFormatter.date(from: expiryStr)
+        }
+        guard let expiresAt = parsedExpiry else {
+            throw AntigravityAuthError.invalidExpiresAtFormat(serviceName: keychainServiceName, rawValue: expiryStr)
+        }
 
         logger.log(.debug, "AntigravityCredentialLocator.locate() succeeded, token expires at \(expiresAt)")
 
         return AntigravityCredentials(accessToken: accessToken, expiresAt: expiresAt)
     }
+
+    private static let goKeyringPrefix = "go-keyring-base64:"
 }
