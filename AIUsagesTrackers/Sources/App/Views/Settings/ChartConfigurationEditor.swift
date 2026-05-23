@@ -182,10 +182,16 @@ struct ChartConfigurationEditor: View {
                 get: { bulkVendorFilter },
                 set: { newValue in
                     bulkVendorFilter = newValue
-                    // A specific account email is only meaningful under a specific vendor:
-                    // dropping back to "All vendors" would orphan the email reference.
-                    if case .all = newValue, case .specific = bulkAccountFilter {
-                        bulkAccountFilter = .all
+                    if case .specific(let email) = bulkAccountFilter {
+                        switch newValue {
+                        case .all:
+                            bulkAccountFilter = .all
+                        case .specific(let vendor):
+                            let accounts = metricOptions.availableAccounts(for: vendor)
+                            if !accounts.contains(email) {
+                                bulkAccountFilter = .all
+                            }
+                        }
                     }
                 }
             )) {
