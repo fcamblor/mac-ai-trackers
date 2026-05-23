@@ -283,6 +283,20 @@ struct SortedForDisplayTests {
         #expect(result[1].id == "claude:a@b.com")
     }
 
+    @Test("duplicate ids in order list keep the first position")
+    func duplicateOrderIdsKeepFirstPosition() {
+        let entries = [
+            entry(vendor: "claude", account: "a@b.com"),
+            entry(vendor: "openai", account: "x@y.com"),
+            entry(vendor: "cursor", account: "c@d.com"),
+        ]
+        let order = ["openai:x@y.com", "claude:a@b.com", "openai:x@y.com"]
+        let result = entries.sortedForDisplay(order: order)
+        #expect(result[0].id == "openai:x@y.com")
+        #expect(result[1].id == "claude:a@b.com")
+        #expect(result[2].id == "cursor:c@d.com")
+    }
+
     @Test("full three-level sort")
     func threeLevelSort() {
         let entries = [

@@ -184,9 +184,10 @@ extension Array where Element == VendorUsageEntry {
     /// When `order` is non-empty, entries whose `id` is listed there are placed first
     /// in the given order; the remainder falls back to the alphabetical sort.
     public func sortedForDisplay(order: [String] = []) -> [VendorUsageEntry] {
-        let orderIndex: [String: Int] = order.isEmpty
-            ? [:]
-            : Dictionary(uniqueKeysWithValues: order.enumerated().map { ($1, $0) })
+        var orderIndex: [String: Int] = [:]
+        for (index, id) in order.enumerated() where orderIndex[id] == nil {
+            orderIndex[id] = index
+        }
         return sorted { lhs, rhs in
             let li = orderIndex[lhs.id]
             let ri = orderIndex[rhs.id]
