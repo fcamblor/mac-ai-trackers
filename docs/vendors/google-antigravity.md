@@ -524,6 +524,20 @@ error catalog.
   path, etc.) is empirically validated, but the current behavior is
   intentional, not a gap.
 
+## Alternative integration paths considered
+
+A second integration path — talking to the local `language_server`
+process Antigravity 2 spawns, instead of the OAuth + Google Code Assist
+endpoints documented above — was investigated and **deferred**. The
+local IPC surface returns useful identity / plan / global-credit data
+but does not expose the per-model `remainingFraction` values that
+drive the metrics in this connector, and its proto namespace is
+inherited verbatim from Windsurf with no Antigravity-specific
+stability guarantee. The investigation findings, RPC shapes,
+discovery procedure, and the conditions under which the path would be
+worth re-evaluating are kept in
+[`google-antigravity-language-server.md`](./google-antigravity-language-server.md).
+
 ## Source references
 
 - Antigravity CLI overview
