@@ -10,6 +10,14 @@ struct TimeWindowMetricRow: View {
     let usagePercent: UsagePercent
     let subtitle: String?
 
+    /// Heuristic threshold above which the subtitle is considered "long" and
+    /// gains a toggle. Chosen so a single concatenated model list ("Claude
+    /// Sonnet 4.6 (Thinking), Claude Opus 4.6 (Thinking)") still fits without
+    /// a toggle but Antigravity's three-model cohorts do not.
+    private static let subtitleExpansionThreshold = 60
+
+    @State private var isSubtitleExpanded = false
+
     var body: some View {
         // TimelineView re-renders every minute so remaining time and theoretical
         // consumption stay accurate even when no network refresh occurs.
@@ -29,18 +37,14 @@ struct TimeWindowMetricRow: View {
             now: now
         )
 
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 1) {
                     Text(name)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                     if let subtitle {
-                        Text(subtitle)
-                            .font(.system(size: 9, weight: .regular))
-                            .italic()
-                            .foregroundStyle(.tertiary)
-                            .lineLimit(1)
+                        subtitleView(subtitle)
                     }
                 }
                 Spacer()
@@ -73,6 +77,31 @@ struct TimeWindowMetricRow: View {
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func subtitleView(_ subtitle: String) -> some View {
+        let needsToggle = subtitle.count > Self.subtitleExpansionThreshold
+        VStack(alignment: .leading, spacing: 2) {
+            Text(subtitle)
+                .font(.system(size: 9, weight: .regular))
+                .italic()
+                .foregroundStyle(.tertiary)
+                .lineLimit(isSubtitleExpanded ? nil : 1)
+                .truncationMode(.tail)
+                .fixedSize(horizontal: false, vertical: isSubtitleExpanded)
+            if needsToggle {
+                Button {
+                    isSubtitleExpanded.toggle()
+                } label: {
+                    Text(isSubtitleExpanded ? "Show less" : "Show all")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.tint)
+                        .underline()
+                }
+                .buttonStyle(.plain)
             }
         }
     }
