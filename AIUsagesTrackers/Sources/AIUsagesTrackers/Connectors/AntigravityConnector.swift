@@ -144,7 +144,7 @@ public actor AntigravityConnector: UsageConnector {
             )
         }
 
-        logger.log(.debug, "Antigravity userinfo payload: \(sanitizer.sanitize(data))")
+        logger.log(.debug, "Antigravity userinfo payload: \(loggablePayload(data))")
 
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let email = json["email"] as? String else {
@@ -177,7 +177,7 @@ public actor AntigravityConnector: UsageConnector {
             )
         }
 
-        logger.log(.debug, "Antigravity loadCodeAssist payload: \(sanitizer.sanitize(data))")
+        logger.log(.debug, "Antigravity loadCodeAssist payload: \(loggablePayload(data))")
 
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let project = json["cloudaicompanionProject"] as? String else {
@@ -206,7 +206,7 @@ public actor AntigravityConnector: UsageConnector {
             )
         }
 
-        logger.log(.debug, "Antigravity fetchAvailableModels payload: \(sanitizer.sanitize(data))")
+        logger.log(.debug, "Antigravity fetchAvailableModels payload: \(loggablePayload(data))")
 
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let models = json["models"] as? [[String: Any]] else {
@@ -244,19 +244,25 @@ public actor AntigravityConnector: UsageConnector {
             )
         }
 
-        logger.log(.debug, "Antigravity retrieveUserQuota payload: \(sanitizer.sanitize(data))")
+        logger.log(.debug, "Antigravity retrieveUserQuota payload: \(loggablePayload(data))")
 
+        // Schema reference: see Tests/Fixtures/google-antigravity-anonymized-golden.json.
+        // Top-level key is `buckets`; per-bucket reset key is `resetTime`.
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let quotaBuckets = json["quotaBuckets"] as? [[String: Any]] else {
+              let quotaBuckets = json["buckets"] as? [[String: Any]] else {
             throw AntigravityConnectorError.parseError(endpoint: "retrieveUserQuota")
         }
 
         var buckets: [QuotaBucket] = []
         for bucket in quotaBuckets {
             guard let modelId = bucket["modelId"] as? String else { continue }
-            let remaining = (bucket["remainingFraction"] as? NSNumber)?.doubleValue ?? 0.0
+            // remainingFraction is omitted from the payload when its protobuf
+            // default applies — empirically observed on full (=1) internal
+            // buckets. Treat absence as 1.0 so the row reads as "untouched"
+            // rather than "exhausted".
+            let remaining = (bucket["remainingFraction"] as? NSNumber)?.doubleValue ?? 1.0
             let total = (bucket["totalFraction"] as? NSNumber)?.doubleValue ?? 1.0
-            let resetAt = isoDate(from: bucket["resetAt"] as? String)
+            let resetAt = isoDate(from: bucket["resetTime"] as? String)
             buckets.append(QuotaBucket(
                 modelId: modelId,
                 remainingFraction: remaining,
@@ -356,6 +362,15 @@ public actor AntigravityConnector: UsageConnector {
     private func isoDate(from raw: String?) -> ISODate? {
         guard let raw = raw, !raw.isEmpty else { return nil }
         return ISODate(rawValue: raw)
+    }
+
+    /// Runs the payload sanitizer and produces a human-readable string for
+    /// the connector log. The sanitizer returns `Data`; without this helper,
+    /// string-interpolating it would print the byte count instead of the
+    /// JSON body and silently defeat the diagnostic.
+    private func loggablePayload(_ data: Data) -> String {
+        let sanitized = sanitizer.sanitize(data)
+        return String(data: sanitized, encoding: .utf8) ?? "<non-UTF8, \(sanitized.count) bytes>"
     }
 
     private func preservedMetrics(for account: AccountEmail) -> [UsageMetric] {
