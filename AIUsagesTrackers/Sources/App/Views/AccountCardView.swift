@@ -69,12 +69,13 @@ struct AccountCardView: View {
     @ViewBuilder
     private func metricRow(for metric: UsageMetric) -> some View {
         switch metric {
-        case let .timeWindow(name, resetAt, windowDuration, usagePercent):
+        case let .timeWindow(name, resetAt, windowDuration, usagePercent, subtitle):
             TimeWindowMetricRow(
                 name: name,
                 resetAt: resetAt,
                 windowDuration: windowDuration,
-                usagePercent: usagePercent
+                usagePercent: usagePercent,
+                subtitle: subtitle
             )
         case let .payAsYouGo(name, currentAmount, currency):
             PayAsYouGoMetricRow(

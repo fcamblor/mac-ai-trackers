@@ -109,7 +109,7 @@ public actor SnapshotRecorder: SnapshotRecording {
             var metrics: [MetricSnapshot] = []
             for metric in entry.metrics {
                 switch metric {
-                case let .timeWindow(name, resetAt, _, usagePercent):
+                case let .timeWindow(name, resetAt, _, usagePercent, _):
                     metrics.append(MetricSnapshot(
                         name: name,
                         kind: .timeWindow,

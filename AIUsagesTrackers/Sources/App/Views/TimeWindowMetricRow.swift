@@ -8,6 +8,7 @@ struct TimeWindowMetricRow: View {
     let resetAt: ISODate?
     let windowDuration: DurationMinutes
     let usagePercent: UsagePercent
+    let subtitle: String?
 
     var body: some View {
         // TimelineView re-renders every minute so remaining time and theoretical
@@ -28,11 +29,20 @@ struct TimeWindowMetricRow: View {
             now: now
         )
 
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 2) {
             HStack {
-                Text(name)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.system(size: 9, weight: .regular))
+                            .italic()
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
+                }
                 Spacer()
                 Text(state.isUnknown ? "???" : "\(usagePercent.rawValue)%")
                     .font(.system(size: 11, weight: .semibold).monospacedDigit())
