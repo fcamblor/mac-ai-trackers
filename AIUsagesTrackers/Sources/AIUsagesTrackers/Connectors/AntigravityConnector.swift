@@ -20,7 +20,18 @@ public actor AntigravityConnector: UsageConnector {
     private var cachedModelCatalogue: [String: ModelInfo] = [:]
     private var cachedCatalogueRefresh: Date?
 
+    // Memoises the window duration last resolved for each `modelId`. Internal
+    // models (chat_*, tab_*) and freshly-rolled buckets ship without a
+    // `resetTime`, so without this fallback they collapse to "Unknown" even
+    // after we've previously seen them in a typed cohort. The map is keyed on
+    // `modelId` rather than display name because Antigravity ships several
+    // model aliases that map to the same display label.
+    private var lastKnownWindowByModel: [String: DurationMinutes] = [:]
+
     private static let requestTimeoutSeconds = 5.0
+    private static let fiveHourWindowMinutes = 5 * 60
+    private static let weeklyWindowMinutes = 7 * 24 * 60
+    private static let fiveHourThresholdSeconds: TimeInterval = 6 * 3600
 
     public init(
         auth: any CredentialLocator<AntigravityCredentials> = AntigravityCredentialLocator(),
@@ -331,24 +342,25 @@ public actor AntigravityConnector: UsageConnector {
                 }
             let subtitle = displayNames.joined(separator: ", ")
 
-            // Detect window duration (if delta < 6h, likely 5h cadence; else weekly)
-            let windowDuration: DurationMinutes
-            if let resetAt = resetAt, let resetDate = resetAt.date {
-                let now = Date()
-                let diff = resetDate.timeIntervalSince(now)
-                if diff > 0 && diff < (6 * 3600) {
-                    windowDuration = DurationMinutes(rawValue: 5 * 60)
-                } else {
-                    windowDuration = DurationMinutes(rawValue: 7 * 24 * 60)
+            // Resolve the window duration: prefer the cadence implied by
+            // `resetAt`, fall back to the cadence last memoised for any of the
+            // bucket's models. If neither path yields a value the cohort is
+            // emitted as "Unknown" so the UI can degrade explicitly instead
+            // of guessing weekly.
+            let resolvedWindow = resolveWindowDuration(resetAt: resetAt, buckets: buckets)
+
+            // Memoise the resolved cadence per `modelId` so future cohorts
+            // missing a `resetTime` can still be named correctly.
+            if let resolved = resolvedWindow {
+                for bucket in buckets {
+                    lastKnownWindowByModel[bucket.modelId] = resolved
                 }
-            } else {
-                windowDuration = DurationMinutes(rawValue: 7 * 24 * 60)
             }
 
             let metric = UsageMetric.timeWindow(
-                name: "Models",
+                name: metricName(for: resolvedWindow),
                 resetAt: resetAt,
-                windowDuration: windowDuration,
+                windowDuration: resolvedWindow ?? DurationMinutes(rawValue: Self.weeklyWindowMinutes),
                 usagePercent: UsagePercent(rawValue: Int(percentUsed.rounded())),
                 subtitle: subtitle.isEmpty ? nil : subtitle
             )
@@ -358,6 +370,35 @@ public actor AntigravityConnector: UsageConnector {
 
         return metrics
     }
+
+    private func resolveWindowDuration(resetAt: ISODate?, buckets: [QuotaBucket]) -> DurationMinutes? {
+        if let resetAt, let resetDate = resetAt.date {
+            let diff = resetDate.timeIntervalSince(clock())
+            if diff > 0 && diff < Self.fiveHourThresholdSeconds {
+                return DurationMinutes(rawValue: Self.fiveHourWindowMinutes)
+            }
+            return DurationMinutes(rawValue: Self.weeklyWindowMinutes)
+        }
+        // No resetAt — try to recover from the per-model memo. First hit wins;
+        // mixed cadences in the same cohort are unobserved in practice.
+        for bucket in buckets {
+            if let memoised = lastKnownWindowByModel[bucket.modelId] {
+                return memoised
+            }
+        }
+        return nil
+    }
+
+    private func metricName(for windowDuration: DurationMinutes?) -> String {
+        guard let windowDuration else { return "Unknown" }
+        switch windowDuration.rawValue {
+        case Self.fiveHourWindowMinutes: return "5h sessions"
+        case Self.weeklyWindowMinutes:   return "Weekly"
+        default:                          return "Models"
+        }
+    }
+
+    private nonisolated func clock() -> Date { Date() }
 
     private func isoDate(from raw: String?) -> ISODate? {
         guard let raw = raw, !raw.isEmpty else { return nil }
