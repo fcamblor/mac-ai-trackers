@@ -82,6 +82,13 @@ private struct AccountRowFramePreferenceKey: PreferenceKey {
     }
 }
 
+/// Tracks the live drag cursor Y so the floating preview can follow it
+/// without forcing a re-layout of the underlying list on every frame.
+@MainActor
+private final class AccountListDragCursorTracker: ObservableObject {
+    @Published var y: CGFloat = 0
+}
+
 private struct AccountsOrderingContent: View {
     @Bindable var store: UsageStore
 
@@ -92,6 +99,7 @@ private struct AccountsOrderingContent: View {
     @State private var rowFrames: [String: CGRect] = [:]
     @State private var draggingID: String?
     @State private var dropIndex: Int?
+    @StateObject private var cursorTracker = AccountListDragCursorTracker()
 
     private var visibleEntries: [VendorUsageEntry] {
         store.entries
@@ -119,6 +127,7 @@ private struct AccountsOrderingContent: View {
                     .animation(.spring(response: 0.34, dampingFraction: 0.85), value: draggingID)
                     .animation(.spring(response: 0.34, dampingFraction: 0.85), value: dropIndex)
                     dropIndicator(entries: entries)
+                    floatingPreview(entries: entries)
                 }
                 .coordinateSpace(name: Self.coordinateSpaceName)
                 .onPreferenceChange(AccountRowFramePreferenceKey.self) { rowFrames = $0 }
@@ -176,10 +185,24 @@ private struct AccountsOrderingContent: View {
         return (prev + next) / 2
     }
 
+    @ViewBuilder
+    private func floatingPreview(entries: [VendorUsageEntry]) -> some View {
+        if let id = draggingID,
+           let entry = entries.first(where: { $0.id == id }),
+           let frame = rowFrames[id] {
+            AccountListFloatingDragPreview(
+                tracker: cursorTracker,
+                entry: entry,
+                frame: frame
+            )
+        }
+    }
+
     private func handleDragChanged(value: DragGesture.Value, entryID: String) {
         if draggingID == nil {
             draggingID = entryID
         }
+        cursorTracker.y = value.location.y
         let entries = visibleEntries
         let newDropIndex = computeDropIndex(at: value.location.y, entries: entries)
         if newDropIndex != dropIndex {
@@ -283,6 +306,57 @@ private struct AccountOrderingRow: View {
                     .onChanged(onDragChanged)
                     .onEnded(onDragEnded)
             )
+    }
+}
+
+/// Static visual of an account row used as the floating drag preview.
+/// Mirrors the in-list row so the user keeps a consistent mental anchor
+/// while dragging, but strips interactive bits (hover, cursor, button).
+private struct AccountDragPreviewCard: View {
+    let entry: VendorUsageEntry
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 18, height: 22)
+            VendorIconView(vendor: entry.vendor, size: 13)
+            Text(entry.account.rawValue)
+                .font(.system(size: 12))
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 0)
+            Image(systemName: "eye.slash")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(.background)
+                .shadow(color: .black.opacity(0.28), radius: 14, x: 0, y: 6)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.accentColor.opacity(0.5), lineWidth: 1)
+        )
+        .rotationEffect(.degrees(-1.2))
+        .scaleEffect(1.02)
+    }
+}
+
+private struct AccountListFloatingDragPreview: View {
+    @ObservedObject var tracker: AccountListDragCursorTracker
+    let entry: VendorUsageEntry
+    let frame: CGRect
+
+    var body: some View {
+        AccountDragPreviewCard(entry: entry)
+            .frame(width: max(frame.width, 240))
+            .offset(x: frame.minX, y: tracker.y - frame.height / 2)
+            .allowsHitTesting(false)
     }
 }
 
