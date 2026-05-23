@@ -182,6 +182,14 @@ public actor AntigravityCredentialLocator: CredentialLocator {
             throw AntigravityAuthError.invalidExpiresAtFormat(serviceName: keychainServiceName, rawValue: expiryStr)
         }
 
+        // Short-circuit if the bearer is already dead — avoids hitting Google's
+        // OAuth endpoints with a stale token, which would otherwise surface as
+        // an opaque HTTP 401 (and, on repeated polling, escalate to 429).
+        if expiresAt < now.addingTimeInterval(-Self.expirySkewSeconds) {
+            logger.log(.debug, "AntigravityCredentialLocator.locate() short-circuit: token expired at \(expiresAt), now=\(now_rfc3339)")
+            throw AntigravityAuthError.tokenExpired(serviceName: keychainServiceName, expiredAt: expiresAt)
+        }
+
         logger.log(.debug, "AntigravityCredentialLocator.locate() succeeded, token expires at \(expiresAt)")
 
         return AntigravityCredentials(accessToken: accessToken, expiresAt: expiresAt)
