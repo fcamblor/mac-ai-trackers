@@ -10,14 +10,10 @@ public enum ClaudeCodePlugin {
     public static let branding = VendorBranding(
         vendor: .claude,
         displayName: "Claude Code",
-        tintHex: "DA7756",
-        assetName: "claude-mark"
+        tintHex: "DA7756"
     )
 
-    public static let documentation = VendorDocumentation(
-        vendor: .claude,
-        slug: "claude"
-    )
+    public static let documentation = VendorDocumentation(vendor: .claude)
 
     @discardableResult
     public static func register(

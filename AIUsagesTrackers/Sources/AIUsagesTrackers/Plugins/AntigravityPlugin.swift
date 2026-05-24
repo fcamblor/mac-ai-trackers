@@ -6,14 +6,10 @@ public enum AntigravityPlugin {
     public static let branding = VendorBranding(
         vendor: .antigravity,
         displayName: "Google Antigravity",
-        tintHex: "4285F4",
-        assetName: "antigravity-mark"
+        tintHex: "4285F4"
     )
 
-    public static let documentation = VendorDocumentation(
-        vendor: .antigravity,
-        slug: "antigravity"
-    )
+    public static let documentation = VendorDocumentation(vendor: .antigravity)
 
     @discardableResult
     public static func register(

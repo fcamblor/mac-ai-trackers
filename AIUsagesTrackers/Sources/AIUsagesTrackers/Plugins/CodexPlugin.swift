@@ -6,14 +6,10 @@ public enum CodexPlugin {
     public static let branding = VendorBranding(
         vendor: .codex,
         displayName: "Codex",
-        tintHex: "10A37F",
-        assetName: "codex-mark"
+        tintHex: "10A37F"
     )
 
-    public static let documentation = VendorDocumentation(
-        vendor: .codex,
-        slug: "codex"
-    )
+    public static let documentation = VendorDocumentation(vendor: .codex)
 
     @discardableResult
     public static func register(

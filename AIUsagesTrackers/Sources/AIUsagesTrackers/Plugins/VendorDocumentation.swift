@@ -8,9 +8,14 @@ public struct VendorDocumentation: Sendable, Equatable, Hashable {
     public let vendor: Vendor
     public let slug: String
 
-    public init(vendor: Vendor, slug: String) {
+    /// `slug` defaults to `vendor.rawValue` so the on-disk doc filename
+    /// (`docs/vendors/<slug>.md`) cannot drift from the vendor
+    /// identifier. Callers should rely on the default; an explicit value
+    /// is only needed when the doc deliberately lives under a different
+    /// name than the slug.
+    public init(vendor: Vendor, slug: String? = nil) {
         self.vendor = vendor
-        self.slug = slug
+        self.slug = slug ?? vendor.rawValue
     }
 
     /// Repository-relative path the doc must exist at.

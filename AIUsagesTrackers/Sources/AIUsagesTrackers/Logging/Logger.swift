@@ -265,10 +265,19 @@ public enum Loggers {
     }
 
     public static let app = FileLogger(filePath: "\(cacheDir)/app.log", dynamicLevel: resolveLevel)
-    public static let claude = FileLogger(filePath: "\(cacheDir)/claude-usages-connector.log", dynamicLevel: resolveLevel)
-    public static let codex = FileLogger(filePath: "\(cacheDir)/codex-usages-connector.log", dynamicLevel: resolveLevel)
-    public static let copilot = FileLogger(filePath: "\(cacheDir)/copilot-usages-connector.log", dynamicLevel: resolveLevel)
-    public static let antigravity = FileLogger(filePath: "\(cacheDir)/antigravity-usages-connector.log", dynamicLevel: resolveLevel)
+    public static let claude = vendorConnectorLogger(.claude)
+    public static let codex = vendorConnectorLogger(.codex)
+    public static let copilot = vendorConnectorLogger(.copilot)
+    public static let antigravity = vendorConnectorLogger(.antigravity)
+
+    /// Returns a connector `FileLogger` whose on-disk filename is derived
+    /// from `vendor.connectorLogFilename`. Centralising the construction
+    /// here is what makes `Vendor.rawValue` the single source of truth
+    /// for the slug — there is no other place where the log filename is
+    /// spelled out, so it cannot drift from the vendor identifier.
+    private static func vendorConnectorLogger(_ vendor: Vendor) -> FileLogger {
+        FileLogger(filePath: "\(cacheDir)/\(vendor.connectorLogFilename)", dynamicLevel: resolveLevel)
+    }
 
     public static let managed: [FileLogger] = [app, claude, codex, copilot, antigravity]
 }

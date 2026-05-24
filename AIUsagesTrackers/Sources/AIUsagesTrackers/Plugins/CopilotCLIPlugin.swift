@@ -6,14 +6,10 @@ public enum CopilotCLIPlugin {
     public static let branding = VendorBranding(
         vendor: .copilot,
         displayName: "GitHub Copilot CLI",
-        tintHex: "6E40C9",
-        assetName: "copilot-mark"
+        tintHex: "6E40C9"
     )
 
-    public static let documentation = VendorDocumentation(
-        vendor: .copilot,
-        slug: "copilot"
-    )
+    public static let documentation = VendorDocumentation(vendor: .copilot)
 
     @discardableResult
     public static func register(

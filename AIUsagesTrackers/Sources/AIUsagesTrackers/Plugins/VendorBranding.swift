@@ -9,15 +9,19 @@ public struct VendorBranding: Sendable, Equatable, Hashable {
     public let tintHex: String
     public let assetName: String
 
+    /// `assetName` defaults to `vendor.defaultBrandingAssetName`
+    /// (`<rawValue>-mark`). Callers should rely on the default so the
+    /// PDF filename in `App/Resources/VendorBranding/` cannot drift
+    /// from the vendor slug.
     public init(
         vendor: Vendor,
         displayName: String,
         tintHex: String,
-        assetName: String
+        assetName: String? = nil
     ) {
         self.vendor = vendor
         self.displayName = displayName
         self.tintHex = tintHex
-        self.assetName = assetName
+        self.assetName = assetName ?? vendor.defaultBrandingAssetName
     }
 }
