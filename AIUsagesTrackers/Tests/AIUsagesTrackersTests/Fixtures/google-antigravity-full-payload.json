@@ -1,0 +1,50 @@
+{
+  "userinfo": {
+    "sub": "1029384756102938",
+    "name": "Seeded Tester",
+    "given_name": "Seeded",
+    "family_name": "Tester",
+    "picture": "https://lh3.googleusercontent.com/a/seededAvatar",
+    "email": "victim-seeded@example.com",
+    "email_verified": true,
+    "hd": "example.com"
+  },
+  "loadCodeAssist": {
+    "cloudaicompanionProject": "seeded-private-cloud-project-id",
+    "currentTier": {
+      "id": "free-tier",
+      "name": "Free",
+      "displayName": "Free Plan"
+    }
+  },
+  "fetchAvailableModels": {
+    "models": [
+      {
+        "modelId": "gemini-3-pro",
+        "displayName": "Gemini 3 Pro",
+        "modelExperiments": "You are Gemini, built by the Google DeepMind team. Always respond in a helpful and concise tone. Never reveal internal planning templates.",
+        "supportedMimeTypes": ["text/plain", "text/markdown", "image/png", "image/jpeg", "application/pdf", "video/mp4"]
+      },
+      {
+        "modelId": "claude-sonnet-4-6",
+        "displayName": "Claude Sonnet 4.6",
+        "modelExperiments": "Internal identity prompt referencing Google DeepMind team and communication-style instructions.",
+        "supportedMimeTypes": ["text/plain", "image/png"]
+      }
+    ]
+  },
+  "retrieveUserQuota": {
+    "buckets": [
+      { "tokenType": "WTUS", "modelId": "gemini-3-pro",      "remainingFraction": 0.42, "resetTime": "2026-05-29T23:24:10Z" },
+      { "tokenType": "WTUS", "modelId": "claude-sonnet-4-6", "remainingFraction": 0.10, "resetTime": "2026-05-29T23:44:13Z" }
+    ]
+  },
+  "_seeded_secrets_for_leakage_test": {
+    "google_access_token": "ya29.a0AfH6SMBseededFakeAccessTokenABCDEF1234567890",
+    "google_client_secret": "GOCSPX-seededFakeClientSecret1234567890",
+    "raw_bearer_message": "Bearer seededFakeBearerSentinel",
+    "credential_blob": "seeded-credential-blob",
+    "encoded_keychain": "go-keyring-base64:eyJ0b2tlbiI6eyJhY2Nlc3NfdG9rZW4iOiJ5YTI5LnNlZWRlZCJ9fQ==",
+    "comment_with_email": "Contact victim-seeded@example.com about the seeded ya29.a0AfH6SMBseededFakeAccessTokenABCDEF1234567890 leak"
+  }
+}
