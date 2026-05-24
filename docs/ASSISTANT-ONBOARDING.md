@@ -226,7 +226,28 @@ Verified:
 - [ ] Optional: outage banner appears when the vendor reports an incident
 Connector log attached: yes — <attached file in this comment>
 Notes: <free-form>
+
+<details>
+<summary>Connector log tail</summary>
+
+```log
+…log tail…
 ```
+
+</details>
+
+### Screenshots
+<!-- Drag & drop images below this line, or remove this section if none. -->
+```
+
+The trailing `### Screenshots` section is always appended **after** the
+collapsed log block as the final visible element of the comment. The
+in-app flow copies the whole payload to the clipboard in one shot, so
+placing the placeholder last is the only reliable way to keep it in the
+tester's line of sight while pasting into GitHub. The HTML comment
+guides the tester in the composer; it is invisible in the rendered
+comment, so the section header reads cleanly whether or not images get
+attached.
 
 Both SHA forms are required so the maintainer can `git checkout` the
 exact build at audit time without ambiguity. Path A pre-fills both forms

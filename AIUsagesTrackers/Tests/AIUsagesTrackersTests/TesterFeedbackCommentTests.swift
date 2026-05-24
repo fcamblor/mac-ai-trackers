@@ -174,6 +174,37 @@ struct TesterFeedbackCommentTests {
         #expect(payload.count == TesterFeedbackComment.notesCharacterCap)
     }
 
+    @Test("render appends a Screenshots section as the trailing block")
+    func screenshotsSectionAlwaysPresent() throws {
+        // Present even when the tester has no notes — the placeholder
+        // reminds them they can attach images, and the maintainer can
+        // tell at a glance whether the tester chose to drop any.
+        let blank = TesterFeedbackComment.render(.init(
+            plan: .pro,
+            macOSVersion: "15.4",
+            context: try makeContext(),
+            submissionPath: .inApp,
+            checklist: [],
+            connectorLogAttached: true,
+            notes: ""
+        ))
+        #expect(blank.hasSuffix("### Screenshots\n<!-- Drag & drop images below this line, or remove this section if none. -->"))
+
+        let withNotes = TesterFeedbackComment.render(.init(
+            plan: .pro,
+            macOSVersion: "15.4",
+            context: try makeContext(),
+            submissionPath: .inApp,
+            checklist: [],
+            connectorLogAttached: true,
+            notes: "saw nothing weird"
+        ))
+        // Notes line still precedes the Screenshots block.
+        let notesIndex = withNotes.range(of: "Notes: saw nothing weird")?.lowerBound
+        let screenshotsIndex = withNotes.range(of: "### Screenshots")?.lowerBound
+        #expect(notesIndex != nil && screenshotsIndex != nil && notesIndex! < screenshotsIndex!)
+    }
+
     @Test("renderWithLogTail wraps the log in a collapsed <details> block")
     func renderWithLogTailAppendsFencedBlock() throws {
         let body = TesterFeedbackComment.renderWithLogTail(
@@ -206,6 +237,28 @@ struct TesterFeedbackCommentTests {
             logFileContents: "   \n\n   "
         )
         #expect(!body.contains("```log"))
+    }
+
+    @Test("renderWithLogTail places Screenshots after the log block")
+    func renderWithLogTailScreenshotsTrailLog() throws {
+        // The tester pastes a long comment into GitHub; the Screenshots
+        // section must remain the visible tail so it isn't lost above
+        // the collapsed log block.
+        let body = TesterFeedbackComment.renderWithLogTail(
+            .init(
+                plan: .pro,
+                macOSVersion: "15.4",
+                context: try makeContext(),
+                submissionPath: .inApp,
+                checklist: [],
+                connectorLogAttached: true
+            ),
+            logFileContents: "line-1\nline-2\n"
+        )
+        #expect(body.hasSuffix("### Screenshots\n<!-- Drag & drop images below this line, or remove this section if none. -->"))
+        let detailsClose = body.range(of: "</details>")?.lowerBound
+        let screenshotsHeader = body.range(of: "### Screenshots")?.lowerBound
+        #expect(detailsClose != nil && screenshotsHeader != nil && detailsClose! < screenshotsHeader!)
     }
 
     @Test("trimmedLogTail caps to byteCap and snaps to a line boundary")

@@ -62,6 +62,15 @@ public struct TesterFeedbackComment: Sendable {
     public static let sentinel = "✅ tester-confirm"
     public static let notesCharacterCap = 2_048
 
+    /// Trailing section reserved for screenshot drag-and-drop. The HTML
+    /// comment is visible in the GitHub composer (guides the tester) but
+    /// invisible in the rendered comment, so the section header stays
+    /// clean whether or not the tester actually attaches images.
+    static let screenshotsSection = """
+        ### Screenshots
+        <!-- Drag & drop images below this line, or remove this section if none. -->
+        """
+
     /// Cap on the appended connector log tail. GitHub comments hard-cap at
     /// 65_536 characters; 30 KB leaves headroom for the rest of the body and
     /// avoids upload truncation on the maintainer's side.
@@ -79,13 +88,17 @@ public struct TesterFeedbackComment: Sendable {
         logFileContents: String,
         tailByteCap: Int = logTailByteCap
     ) -> String {
-        let body = render(input)
+        let body = renderBody(input)
         let tail = trimmedLogTail(logFileContents, byteCap: tailByteCap)
-        guard !tail.isEmpty else { return body }
-        return body
-            + "\n\n<details>\n<summary>Connector log tail</summary>\n\n"
+        let logBlock = tail.isEmpty ? "" :
+            "\n\n<details>\n<summary>Connector log tail</summary>\n\n"
             + "```log\n\(tail)\n```"
             + "\n\n</details>"
+        // Screenshots stay last so the tester sees the section as the
+        // final block in the GitHub composer after pasting — they would
+        // otherwise scroll past it without noticing once the log tail is
+        // appended.
+        return body + logBlock + "\n\n" + screenshotsSection
     }
 
     /// Returns the tail of `contents` capped to `byteCap` UTF-8 bytes, snapped
@@ -105,6 +118,13 @@ public struct TesterFeedbackComment: Sendable {
     }
 
     public static func render(_ input: Input) -> String {
+        renderBody(input) + "\n\n" + screenshotsSection
+    }
+
+    /// Body fields without the trailing `Screenshots` section — kept
+    /// separate so `renderWithLogTail` can interleave the log block
+    /// between the body and the always-last `Screenshots` placeholder.
+    private static func renderBody(_ input: Input) -> String {
         var lines: [String] = [sentinel, ""]
         lines.append("Plan: \(planLine(input))")
         lines.append("macOS: \(input.macOSVersion)")
