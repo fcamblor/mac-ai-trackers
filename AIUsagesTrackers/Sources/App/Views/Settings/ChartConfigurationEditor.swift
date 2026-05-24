@@ -37,6 +37,10 @@ struct ChartConfigurationEditor: View {
     @State private var renderedSeriesCount: Int?
     @StateObject private var cursorTracker = DragCursorTracker()
 
+    // Bulk-seed filters, only used by the empty-state quick-start block.
+    @State private var bulkVendorFilter: BulkVendorFilter = .all
+    @State private var bulkAccountFilter: BulkAccountFilter = .all
+
     private var coordinateSpaceName: String {
         "chart.series.\(configuration.id.uuidString)"
     }
@@ -127,10 +131,213 @@ struct ChartConfigurationEditor: View {
     }
 
     private var emptySeriesState: some View {
-        Text("No custom series configured")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .padding(.vertical, 6)
+        VStack(alignment: .leading, spacing: 10) {
+            Text("No custom series configured")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if !availableVendors.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Quick start — add every metric matching a filter")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .textCase(.uppercase)
+                        .tracking(0.6)
+                        .foregroundStyle(.secondary)
+
+                    HStack(alignment: .bottom, spacing: 10) {
+                        bulkVendorPicker
+                        bulkAccountPicker
+                        Button {
+                            performBulkAdd()
+                        } label: {
+                            Label("Add all matching metrics", systemImage: "plus.rectangle.on.rectangle")
+                        }
+                        .controlSize(.small)
+                        .disabled(bulkAddCandidates.isEmpty)
+                    }
+
+                    Text(bulkAddSummary)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(NSColor.controlBackgroundColor).opacity(0.6))
+                )
+            }
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var bulkVendorPicker: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Vendor")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .tracking(0.4)
+            Picker("", selection: Binding(
+                get: { bulkVendorFilter },
+                set: { newValue in
+                    bulkVendorFilter = newValue
+                    if case .specific(let email) = bulkAccountFilter {
+                        switch newValue {
+                        case .all:
+                            bulkAccountFilter = .all
+                        case .specific(let vendor):
+                            let accounts = metricOptions.availableAccounts(for: vendor)
+                            if !accounts.contains(email) {
+                                bulkAccountFilter = .all
+                            }
+                        }
+                    }
+                }
+            )) {
+                Text("All vendors").tag(BulkVendorFilter.all)
+                Divider()
+                ForEach(availableVendors, id: \.rawValue) { v in
+                    Text(VendorBrandingResolver.displayName(for: v)).tag(BulkVendorFilter.specific(v))
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+        }
+    }
+
+    private var bulkAccountPicker: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Account")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .tracking(0.4)
+            Picker("", selection: Binding(
+                get: { bulkAccountFilter },
+                set: { bulkAccountFilter = $0 }
+            )) {
+                Text("All accounts").tag(BulkAccountFilter.all)
+                Text("Currently active").tag(BulkAccountFilter.currentlyActive)
+                if case .specific(let v) = bulkVendorFilter {
+                    let accounts = metricOptions.availableAccounts(for: v)
+                    if !accounts.isEmpty {
+                        Divider()
+                        ForEach(accounts, id: \.rawValue) { email in
+                            Text(email.rawValue).tag(BulkAccountFilter.specific(email))
+                        }
+                    }
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+        }
+    }
+
+    private var bulkAddSummary: String {
+        let count = bulkAddCandidates.count
+        if count == 0 {
+            return "No metrics match this filter."
+        }
+        return count == 1 ? "Will add 1 series." : "Will add \(count) series."
+    }
+
+    private var bulkAddCandidates: [(vendor: Vendor, account: AccountSelection, metric: MetricOption)] {
+        var results: [(Vendor, AccountSelection, MetricOption)] = []
+        let vendors: [Vendor] = {
+            switch bulkVendorFilter {
+            case .all: return availableVendors
+            case .specific(let v): return [v]
+            }
+        }()
+        for vendor in vendors {
+            let accounts = accountSelections(forVendor: vendor)
+            for account in accounts {
+                for metric in metricOptions.availableMetrics(vendor: vendor, account: account) {
+                    results.append((vendor, account, metric))
+                }
+            }
+        }
+        return results.map { ($0.0, $0.1, $0.2) }
+    }
+
+    private func accountSelections(forVendor vendor: Vendor) -> [AccountSelection] {
+        switch bulkAccountFilter {
+        case .all:
+            // `.currentlyActive` is intentionally omitted here — it would resolve to an account
+            // already enumerated by `.specific(email)`, producing duplicate series.
+            return metricOptions.availableAccounts(for: vendor).map(AccountSelection.specific)
+        case .currentlyActive:
+            return [.currentlyActive]
+        case .specific(let email):
+            // Only honored when the picker is constrained to that vendor; otherwise skip.
+            guard case .specific(let v) = bulkVendorFilter, v == vendor else { return [] }
+            return [.specific(email)]
+        }
+    }
+
+    private func performBulkAdd() {
+        let candidates = bulkAddCandidates
+        guard !candidates.isEmpty else { return }
+        var series = customSeries
+        let includeVendorInLabel: Bool = {
+            if case .all = bulkVendorFilter { return true }
+            return false
+        }()
+        let includeAccountInLabel: Bool = {
+            if case .all = bulkAccountFilter { return true }
+            return false
+        }()
+        for candidate in candidates {
+            let label = bulkSeriesLabel(
+                vendor: candidate.vendor,
+                account: candidate.account,
+                metricName: candidate.metric.name,
+                includeVendor: includeVendorInLabel,
+                includeAccount: includeAccountInLabel
+            )
+            series.append(
+                ChartSeriesConfig(
+                    vendor: candidate.vendor,
+                    account: candidate.account,
+                    metricName: candidate.metric.name,
+                    label: label,
+                    style: rotatingStyle(forIndex: series.count)
+                )
+            )
+        }
+        configuration.selection = .custom(series)
+    }
+
+    // Cycle through (color, lineStyle) pairs: exhaust every color with `.solid`, then
+    // switch to `.dashed` and walk the palette again, then `.dotted`. This keeps every
+    // pair unique for the first colors × styles series before any duplicate (color,
+    // lineStyle) tuple appears.
+    private func rotatingStyle(forIndex index: Int) -> ChartSeriesStyle {
+        let colors = ChartSeriesColor.allCases
+        let styles = ChartLineStyle.allCases
+        let colorIndex = index % colors.count
+        let styleIndex = (index / colors.count) % styles.count
+        return ChartSeriesStyle(color: colors[colorIndex], lineStyle: styles[styleIndex])
+    }
+
+    private func bulkSeriesLabel(
+        vendor: Vendor,
+        account: AccountSelection,
+        metricName: String,
+        includeVendor: Bool,
+        includeAccount: Bool
+    ) -> String {
+        var parts: [String] = []
+        if includeVendor {
+            parts.append(VendorBrandingResolver.displayName(for: vendor))
+        }
+        if includeAccount, case .specific(let email) = account {
+            parts.append(email.rawValue)
+        }
+        guard !parts.isEmpty else { return "" }
+        parts.append(metricName)
+        return parts.joined(separator: " · ")
     }
 
     private func seriesListBody(
@@ -412,6 +619,17 @@ struct ChartConfigurationEditor: View {
 enum ChartSelectionMode: Hashable {
     case allAvailable
     case custom
+}
+
+fileprivate enum BulkVendorFilter: Hashable {
+    case all
+    case specific(Vendor)
+}
+
+fileprivate enum BulkAccountFilter: Hashable {
+    case all
+    case currentlyActive
+    case specific(AccountEmail)
 }
 
 // Extracted as a struct with Equatable conformance so `.equatable()` can short-circuit
