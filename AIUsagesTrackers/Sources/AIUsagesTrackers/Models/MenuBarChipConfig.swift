@@ -148,6 +148,12 @@ public struct TimeWindowDisplay: Codable, Equatable, Hashable, Sendable {
             forKey: .hideResetMinutesWhenOverOneDay
         ) ?? true
         if !(showLetter || showPercent || showReset) {
+            // Surface the coercion so a downstream surprise (a chip suddenly
+            // showing its letter after upgrade) can be traced back to a legacy
+            // payload that violated the chip-segment invariant. The decoder
+            // intentionally repairs rather than throws so the user's chip is
+            // preserved across the upgrade — see `LegacyDisplay.toSegmentDisplay`.
+            Loggers.app.log(.warning, "TimeWindowDisplay: decoded payload had no visible element, promoting showLetter=true")
             showLetter = true
         }
     }

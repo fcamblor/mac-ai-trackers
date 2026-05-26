@@ -60,13 +60,30 @@ public enum OutageWarningMigration {
     /// Returns nil when the payload doesn't decode — `MenuBarChipsMigration`
     /// will see the same bytes and log its own decode failure.
     private static func applyWarning(to data: Data, warningText: String) -> Data? {
-        guard var array = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else {
+        let decoded: Any
+        do {
+            decoded = try JSONSerialization.jsonObject(with: data)
+        } catch {
+            Loggers.app.log(.warning, "OutageWarningMigration: failed to decode legacy segments payload: \(error)")
+            return nil
+        }
+        guard var array = decoded as? [[String: Any]] else {
+            Loggers.app.log(.warning, "OutageWarningMigration: legacy segments payload has unexpected shape")
             return nil
         }
         for index in array.indices {
             array[index]["showOutageWarning"] = true
             array[index]["outageWarningText"] = warningText
         }
-        return try? JSONSerialization.data(withJSONObject: array, options: [])
+        do {
+            return try JSONSerialization.data(withJSONObject: array, options: [])
+        } catch {
+            // Re-encoding a dictionary we just decoded should never fail in
+            // practice, but if it does we must surface it — silently dropping
+            // would leave the migration marking itself complete with no warning
+            // applied, and the user would lose the legacy text.
+            Loggers.app.log(.error, "OutageWarningMigration: failed to re-encode legacy segments after applying warning: \(error)")
+            return nil
+        }
     }
 }

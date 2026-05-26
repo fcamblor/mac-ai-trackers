@@ -16,6 +16,10 @@ public enum MenuBarChipsMigration {
     private static let legacySegmentsKey = "ai-tracker.menuBarSegments"
     private static let legacySegmentsInitializedKey = "ai-tracker.menuBarSegmentsInitialized"
     private static let legacySeparatorKey = "ai-tracker.menuBarSeparator"
+    /// Where the original legacy JSON is stashed when decoding fails. Lets a
+    /// future build (or support diagnostics) recover the user's intent instead
+    /// of losing it silently to the "empty chips list" fallback.
+    public static let corruptedBackupKey = "ai-tracker.menuBarSegments.corrupted-backup"
 
     public static func migrateIfNeeded(
         preferences: any AppPreferences,
@@ -31,9 +35,11 @@ public enum MenuBarChipsMigration {
                 chips = legacy.map { $0.toChip() }
             } catch {
                 Loggers.app.log(.error, "MenuBarChipsMigration: failed to decode legacy segments: \(error)")
-                // Fall through: still mark the migration as done and clear keys
-                // so we don't loop on a corrupt payload. The user will start
-                // from an empty chips list (same end-state as a fresh install).
+                // Stash the original bytes so the user's intent isn't lost to
+                // the "empty chips list" fallback — a future build (or manual
+                // diagnostics) can recover it. We still proceed and mark the
+                // migration done so we don't loop on a corrupt payload.
+                defaults.set(data, forKey: corruptedBackupKey)
                 chips = []
             }
             preferences.menuBarChips = chips
