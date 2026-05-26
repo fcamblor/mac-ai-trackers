@@ -396,10 +396,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let popover, let button = statusItem?.button else { return }
         if popover.isShown {
             popover.performClose(sender)
-        } else if Self.sharedPreferences.menuBarSegments.isEmpty {
+        } else if Self.sharedPreferences.menuBarChips.isEmpty {
             // Unconfigured state: the menu bar shows a "Configure AI Metrics"
             // call to action, so route the click straight to the tab that
-            // teaches users how to populate menu bar segments instead of
+            // teaches users how to populate menu bar chips instead of
             // opening an empty popover.
             openSettings(targetTab: .menubarHint)
         } else {
