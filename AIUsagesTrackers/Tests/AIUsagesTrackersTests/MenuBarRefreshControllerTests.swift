@@ -5,21 +5,34 @@ import Testing
 @MainActor
 @Suite("MenuBarRefreshController — dedup")
 struct MenuBarRefreshControllerTests {
+    private func makeChip(
+        vendor: Vendor = .claude,
+        segmentText: String = "Claude",
+        tier: ConsumptionTier? = nil
+    ) -> RenderedChip {
+        RenderedChip(
+            vendor: vendor,
+            showVendorIcon: false,
+            outageWarningText: nil,
+            segments: [MenuBarSegment(text: segmentText, tier: tier)]
+        )
+    }
+
     private func makeKey(
         text: String = "x",
-        separator: String = " | ",
+        background: ChipBackground = .paper,
         isDark: Bool = true,
         isUnconfigured: Bool = false,
-        segments: [MenuBarSegment] = [
-            MenuBarSegment(text: "Claude", tier: nil, showDot: true, vendorIcon: nil)
-        ]
+        tierOverride: ConsumptionTier? = nil,
+        chips: [RenderedChip]? = nil
     ) -> MenuBarRenderKey {
         MenuBarRenderKey(
-            segments: segments,
+            chips: chips ?? [makeChip()],
             text: text,
-            separator: separator,
+            background: background,
             isDark: isDark,
-            isUnconfigured: isUnconfigured
+            isUnconfigured: isUnconfigured,
+            tierOverride: tierOverride
         )
     }
 
@@ -68,17 +81,23 @@ struct MenuBarRefreshControllerTests {
         assertFieldInvalidatesDedup(
             field: "text",
             original: k,
-            mutated: MenuBarRenderKey(segments: k.segments, text: "after", separator: k.separator, isDark: k.isDark, isUnconfigured: k.isUnconfigured)
+            mutated: MenuBarRenderKey(
+                chips: k.chips, text: "after", background: k.background,
+                isDark: k.isDark, isUnconfigured: k.isUnconfigured, tierOverride: k.tierOverride
+            )
         )
     }
 
-    @Test("Changing separator invalidates dedup")
-    func separatorChangeInvalidates() {
-        let k = makeKey(separator: " | ")
+    @Test("Changing background invalidates dedup")
+    func backgroundChangeInvalidates() {
+        let k = makeKey(background: .paper)
         assertFieldInvalidatesDedup(
-            field: "separator",
+            field: "background",
             original: k,
-            mutated: MenuBarRenderKey(segments: k.segments, text: k.text, separator: " · ", isDark: k.isDark, isUnconfigured: k.isUnconfigured)
+            mutated: MenuBarRenderKey(
+                chips: k.chips, text: k.text, background: .slate,
+                isDark: k.isDark, isUnconfigured: k.isUnconfigured, tierOverride: k.tierOverride
+            )
         )
     }
 
@@ -88,7 +107,10 @@ struct MenuBarRefreshControllerTests {
         assertFieldInvalidatesDedup(
             field: "isDark",
             original: k,
-            mutated: MenuBarRenderKey(segments: k.segments, text: k.text, separator: k.separator, isDark: false, isUnconfigured: k.isUnconfigured)
+            mutated: MenuBarRenderKey(
+                chips: k.chips, text: k.text, background: k.background,
+                isDark: false, isUnconfigured: k.isUnconfigured, tierOverride: k.tierOverride
+            )
         )
     }
 
@@ -98,33 +120,52 @@ struct MenuBarRefreshControllerTests {
         assertFieldInvalidatesDedup(
             field: "isUnconfigured",
             original: k,
-            mutated: MenuBarRenderKey(segments: k.segments, text: k.text, separator: k.separator, isDark: k.isDark, isUnconfigured: true)
+            mutated: MenuBarRenderKey(
+                chips: k.chips, text: k.text, background: k.background,
+                isDark: k.isDark, isUnconfigured: true, tierOverride: k.tierOverride
+            )
         )
     }
 
-    @Test("Changing segments invalidates dedup")
-    func segmentsChangeInvalidates() {
+    @Test("Changing chips invalidates dedup")
+    func chipsChangeInvalidates() {
         let k = makeKey()
-        let other = [MenuBarSegment(text: "Codex", tier: nil, showDot: false, vendorIcon: nil)]
+        let other = [makeChip(segmentText: "Codex")]
         assertFieldInvalidatesDedup(
-            field: "segments",
+            field: "chips",
             original: k,
-            mutated: MenuBarRenderKey(segments: other, text: k.text, separator: k.separator, isDark: k.isDark, isUnconfigured: k.isUnconfigured)
+            mutated: MenuBarRenderKey(
+                chips: other, text: k.text, background: k.background,
+                isDark: k.isDark, isUnconfigured: k.isUnconfigured, tierOverride: k.tierOverride
+            )
         )
     }
 
-    @Test("Toggling colorizeText on a segment invalidates dedup")
-    func colorizeTextChangeInvalidates() {
-        let k = makeKey(segments: [
-            MenuBarSegment(text: "S", tier: .comfortable, showDot: true, colorizeText: false)
-        ])
-        let colorized = [
-            MenuBarSegment(text: "S", tier: .comfortable, showDot: true, colorizeText: true)
-        ]
+    @Test("Changing a segment tier invalidates dedup — drives the pill background")
+    func tierChangeInvalidates() {
+        let plain = [makeChip(segmentText: "S", tier: .comfortable)]
+        let critical = [makeChip(segmentText: "S", tier: .critical)]
+        let k = makeKey(chips: plain)
         assertFieldInvalidatesDedup(
-            field: "colorizeText",
+            field: "tier",
             original: k,
-            mutated: MenuBarRenderKey(segments: colorized, text: k.text, separator: k.separator, isDark: k.isDark, isUnconfigured: k.isUnconfigured)
+            mutated: MenuBarRenderKey(
+                chips: critical, text: k.text, background: k.background,
+                isDark: k.isDark, isUnconfigured: k.isUnconfigured, tierOverride: k.tierOverride
+            )
+        )
+    }
+
+    @Test("Changing tierOverride invalidates dedup — pacing color cycle")
+    func tierOverrideChangeInvalidates() {
+        let k = makeKey(tierOverride: nil)
+        assertFieldInvalidatesDedup(
+            field: "tierOverride",
+            original: k,
+            mutated: MenuBarRenderKey(
+                chips: k.chips, text: k.text, background: k.background,
+                isDark: k.isDark, isUnconfigured: k.isUnconfigured, tierOverride: .critical
+            )
         )
     }
 

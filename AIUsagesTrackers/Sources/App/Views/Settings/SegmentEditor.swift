@@ -2,31 +2,45 @@ import SwiftUI
 import AppKit
 import AIUsagesTrackersLib
 
+/// Edits the display options of a single chip sub-segment. Chip-level chrome
+/// (vendor icon, outage warning) lives in `ChipCardView` so this editor stays
+/// focused on what a single segment renders.
 struct SegmentEditor: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let preferences: any AppPreferences
     @Bindable var store: UsageStore
+    let chipID: UUID
     let segmentID: UUID
     let isDark: Bool
 
-    private var segmentBinding: Binding<MenuBarSegmentConfig>? {
-        SettingsConfigurationBindings.menuBarSegment(preferences: preferences, segmentID: segmentID)
+    private var chipBinding: Binding<MenuBarChipConfig>? {
+        SettingsConfigurationBindings.menuBarChip(preferences: preferences, chipID: chipID)
+    }
+
+    private var segmentBinding: Binding<MenuBarChipSegmentConfig>? {
+        SettingsConfigurationBindings.menuBarChipSegment(
+            preferences: preferences,
+            chipID: chipID,
+            segmentID: segmentID
+        )
     }
 
     var body: some View {
-        if let segmentBinding {
+        if let chipBinding, let segmentBinding {
+            let vendor = chipBinding.wrappedValue.vendor
             VStack(alignment: .leading, spacing: 14) {
                 MetricSelectionEditor(
                     store: store,
-                    vendor: segmentBinding.vendor,
+                    vendor: .constant(vendor),
                     account: segmentBinding.account,
                     metricName: segmentBinding.metricName,
                     layout: .grid,
+                    showVendorPicker: false,
                     onMetricChanged: { metric in
-                        var segment = segmentBinding.wrappedValue
-                        segment.display = defaultDisplay(metric: metric, metricName: segment.metricName)
-                        segmentBinding.wrappedValue = segment
+                        var seg = segmentBinding.wrappedValue
+                        seg.display = defaultDisplay(metric: metric, metricName: seg.metricName)
+                        segmentBinding.wrappedValue = seg
                     }
                 )
 
@@ -56,90 +70,32 @@ struct SegmentEditor: View {
     // MARK: Time-window — chip strip + sub-options
 
     @ViewBuilder
-    private func timeWindowSection(_ binding: Binding<MenuBarSegmentConfig>) -> some View {
+    private func timeWindowSection(_ binding: Binding<MenuBarChipSegmentConfig>) -> some View {
         let displayBinding = timeWindowDisplayBinding(binding)
-        let segment = binding.wrappedValue
 
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
-                sectionTitle("Menu bar pieces")
+                sectionTitle("Segment pieces")
                 Text("— click a piece to toggle it")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
 
-            chipStrip(segment: segment, binding: binding, display: displayBinding)
-
-            subOptionsPanel(segment: segment, binding: binding, display: displayBinding)
+            chipStrip(display: displayBinding)
+            subOptionsPanel(display: displayBinding)
         }
     }
 
     // MARK: Chip strip
 
     @ViewBuilder
-    private func chipStrip(
-        segment: MenuBarSegmentConfig,
-        binding: Binding<MenuBarSegmentConfig>,
-        display: Binding<TimeWindowDisplay>
-    ) -> some View {
+    private func chipStrip(display: Binding<TimeWindowDisplay>) -> some View {
         HStack(alignment: .top, spacing: 6) {
-            chip(
-                caption: "Icon",
-                isOn: display.wrappedValue.showVendorIcon,
-                toggle: { display.wrappedValue.showVendorIcon.toggle() }
-            ) {
-                VendorIconView(vendor: segment.vendor, size: 14)
-            }
-
-            chipConnector
-
-            chip(
-                caption: "Outage",
-                isOn: segment.showOutageWarning,
-                toggle: {
-                    var seg = binding.wrappedValue
-                    seg.showOutageWarning.toggle()
-                    binding.wrappedValue = seg
-                }
-            ) {
-                Text(segment.outageWarningText.isEmpty ? "⚠️" : segment.outageWarningText)
-                    .font(.system(size: 13))
-            }
-
-            chipConnector
-
-            chip(
-                caption: "Dot",
-                isOn: display.wrappedValue.showDot,
-                toggle: { display.wrappedValue.showDot.toggle() }
-            ) {
-                Circle()
-                    .fill(Color.green)
-                    .overlay(Circle().stroke(Color.primary.opacity(0.35), lineWidth: 0.6))
-                    .frame(width: 9, height: 9)
-            }
-
-            chipConnector
-
-            chip(
-                caption: "Color",
-                isOn: display.wrappedValue.colorizeText,
-                toggle: { display.wrappedValue.colorizeText.toggle() }
-            ) {
-                // Mirror the rendered effect: tier-coloured glyph with a thin
-                // outline of the chip's foreground. The "Aa" reads as text
-                // colorisation at a glance even before the user enables it.
-                Text("Aa")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Color.green)
-            }
-
-            chipConnector
-
             chip(
                 caption: "Label",
                 isOn: display.wrappedValue.showLetter,
-                toggle: { display.wrappedValue.showLetter.toggle() }
+                canToggleOff: canToggleOff(display: display.wrappedValue, candidate: \.showLetter),
+                toggle: { toggleVisibility(display: display, keyPath: \.showLetter) }
             ) {
                 Text(display.wrappedValue.letter.isEmpty ? "·" : display.wrappedValue.letter)
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
@@ -150,7 +106,8 @@ struct SegmentEditor: View {
             chip(
                 caption: "Percent",
                 isOn: display.wrappedValue.showPercent,
-                toggle: { display.wrappedValue.showPercent.toggle() }
+                canToggleOff: canToggleOff(display: display.wrappedValue, candidate: \.showPercent),
+                toggle: { toggleVisibility(display: display, keyPath: \.showPercent) }
             ) {
                 Text(percentSamplePreview(display: display.wrappedValue))
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -161,7 +118,8 @@ struct SegmentEditor: View {
             chip(
                 caption: "Reset",
                 isOn: display.wrappedValue.showReset,
-                toggle: { display.wrappedValue.showReset.toggle() }
+                canToggleOff: canToggleOff(display: display.wrappedValue, candidate: \.showReset),
+                toggle: { toggleVisibility(display: display, keyPath: \.showReset) }
             ) {
                 Text(resetSamplePreview(display: display.wrappedValue))
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -169,6 +127,31 @@ struct SegmentEditor: View {
 
             Spacer(minLength: 0)
         }
+    }
+
+    /// Enforces the per-segment invariant: at least one of the three visible
+    /// toggles must stay on.
+    private func canToggleOff(
+        display: TimeWindowDisplay,
+        candidate keyPath: WritableKeyPath<TimeWindowDisplay, Bool>
+    ) -> Bool {
+        var rest = display
+        rest[keyPath: keyPath] = false
+        return rest.hasAnyVisibleElement
+    }
+
+    /// Toggling on is always allowed. Toggling off goes through the invariant
+    /// check; when the segment would otherwise become empty, the user gets a
+    /// disabled chip instead of a silent no-op.
+    private func toggleVisibility(
+        display: Binding<TimeWindowDisplay>,
+        keyPath: WritableKeyPath<TimeWindowDisplay, Bool>
+    ) {
+        let current = display.wrappedValue[keyPath: keyPath]
+        if current && !canToggleOff(display: display.wrappedValue, candidate: keyPath) {
+            return
+        }
+        display.wrappedValue[keyPath: keyPath].toggle()
     }
 
     private var chipConnector: some View {
@@ -181,10 +164,12 @@ struct SegmentEditor: View {
     private func chip<Symbol: View>(
         caption: String,
         isOn: Bool,
+        canToggleOff: Bool,
         toggle: @escaping () -> Void,
         @ViewBuilder symbol: () -> Symbol
     ) -> some View {
-        Button(action: {
+        let lockedOn = isOn && !canToggleOff
+        return Button(action: {
             withAnimation(.easeOut(duration: 0.14)) { toggle() }
         }) {
             VStack(spacing: 4) {
@@ -213,7 +198,10 @@ struct SegmentEditor: View {
             }
         }
         .buttonStyle(.plain)
-        .help(isOn ? "\(caption) shown — click to hide" : "\(caption) hidden — click to show")
+        .help(lockedOn
+              ? "A segment needs at least one visible piece — toggle another one on first."
+              : (isOn ? "\(caption) shown — click to hide" : "\(caption) hidden — click to show"))
+        .opacity(lockedOn ? 0.7 : 1.0)
     }
 
     private func percentSamplePreview(display: TimeWindowDisplay) -> String {
@@ -224,34 +212,20 @@ struct SegmentEditor: View {
     }
 
     private func resetSamplePreview(display: TimeWindowDisplay) -> String {
-        // Sample assumes a > 1 day countdown so the toggle's effect is visible.
-        // See formatRemainingTime in UsageComputations.swift.
         display.hideResetMinutesWhenOverOneDay ? "2d 4h" : "2d 4h 15m"
     }
 
     // MARK: Sub-options panel
 
     @ViewBuilder
-    private func subOptionsPanel(
-        segment: MenuBarSegmentConfig,
-        binding: Binding<MenuBarSegmentConfig>,
-        display: Binding<TimeWindowDisplay>
-    ) -> some View {
-        let hasOutage = segment.showOutageWarning
+    private func subOptionsPanel(display: Binding<TimeWindowDisplay>) -> some View {
         let hasLetter = display.wrappedValue.showLetter
         let hasPercent = display.wrappedValue.showPercent
         let hasReset = display.wrappedValue.showReset
-        let anyOption = hasOutage || hasLetter || hasPercent || hasReset
+        let anyOption = hasLetter || hasPercent || hasReset
 
         if anyOption {
             VStack(alignment: .leading, spacing: 8) {
-                if hasOutage {
-                    subOptionRow(label: "Outage text") {
-                        TextField("", text: outageTextBinding(binding))
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 64)
-                    }
-                }
                 if hasLetter {
                     subOptionRow(label: "Label letter") {
                         TextField("", text: display.letter)
@@ -311,42 +285,21 @@ struct SegmentEditor: View {
 
     // MARK: Pay-as-you-go
 
-    private func payAsYouGoSection(_ binding: Binding<MenuBarSegmentConfig>) -> some View {
+    private func payAsYouGoSection(_ binding: Binding<MenuBarChipSegmentConfig>) -> some View {
         let preview = previewPayAsYouGo(for: binding.wrappedValue) ?? "—"
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: "info.circle")
-                    .foregroundStyle(.secondary)
-                Text("Displays \"\(preview)\" — no display pieces to toggle.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            HStack(spacing: 8) {
-                chip(
-                    caption: "Outage",
-                    isOn: binding.wrappedValue.showOutageWarning,
-                    toggle: {
-                        var seg = binding.wrappedValue
-                        seg.showOutageWarning.toggle()
-                        binding.wrappedValue = seg
-                    }
-                ) {
-                    Text(binding.wrappedValue.outageWarningText.isEmpty ? "⚠️" : binding.wrappedValue.outageWarningText)
-                        .font(.system(size: 13))
-                }
-                if binding.wrappedValue.showOutageWarning {
-                    TextField("", text: outageTextBinding(binding))
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 64)
-                }
-            }
+        return HStack(spacing: 6) {
+            Image(systemName: "info.circle")
+                .foregroundStyle(.secondary)
+            Text("Displays \"\(preview)\" — no display pieces to toggle.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
     // MARK: Bindings
 
     private func timeWindowDisplayBinding(
-        _ binding: Binding<MenuBarSegmentConfig>
+        _ binding: Binding<MenuBarChipSegmentConfig>
     ) -> Binding<TimeWindowDisplay> {
         Binding<TimeWindowDisplay>(
             get: {
@@ -358,17 +311,6 @@ struct SegmentEditor: View {
             set: { newDisplay in
                 var seg = binding.wrappedValue
                 seg.display = .timeWindow(newDisplay)
-                binding.wrappedValue = seg
-            }
-        )
-    }
-
-    private func outageTextBinding(_ binding: Binding<MenuBarSegmentConfig>) -> Binding<String> {
-        Binding<String>(
-            get: { binding.wrappedValue.outageWarningText },
-            set: { newValue in
-                var seg = binding.wrappedValue
-                seg.outageWarningText = newValue
                 binding.wrappedValue = seg
             }
         )
@@ -398,8 +340,9 @@ struct SegmentEditor: View {
         }
     }
 
-    private func previewPayAsYouGo(for segment: MenuBarSegmentConfig) -> String? {
-        guard let entry = resolveEntry(vendor: segment.vendor, account: segment.account),
+    private func previewPayAsYouGo(for segment: MenuBarChipSegmentConfig) -> String? {
+        guard let chipBinding else { return nil }
+        guard let entry = resolveEntry(vendor: chipBinding.wrappedValue.vendor, account: segment.account),
               let metric = entry.metrics.first(where: { SegmentEditingHelpers.metricName($0) == segment.metricName }),
               case let .payAsYouGo(_, amount, currency) = metric else {
             return nil

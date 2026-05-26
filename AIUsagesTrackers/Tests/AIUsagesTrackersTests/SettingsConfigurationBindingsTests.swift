@@ -6,38 +6,78 @@ import Testing
 @MainActor
 @Suite("Settings configuration bindings")
 struct SettingsConfigurationBindingsTests {
-    @Test("menu bar segment binding read survives target deletion")
-    func menuBarSegmentBindingSurvivesTargetDeletion() {
-        let first = MenuBarSegmentConfig(
+    @Test("menu bar chip binding read survives target deletion")
+    func menuBarChipBindingSurvivesTargetDeletion() {
+        let first = MenuBarChipConfig(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000101")!,
             vendor: .claude,
-            account: .currentlyActive,
-            metricName: "5h sessions (all models)",
-            display: .timeWindow(TimeWindowDisplay(letter: "S"))
+            segments: [
+                MenuBarChipSegmentConfig(
+                    account: .currentlyActive,
+                    metricName: "5h sessions (all models)",
+                    display: .timeWindow(TimeWindowDisplay(letter: "S"))
+                )
+            ]
         )
-        let target = MenuBarSegmentConfig(
+        let target = MenuBarChipConfig(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!,
             vendor: .claude,
-            account: .currentlyActive,
-            metricName: "Weekly (all models)",
-            display: .timeWindow(TimeWindowDisplay(letter: "W"))
+            segments: [
+                MenuBarChipSegmentConfig(
+                    account: .currentlyActive,
+                    metricName: "Weekly (all models)",
+                    display: .timeWindow(TimeWindowDisplay(letter: "W"))
+                )
+            ]
         )
-        let preferences = InMemoryAppPreferences(menuBarSegments: [first, target])
+        let preferences = InMemoryAppPreferences(menuBarChips: [first, target])
 
-        let binding = SettingsConfigurationBindings.menuBarSegment(
+        let binding = SettingsConfigurationBindings.menuBarChip(
             preferences: preferences,
-            segmentID: target.id
+            chipID: target.id
         )
         #expect(binding != nil)
         guard let binding else { return }
 
-        preferences.menuBarSegments.removeAll { $0.id == target.id }
+        preferences.menuBarChips.removeAll { $0.id == target.id }
 
         #expect(binding.wrappedValue == target)
         var edited = binding.wrappedValue
-        edited.metricName = "Edited after deletion"
+        edited.showVendorIcon = true
         binding.wrappedValue = edited
-        #expect(preferences.menuBarSegments == [first])
+        #expect(preferences.menuBarChips == [first])
+    }
+
+    @Test("chip segment binding mutates the right slot")
+    func chipSegmentBindingMutatesParent() {
+        let segmentID = UUID(uuidString: "00000000-0000-0000-0000-000000000301")!
+        let chip = MenuBarChipConfig(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000201")!,
+            vendor: .claude,
+            segments: [
+                MenuBarChipSegmentConfig(
+                    id: segmentID,
+                    account: .currentlyActive,
+                    metricName: "Original",
+                    display: .timeWindow(TimeWindowDisplay(letter: "O"))
+                )
+            ]
+        )
+        let preferences = InMemoryAppPreferences(menuBarChips: [chip])
+
+        let binding = SettingsConfigurationBindings.menuBarChipSegment(
+            preferences: preferences,
+            chipID: chip.id,
+            segmentID: segmentID
+        )
+        #expect(binding != nil)
+        guard let binding else { return }
+
+        var edited = binding.wrappedValue
+        edited.metricName = "Edited"
+        binding.wrappedValue = edited
+
+        #expect(preferences.menuBarChips.first?.segments.first?.metricName == "Edited")
     }
 
     @Test("chart configuration binding read survives target deletion")

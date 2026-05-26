@@ -191,8 +191,8 @@ struct UsageStoreFormattingTests {
             timeWindowMetric(name: "Weekly (all models)", resetAt: "2026-04-23T21:00:00Z", usagePercent: 7),
         ])
         watcher.send(data)
-        try await eventually { store.menuBarText == "S 48% 2h 13m | W 7% 6d 8h" }
-        #expect(store.menuBarText == "S 48% 2h 13m | W 7% 6d 8h")
+        try await eventually { store.menuBarText == "S 48% 2h 13m W 7% 6d 8h" }
+        #expect(store.menuBarText == "S 48% 2h 13m W 7% 6d 8h")
         store.stop()
     }
 
@@ -639,8 +639,8 @@ struct UsageStoreEntryTests {
             timeWindowMetric(name: "weekly_opus",   resetAt: "2026-04-17T14:00:00Z", usagePercent: 20),
         ])
         watcher.send(data)
-        try await eventually { store.menuBarText == "S 10% 1h | W 50% 2h" }
-        #expect(store.menuBarText == "S 10% 1h | W 50% 2h")
+        try await eventually { store.menuBarText == "S 10% 1h W 50% 2h" }
+        #expect(store.menuBarText == "S 10% 1h W 50% 2h")
         store.stop()
     }
 
@@ -831,21 +831,30 @@ struct UsageStoreEntriesTests {
     }
 }
 
-// MARK: - menuBarSegments tests
+// MARK: - menuBarChips tests
 
-@Suite("UsageStore menuBarSegments")
-struct UsageStoreMenuBarSegmentsTests {
+@Suite("UsageStore menuBarChips")
+struct UsageStoreMenuBarChipsTests {
 
+    /// Shorthand for the default-preference chip (single Claude chip with S+W
+    /// sub-segments — see `UsageStore.makeDefaultPreferences`). All tests in
+    /// this suite use that default, so they share one rendered chip with one
+    /// or two rendered sub-segments depending on the input data.
     @MainActor
-    @Test("default menuBarSegments is empty")
-    func defaultIsEmpty() {
-        let watcher = MockFileWatcher()
-        let store = UsageStore(fileWatcher: watcher)
-        #expect(store.menuBarSegments.isEmpty)
+    private func firstChipSegments(_ store: UsageStore) -> [MenuBarSegment] {
+        store.menuBarChips.first?.segments ?? []
     }
 
     @MainActor
-    @Test("single metric produces one segment with text and tier")
+    @Test("default menuBarChips is empty when no data has arrived")
+    func defaultIsEmpty() {
+        let watcher = MockFileWatcher()
+        let store = UsageStore(fileWatcher: watcher)
+        #expect(store.menuBarChips.isEmpty)
+    }
+
+    @MainActor
+    @Test("single metric produces one chip with one rendered segment")
     func singleSegment() async throws {
         let watcher = MockFileWatcher()
         // Session: 300 min, reset 15:00, now 12:30 → 50% elapsed, 48% usage → ratio 0.96 → approaching
@@ -857,16 +866,17 @@ struct UsageStoreMenuBarSegmentsTests {
             timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 48),
         ])
         watcher.send(data)
-        try await eventually { store.menuBarSegments.count == 1 }
+        try await eventually { self.firstChipSegments(store).count == 1 }
 
-        #expect(store.menuBarSegments.count == 1)
-        #expect(store.menuBarSegments[0].text == "S 48% 2h 30m")
-        #expect(store.menuBarSegments[0].tier == .approaching)
+        let segments = firstChipSegments(store)
+        #expect(segments.count == 1)
+        #expect(segments[0].text == "S 48% 2h 30m")
+        #expect(segments[0].tier == .approaching)
         store.stop()
     }
 
     @MainActor
-    @Test("multiple metrics produce one segment per metric in order")
+    @Test("multiple metrics produce one chip with one segment per metric")
     func multipleSegments() async throws {
         let watcher = MockFileWatcher()
         let clock = FixedClock(ISO8601DateFormatter().date(from: "2026-04-17T12:30:00Z")!)
@@ -878,10 +888,11 @@ struct UsageStoreMenuBarSegmentsTests {
             timeWindowMetric(name: "Weekly (all models)",  resetAt: "2026-04-23T21:00:00Z", windowDurationMinutes: 10080, usagePercent: 80),
         ])
         watcher.send(data)
-        try await eventually { store.menuBarSegments.count == 2 }
+        try await eventually { self.firstChipSegments(store).count == 2 }
 
-        #expect(store.menuBarSegments[0].text.hasPrefix("S "))
-        #expect(store.menuBarSegments[1].text.hasPrefix("W "))
+        let segments = firstChipSegments(store)
+        #expect(segments[0].text.hasPrefix("S "))
+        #expect(segments[1].text.hasPrefix("W "))
         store.stop()
     }
 
@@ -898,15 +909,15 @@ struct UsageStoreMenuBarSegmentsTests {
             timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 50),
         ])
         watcher.send(data)
-        try await eventually { store.menuBarSegments.count == 1 }
+        try await eventually { self.firstChipSegments(store).count == 1 }
 
-        #expect(store.menuBarSegments[0].tier == nil)
+        #expect(firstChipSegments(store).first?.tier == nil)
         store.stop()
     }
 
     @MainActor
-    @Test("segments cleared on decode error")
-    func segmentsClearedOnError() async throws {
+    @Test("chips cleared on decode error")
+    func chipsClearedOnError() async throws {
         let watcher = MockFileWatcher()
         let clock = FixedClock(ISO8601DateFormatter().date(from: "2026-04-17T12:30:00Z")!)
         let store = UsageStore(fileWatcher: watcher, clock: clock, countdownRefreshSeconds: 999)
@@ -916,11 +927,11 @@ struct UsageStoreMenuBarSegmentsTests {
             timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T15:00:00Z", windowDurationMinutes: 300, usagePercent: 48),
         ])
         watcher.send(data)
-        try await eventually { store.menuBarSegments.count == 1 }
+        try await eventually { !store.menuBarChips.isEmpty }
 
         watcher.send("bad".data(using: .utf8)!)
-        try await eventually { store.menuBarSegments.isEmpty }
-        #expect(store.menuBarSegments.isEmpty)
+        try await eventually { store.menuBarChips.isEmpty }
+        #expect(store.menuBarChips.isEmpty)
         store.stop()
     }
 }
@@ -983,7 +994,10 @@ struct UsageStoreMenuBarTierTests {
             timeWindowMetric(name: "Weekly (all models)", resetAt: "2026-04-23T21:00:00Z", windowDurationMinutes: 10080, usagePercent: 80),
         ])
         watcher.send(data)
-        try await eventually { store.menuBarText.contains("|") }
+        // Two segments rendered → joined text contains both letters.
+        try await eventually {
+            store.menuBarText.contains("S ") && store.menuBarText.contains("W ")
+        }
         // Weekly tier is worse than session tier → menuBarTier reflects weekly
         #expect(store.menuBarTier != nil)
         #expect(store.menuBarTier! > .comfortable)
@@ -1196,58 +1210,66 @@ struct UsageStoreOutagesTests {
     }
 
     @MainActor
-    @Test("segment with showOutageWarning surfaces warning text only when its vendor has an outage")
-    func segmentOutageWarningCoupledToVendor() async throws {
+    @Test("chip with showOutageWarning surfaces warning text only when its vendor has an outage")
+    func chipOutageWarningCoupledToVendor() async throws {
         let watcher = MockFileWatcher()
         let prefs = InMemoryAppPreferences(
-            menuBarSegments: [
-                MenuBarSegmentConfig(
+            menuBarChips: [
+                MenuBarChipConfig(
                     vendor: .claude,
-                    account: .currentlyActive,
-                    metricName: "5h sessions (all models)",
-                    display: .timeWindow(TimeWindowDisplay(letter: "S")),
                     showOutageWarning: true,
-                    outageWarningText: "⚠️"
+                    outageWarningText: "⚠️",
+                    segments: [
+                        MenuBarChipSegmentConfig(
+                            account: .currentlyActive,
+                            metricName: "5h sessions (all models)",
+                            display: .timeWindow(TimeWindowDisplay(letter: "S"))
+                        )
+                    ]
                 ),
             ],
-            menuBarSegmentsInitialized: true
+            menuBarChipsInitialized: true
         )
         let store = UsageStore(fileWatcher: watcher, preferences: prefs, countdownRefreshSeconds: 999)
         store.start()
 
-        // No outage yet — segment is rendered without warning.
+        // No outage yet — chip is rendered without warning.
         let withoutOutage = try makeUsagesJSON(metrics: [timeWindowMetric()])
         watcher.send(withoutOutage)
-        try await eventually { !store.menuBarSegments.isEmpty }
-        #expect(store.menuBarSegments.first?.outageWarningText == nil)
+        try await eventually { !store.menuBarChips.isEmpty }
+        #expect(store.menuBarChips.first?.outageWarningText == nil)
 
-        // Outage on the same vendor — warning surfaces on the segment.
+        // Outage on the same vendor — warning surfaces on the chip.
         let withOutage = try makeUsagesWithOutagesJSON(
             metrics: [timeWindowMetric()],
             outages: [outageJSON()]
         )
         watcher.send(withOutage)
-        try await eventually { store.menuBarSegments.first?.outageWarningText != nil }
-        #expect(store.menuBarSegments.first?.outageWarningText == "⚠️")
+        try await eventually { store.menuBarChips.first?.outageWarningText != nil }
+        #expect(store.menuBarChips.first?.outageWarningText == "⚠️")
 
         store.stop()
     }
 
     @MainActor
-    @Test("segment without showOutageWarning never surfaces warning even during an outage")
-    func segmentWithoutOptInIgnoresOutage() async throws {
+    @Test("chip without showOutageWarning never surfaces warning even during an outage")
+    func chipWithoutOptInIgnoresOutage() async throws {
         let watcher = MockFileWatcher()
         let prefs = InMemoryAppPreferences(
-            menuBarSegments: [
-                MenuBarSegmentConfig(
+            menuBarChips: [
+                MenuBarChipConfig(
                     vendor: .claude,
-                    account: .currentlyActive,
-                    metricName: "5h sessions (all models)",
-                    display: .timeWindow(TimeWindowDisplay(letter: "S")),
-                    showOutageWarning: false
+                    showOutageWarning: false,
+                    segments: [
+                        MenuBarChipSegmentConfig(
+                            account: .currentlyActive,
+                            metricName: "5h sessions (all models)",
+                            display: .timeWindow(TimeWindowDisplay(letter: "S"))
+                        )
+                    ]
                 ),
             ],
-            menuBarSegmentsInitialized: true
+            menuBarChipsInitialized: true
         )
         let store = UsageStore(fileWatcher: watcher, preferences: prefs, countdownRefreshSeconds: 999)
         store.start()
@@ -1257,8 +1279,8 @@ struct UsageStoreOutagesTests {
             outages: [outageJSON()]
         )
         watcher.send(withOutage)
-        try await eventually { !store.menuBarSegments.isEmpty }
-        #expect(store.menuBarSegments.first?.outageWarningText == nil)
+        try await eventually { !store.menuBarChips.isEmpty }
+        #expect(store.menuBarChips.first?.outageWarningText == nil)
 
         store.stop()
     }

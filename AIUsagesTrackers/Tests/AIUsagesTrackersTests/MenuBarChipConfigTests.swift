@@ -41,7 +41,6 @@ struct SegmentDisplayTests {
     @Test("timeWindow round-trips preserving all flags")
     func timeWindowRoundTrip() throws {
         let original = SegmentDisplay.timeWindow(TimeWindowDisplay(
-            showDot: false,
             showLetter: true,
             letter: "X",
             showPercent: false,
@@ -65,33 +64,33 @@ struct SegmentDisplayTests {
     @Test("TimeWindowDisplay default init enables all toggles")
     func timeWindowDefaults() {
         let display = TimeWindowDisplay()
-        #expect(display.showDot)
         #expect(display.showLetter)
         #expect(display.showPercent)
         #expect(display.percentDisplayMode == .consumed)
         #expect(display.showReset)
         #expect(display.hideResetMinutesWhenOverOneDay)
-        #expect(!display.showVendorIcon)
     }
 
     @Test("TimeWindowDisplay JSON without newer fields decodes to defaults")
     func newerFieldsMissingDefault() throws {
         let json = """
-        {"showDot":true,"showLetter":true,"letter":"S","showPercent":true,"showReset":true}
+        {"showLetter":true,"letter":"S","showPercent":true,"showReset":true}
         """
         let data = json.data(using: .utf8)!
         let decoded = try JSONDecoder().decode(TimeWindowDisplay.self, from: data)
         #expect(decoded.percentDisplayMode == .consumed)
         #expect(decoded.hideResetMinutesWhenOverOneDay)
-        #expect(!decoded.showVendorIcon)
     }
 
-    @Test("TimeWindowDisplay with showVendorIcon true round-trips")
-    func showVendorIconRoundTrip() throws {
-        let original = TimeWindowDisplay(showVendorIcon: true)
-        let data = try JSONEncoder().encode(original)
+    @Test("Legacy JSON carrying only showDot:true gets promoted to showLetter=true on decode")
+    func legacyDotOnlyPromotesToLetter() throws {
+        let json = """
+        {"showDot":true,"showLetter":false,"letter":"","showPercent":false,"showReset":false,"colorizeText":true}
+        """
+        let data = json.data(using: .utf8)!
         let decoded = try JSONDecoder().decode(TimeWindowDisplay.self, from: data)
-        #expect(decoded.showVendorIcon == true)
+        #expect(decoded.hasAnyVisibleElement)
+        #expect(decoded.showLetter)
     }
 
     @Test("TimeWindowDisplay with remaining percent and compact reset round-trips")
@@ -105,55 +104,138 @@ struct SegmentDisplayTests {
         #expect(decoded.percentDisplayMode == .remaining)
         #expect(decoded.hideResetMinutesWhenOverOneDay)
     }
+
+    @Test("TimeWindowDisplay hasAnyVisibleElement requires at least one toggle on")
+    func hasAnyVisibleElement() {
+        var d = TimeWindowDisplay(showLetter: false, showPercent: false, showReset: false)
+        #expect(!d.hasAnyVisibleElement)
+        d.showLetter = true
+        #expect(d.hasAnyVisibleElement)
+    }
 }
 
-@Suite("MenuBarSegmentConfig")
-struct MenuBarSegmentConfigTests {
+@Suite("MenuBarChipSegmentConfig")
+struct MenuBarChipSegmentConfigTests {
     @Test("round-trips through Codable")
     func roundTrip() throws {
-        let original = MenuBarSegmentConfig(
-            vendor: .claude,
+        let original = MenuBarChipSegmentConfig(
             account: .currentlyActive,
             metricName: "Weekly (all models)",
             display: .timeWindow(TimeWindowDisplay(letter: "W"))
         )
         let data = try JSONEncoder().encode(original)
-        let decoded = try JSONDecoder().decode(MenuBarSegmentConfig.self, from: data)
+        let decoded = try JSONDecoder().decode(MenuBarChipSegmentConfig.self, from: data)
+        #expect(decoded == original)
+    }
+
+    /// The TimeWindowDisplay decoder promotes `showLetter` to true when every
+    /// visible toggle would otherwise be off, so segments that round-trip
+    /// through Codable always come back with at least one visible element.
+    /// This keeps existing user JSON (notably legacy showDot-only segments)
+    /// from being silently dropped on upgrade.
+    @Test("decoder repairs segment with no visible element by promoting showLetter")
+    func decoderRepairsEmptyDisplay() throws {
+        let segment = MenuBarChipSegmentConfig(
+            account: .currentlyActive,
+            metricName: "X",
+            display: .timeWindow(TimeWindowDisplay(
+                showLetter: false, showPercent: false, showReset: false
+            ))
+        )
+        let data = try JSONEncoder().encode(segment)
+        let decoded = try JSONDecoder().decode(MenuBarChipSegmentConfig.self, from: data)
+        if case .timeWindow(let tw) = decoded.display {
+            #expect(tw.showLetter)
+        } else {
+            Issue.record("expected .timeWindow display")
+        }
+    }
+}
+
+@Suite("MenuBarChipConfig")
+struct MenuBarChipConfigTests {
+    @Test("round-trips through Codable")
+    func roundTrip() throws {
+        let original = MenuBarChipConfig(
+            vendor: .claude,
+            showVendorIcon: true,
+            segments: [
+                MenuBarChipSegmentConfig(
+                    account: .currentlyActive,
+                    metricName: "Weekly (all models)",
+                    display: .timeWindow(TimeWindowDisplay(letter: "W"))
+                )
+            ]
+        )
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(MenuBarChipConfig.self, from: data)
         #expect(decoded == original)
     }
 
     @Test("id survives Codable round-trip")
     func idSurvivesRoundTrip() throws {
-        let original = MenuBarSegmentConfig(
+        let original = MenuBarChipConfig(
             vendor: .claude,
-            account: .specific("a@b.com"),
-            metricName: "Weekly (all models)",
-            display: .payAsYouGo
+            segments: [
+                MenuBarChipSegmentConfig(
+                    account: .specific("a@b.com"),
+                    metricName: "Cost",
+                    display: .payAsYouGo
+                )
+            ]
         )
         let data = try JSONEncoder().encode(original)
-        let decoded = try JSONDecoder().decode(MenuBarSegmentConfig.self, from: data)
+        let decoded = try JSONDecoder().decode(MenuBarChipConfig.self, from: data)
         #expect(decoded.id == original.id)
     }
 
-    @Test("array of mixed segments round-trips")
+    @Test("decoder rejects empty segments array")
+    func rejectsEmptySegments() throws {
+        // Build raw JSON with an empty segments list — the safe init prevents
+        // building a chip with []? in pure Swift, so we go through raw JSON.
+        let json = """
+        {
+            "id": "\(UUID().uuidString)",
+            "vendor": "claude",
+            "showVendorIcon": false,
+            "showOutageWarning": false,
+            "outageWarningText": "⚠️",
+            "segments": []
+        }
+        """
+        let data = json.data(using: .utf8)!
+        #expect(throws: (any Error).self) {
+            _ = try JSONDecoder().decode(MenuBarChipConfig.self, from: data)
+        }
+    }
+
+    @Test("array of mixed chips round-trips")
     func arrayRoundTrip() throws {
-        let segments: [MenuBarSegmentConfig] = [
-            MenuBarSegmentConfig(
+        let chips: [MenuBarChipConfig] = [
+            MenuBarChipConfig(
                 vendor: .claude,
-                account: .currentlyActive,
-                metricName: "5h sessions (all models)",
-                display: .timeWindow(TimeWindowDisplay(letter: "S"))
+                segments: [
+                    MenuBarChipSegmentConfig(
+                        account: .currentlyActive,
+                        metricName: "5h sessions (all models)",
+                        display: .timeWindow(TimeWindowDisplay(letter: "S"))
+                    )
+                ]
             ),
-            MenuBarSegmentConfig(
+            MenuBarChipConfig(
                 vendor: .claude,
-                account: .specific("user@example.com"),
-                metricName: "Monthly cost",
-                display: .payAsYouGo
+                segments: [
+                    MenuBarChipSegmentConfig(
+                        account: .specific("user@example.com"),
+                        metricName: "Monthly cost",
+                        display: .payAsYouGo
+                    )
+                ]
             ),
         ]
-        let data = try JSONEncoder().encode(segments)
-        let decoded = try JSONDecoder().decode([MenuBarSegmentConfig].self, from: data)
-        #expect(decoded == segments)
+        let data = try JSONEncoder().encode(chips)
+        let decoded = try JSONDecoder().decode([MenuBarChipConfig].self, from: data)
+        #expect(decoded == chips)
     }
 }
 

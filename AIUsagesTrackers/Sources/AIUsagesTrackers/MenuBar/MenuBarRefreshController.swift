@@ -3,24 +3,31 @@ import Foundation
 /// Identity of a menu bar render: every field that influences the produced
 /// image must appear here so equality means "the bitmap would be identical".
 public struct MenuBarRenderKey: Equatable, Sendable {
-    public let segments: [MenuBarSegment]
+    public let chips: [RenderedChip]
     public let text: String
-    public let separator: String
+    public let background: ChipBackground
     public let isDark: Bool
     public let isUnconfigured: Bool
+    /// Non-nil only when the debug "cycle pacing colors" affordance is on. The
+    /// override forces every visible chip segment's text & dot through this
+    /// tier so contrast against `background` can be QA'd. Including it in the
+    /// key means dedup naturally batches identical successive overrides.
+    public let tierOverride: ConsumptionTier?
 
     public init(
-        segments: [MenuBarSegment],
+        chips: [RenderedChip],
         text: String,
-        separator: String,
+        background: ChipBackground,
         isDark: Bool,
-        isUnconfigured: Bool
+        isUnconfigured: Bool,
+        tierOverride: ConsumptionTier? = nil
     ) {
-        self.segments = segments
+        self.chips = chips
         self.text = text
-        self.separator = separator
+        self.background = background
         self.isDark = isDark
         self.isUnconfigured = isUnconfigured
+        self.tierOverride = tierOverride
     }
 }
 

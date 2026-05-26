@@ -6,9 +6,24 @@ public enum AppPreferenceKeys: String {
     case refreshIntervalSeconds = "ai-tracker.refreshIntervalSeconds"
     case launchAtLogin = "ai-tracker.launchAtLogin"
     case logLevel = "ai-tracker.logLevel"
-    case menuBarSegments = "ai-tracker.menuBarSegments"
-    case menuBarSegmentsInitialized = "ai-tracker.menuBarSegmentsInitialized"
-    case menuBarSeparator = "ai-tracker.menuBarSeparator"
+    case menuBarChips = "ai-tracker.menuBarChips"
+    case menuBarChipsInitialized = "ai-tracker.menuBarChipsInitialized"
+    /// One-shot flag set by `MenuBarChipsMigration` once it has converted the
+    /// legacy `[MenuBarSegmentConfig]` payload (formerly under
+    /// `ai-tracker.menuBarSegments`) into the chip-based model.
+    case menuBarChipsMigrationCompleted = "ai-tracker.menuBarChipsMigrationCompleted"
+    /// One-shot flag set by `OutageWarningMigration` once it has promoted the
+    /// legacy global outage warning preference to per-segment fields on the
+    /// (still-legacy) `[MenuBarSegmentConfig]` payload. Runs before
+    /// `menuBarChipsMigrationCompleted`, but the flags are independent.
+    case menuBarOutageWarningMigrationCompleted = "ai-tracker.menuBarOutageWarningMigrationCompleted"
+    /// Persisted name of the chip pill colour scheme. Decoded into a
+    /// `ChipBackground` value object — defaults to `.paper` (light pill).
+    case menuBarChipBackground = "ai-tracker.menuBarChipBackground"
+    /// Debug-build only: when true, the renderer cycles every visible chip
+    /// segment's text & dot through `ConsumptionTier.allCases` once per
+    /// second so contrast against `menuBarChipBackground` can be QA'd.
+    case menuBarPacingColorCycleEnabled = "ai-tracker.menuBarPacingColorCycleEnabled"
     case chartConfigurations = "ai-tracker.chartConfigurations"
     case chartConfigurationsInitialized = "ai-tracker.chartConfigurationsInitialized"
     case ignoredAccounts = "ai-tracker.ignoredAccounts"

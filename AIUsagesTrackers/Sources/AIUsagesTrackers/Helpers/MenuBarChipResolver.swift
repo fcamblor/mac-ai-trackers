@@ -1,9 +1,9 @@
 import Foundation
 
-// MARK: - Resolution
+// MARK: - Resolution outputs
 
 public enum MenuBarSegmentIssue: Equatable, Sendable {
-    /// `.currentlyActive` was selected but no account for the vendor is flagged active.
+    /// `.currentlyActive` was selected but no account for the chip's vendor is flagged active.
     case noActiveAccount(vendor: Vendor)
     /// A specific account was selected but it's absent from the usages file.
     case accountNotFound(vendor: Vendor, email: AccountEmail)
@@ -15,35 +15,90 @@ public enum MenuBarSegmentIssue: Equatable, Sendable {
     case metricKindMismatch
 }
 
-public struct ResolvedMenuBarSegment: Sendable {
-    public let config: MenuBarSegmentConfig
+public struct ResolvedChipSegment: Sendable {
+    public let config: MenuBarChipSegmentConfig
     public let rendered: MenuBarSegment?
     public let issue: MenuBarSegmentIssue?
 
-    public init(config: MenuBarSegmentConfig, rendered: MenuBarSegment?, issue: MenuBarSegmentIssue?) {
+    public init(
+        config: MenuBarChipSegmentConfig,
+        rendered: MenuBarSegment?,
+        issue: MenuBarSegmentIssue?
+    ) {
         self.config = config
         self.rendered = rendered
         self.issue = issue
     }
 }
 
+public struct ResolvedMenuBarChip: Sendable {
+    public let chip: MenuBarChipConfig
+    /// True when the chip's vendor currently has at least one active outage.
+    /// Computed once for the chip (vendor-level) rather than re-checked for
+    /// every segment.
+    public let hasActiveOutage: Bool
+    public let segments: [ResolvedChipSegment]
+
+    public init(
+        chip: MenuBarChipConfig,
+        hasActiveOutage: Bool,
+        segments: [ResolvedChipSegment]
+    ) {
+        self.chip = chip
+        self.hasActiveOutage = hasActiveOutage
+        self.segments = segments
+    }
+
+    /// The text rendered alongside the vendor icon when the chip opts into
+    /// outage warnings and the vendor currently has at least one active
+    /// outage. Empty warning text is treated as "no warning" to match the
+    /// existing UI affordance where clearing the field disables the badge.
+    public var outageWarningText: String? {
+        guard chip.showOutageWarning, hasActiveOutage else { return nil }
+        return chip.outageWarningText.isEmpty ? nil : chip.outageWarningText
+    }
+}
+
 // MARK: - Resolver
 
-/// Converts a `MenuBarSegmentConfig` + a snapshot of usage entries into either a
-/// renderable `MenuBarSegment` or a structured issue that the Settings UI can
-/// surface to the user.
-public enum MenuBarSegmentResolver {
+/// Converts a `MenuBarChipConfig` + a snapshot of usage entries and outages
+/// into the renderable structure used by the menu bar label, while preserving
+/// per-segment issues so the Settings UI can surface them to the user.
+public enum MenuBarChipResolver {
 
     public static func resolve(
-        config: MenuBarSegmentConfig,
+        chip: MenuBarChipConfig,
+        entries: [VendorUsageEntry],
+        outagesByVendor: [Vendor: [Outage]],
+        now: Date
+    ) -> ResolvedMenuBarChip {
+        let hasOutage = (outagesByVendor[chip.vendor]?.isEmpty == false)
+        let resolvedSegments = chip.segments.map { segmentConfig in
+            resolveSegment(
+                vendor: chip.vendor,
+                segmentConfig: segmentConfig,
+                entries: entries,
+                now: now
+            )
+        }
+        return ResolvedMenuBarChip(
+            chip: chip,
+            hasActiveOutage: hasOutage,
+            segments: resolvedSegments
+        )
+    }
+
+    private static func resolveSegment(
+        vendor: Vendor,
+        segmentConfig: MenuBarChipSegmentConfig,
         entries: [VendorUsageEntry],
         now: Date
-    ) -> ResolvedMenuBarSegment {
-        let vendorEntries = entries.filter { $0.vendor == config.vendor }
+    ) -> ResolvedChipSegment {
+        let vendorEntries = entries.filter { $0.vendor == vendor }
 
         let entry: VendorUsageEntry?
         let resolveIssue: MenuBarSegmentIssue?
-        switch config.account {
+        switch segmentConfig.account {
         case .currentlyActive:
             if let active = vendorEntries.first(where: { $0.isActive }) {
                 entry = active
@@ -55,7 +110,7 @@ public enum MenuBarSegmentResolver {
                 resolveIssue = nil
             } else {
                 entry = nil
-                resolveIssue = .noActiveAccount(vendor: config.vendor)
+                resolveIssue = .noActiveAccount(vendor: vendor)
             }
         case .specific(let email):
             if let match = vendorEntries.first(where: { $0.account == email }) {
@@ -63,40 +118,39 @@ public enum MenuBarSegmentResolver {
                 resolveIssue = nil
             } else {
                 entry = nil
-                resolveIssue = .accountNotFound(vendor: config.vendor, email: email)
+                resolveIssue = .accountNotFound(vendor: vendor, email: email)
             }
         }
 
         guard let entry else {
-            return ResolvedMenuBarSegment(config: config, rendered: nil, issue: resolveIssue)
+            return ResolvedChipSegment(config: segmentConfig, rendered: nil, issue: resolveIssue)
         }
 
-        guard let metric = entry.metrics.first(where: { metricName($0) == config.metricName }) else {
-            return ResolvedMenuBarSegment(
-                config: config,
+        guard let metric = entry.metrics.first(where: { metricName($0) == segmentConfig.metricName }) else {
+            return ResolvedChipSegment(
+                config: segmentConfig,
                 rendered: nil,
-                issue: .metricNotFound(metricName: config.metricName)
+                issue: .metricNotFound(metricName: segmentConfig.metricName)
             )
         }
 
-        switch (metric, config.display) {
+        switch (metric, segmentConfig.display) {
         case let (.timeWindow(_, resetAt, windowDuration, usagePercent), .timeWindow(display)):
             let segment = renderTimeWindow(
                 display: display,
-                vendor: config.vendor,
                 resetAt: resetAt,
                 windowDuration: windowDuration,
                 usagePercent: usagePercent,
                 now: now
             )
-            return ResolvedMenuBarSegment(config: config, rendered: segment, issue: nil)
+            return ResolvedChipSegment(config: segmentConfig, rendered: segment, issue: nil)
 
         case let (.payAsYouGo(_, currentAmount, currency), .payAsYouGo):
             let segment = renderPayAsYouGo(currentAmount: currentAmount, currency: currency)
-            return ResolvedMenuBarSegment(config: config, rendered: segment, issue: nil)
+            return ResolvedChipSegment(config: segmentConfig, rendered: segment, issue: nil)
 
         default:
-            return ResolvedMenuBarSegment(config: config, rendered: nil, issue: .metricKindMismatch)
+            return ResolvedChipSegment(config: segmentConfig, rendered: nil, issue: .metricKindMismatch)
         }
     }
 
@@ -112,7 +166,6 @@ public enum MenuBarSegmentResolver {
 
     private static func renderTimeWindow(
         display: TimeWindowDisplay,
-        vendor: Vendor,
         resetAt: ISODate?,
         windowDuration: DurationMinutes,
         usagePercent: UsagePercent,
@@ -152,25 +205,18 @@ public enum MenuBarSegmentResolver {
         }
         let text = parts.joined(separator: " ")
 
-        // The tier reflects the underlying usage state and is exposed
-        // independently of `showDot` — the dot is just one consumer of it.
-        // Text colorisation (see TimeWindowDisplay.colorizeText) also reads
-        // the tier, so a user who hides the dot can still tint the text.
+        // The tier drives the pill background colour. It still reflects the
+        // underlying usage state regardless of which textual toggles are on.
         let tier: ConsumptionTier? = state.tier
 
-        // If the user turned every visible element off, there's nothing to render
-        if text.isEmpty, !display.showDot, !display.showVendorIcon {
+        // Display invariants guarantee at least one toggle is on, so `text`
+        // shouldn't be empty under normal use — but a payload with all toggles
+        // off would still surface as an empty pill, which is meaningless.
+        if text.isEmpty {
             return nil
         }
 
-        let vendorIcon: Vendor? = display.showVendorIcon ? vendor : nil
-        return MenuBarSegment(
-            text: text,
-            tier: tier,
-            showDot: display.showDot,
-            vendorIcon: vendorIcon,
-            colorizeText: display.colorizeText
-        )
+        return MenuBarSegment(text: text, tier: tier)
     }
 
     private static func formatUsagePercent(_ usagePercent: UsagePercent, mode: UsagePercentDisplayMode) -> String {
@@ -184,6 +230,6 @@ public enum MenuBarSegmentResolver {
 
     private static func renderPayAsYouGo(currentAmount: Double, currency: String) -> MenuBarSegment {
         let amount = String(format: "%.2f", currentAmount)
-        return MenuBarSegment(text: "\(amount) \(currency)", tier: nil, showDot: false)
+        return MenuBarSegment(text: "\(amount) \(currency)", tier: nil)
     }
 }

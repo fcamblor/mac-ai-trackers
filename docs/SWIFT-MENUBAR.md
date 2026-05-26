@@ -1,6 +1,24 @@
 # Swift menu bar UI
 
-Lessons learned while trying to render per-segment colored indicators in the menu bar. Read this before touching `AppDelegate.swift` or `MenuBarLabelRenderer.swift`.
+Lessons learned while building the chip-based menu bar label. Read this before touching the status-item rendering path.
+
+## Chips, not flat segments
+
+The menu bar label is a list of **chips**. Each chip is a pill drawn behind a
+sub-list of **segments**:
+
+- A chip owns vendor-level chrome: vendor icon (optional), outage warning
+  badge (optional), and the pill background colour.
+- A chip's segments share the chip's pill — they are rendered inside it,
+  separated by a thin space.
+- A chip is constrained to hold at least one segment; each segment must
+  declare at least one visible element (dot, letter, percent, or reset
+  countdown). Both invariants are enforced at decode time.
+
+The pill colour is picked from `ChipBackground` (three curated options:
+`paper`, `slate`, `system`). Anything more permissive — per-chip colours,
+gradients, free-form hex — would defeat the legibility guarantees of the
+tier colour palette painted inside the pill.
 
 ## Do not use `MenuBarExtra` for anything beyond a single monochrome label
 
@@ -35,6 +53,33 @@ For correct text color in a rasterised label:
 
 Never use `NSColor.labelColor` for rasterised menu bar text: it resolves against the app's appearance at draw time and will be wrong whenever the menu bar is tinted differently.
 
+## Pill rasterisation
+
+Each chip's pill is drawn with `NSBezierPath(roundedRect:xRadius:yRadius:)`
+on a single `NSImage` covering the whole label. The chip text is drawn on
+top of the pill in the same `lockFocus` pass, so there is no second
+compositing step and the bitmap stays sharp at integer pixel boundaries.
+
+Two consequences:
+
+1. The pill's text colour is fixed by the chip background (dark on `paper`,
+   light on `slate`), not by the menu bar appearance. Wallpaper tinting no
+   longer drives the text colour at all once a chip is involved.
+2. The dot needs no stroke — the pill already provides a guaranteed
+   contrast against the tier fill. Stripping the stroke also lets us drop
+   the `colorizedAttributes` text outline that the pre-chip renderer used.
+
+## Pacing colour cycle (debug)
+
+A debug-only affordance cycles every visible chip segment's text and dot
+through `ConsumptionTier.allCases` at 1 Hz, so the contrast between each
+tier hue and the chosen `ChipBackground` can be QA'd live. The renderer
+takes a `tierOverride: ConsumptionTier?` parameter that forces the dot fill
+and the text colour when non-nil; production callers always pass `nil`.
+
+The override is stored in `MenuBarRenderKey` so the dedup logic naturally
+batches identical overrides and only repaints when the cycle ticks.
+
 ## Rasterising with `lockFocus`
 
 ```swift
@@ -55,7 +100,7 @@ image.isTemplate = false
 ```swift
 private func trackStoreChanges(store: UsageStore) {
     withObservationTracking {
-        _ = store.menuBarSegments
+        _ = store.menuBarChips
         _ = store.menuBarText
     } onChange: { [weak self] in
         Task { @MainActor in
