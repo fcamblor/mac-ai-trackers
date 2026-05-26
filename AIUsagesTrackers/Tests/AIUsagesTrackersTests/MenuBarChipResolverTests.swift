@@ -177,6 +177,7 @@ struct ResolverTimeWindowTogglesTests {
     func allDefault() {
         let seg = resolveWith(TimeWindowDisplay(letter: "S"))
         #expect(seg?.text == "S 48% 2h 13m")
+        #expect(seg?.tier != nil)
     }
 
     @Test("only percent")
@@ -202,6 +203,191 @@ struct ResolverTimeWindowTogglesTests {
             percentDisplayMode: .remaining, showReset: false
         ))
         #expect(seg?.text == "52%")
+    }
+
+    @Test("letter off hides the letter")
+    func letterOff() {
+        let seg = resolveWith(TimeWindowDisplay(
+            showLetter: false, letter: "S",
+            showPercent: true, showReset: true
+        ))
+        #expect(seg?.text == "48% 2h 13m")
+    }
+
+    @Test("percent off hides percent")
+    func percentOff() {
+        let seg = resolveWith(TimeWindowDisplay(
+            showLetter: true, letter: "S",
+            showPercent: false, showReset: true
+        ))
+        #expect(seg?.text == "S 2h 13m")
+    }
+
+    @Test("reset off hides remaining time")
+    func resetOff() {
+        let seg = resolveWith(TimeWindowDisplay(
+            showLetter: true, letter: "S",
+            showPercent: true, showReset: false
+        ))
+        #expect(seg?.text == "S 48%")
+    }
+
+    @Test("hideResetMinutesWhenOverOneDay collapses minutes past 24h")
+    func resetHidesMinutesOverOneDay() {
+        let display = TimeWindowDisplay(
+            showLetter: true,
+            letter: "W",
+            showPercent: false,
+            showReset: true,
+            hideResetMinutesWhenOverOneDay: true
+        )
+        let chip = singleSegmentChip(
+            metricName: "Weekly (all models)",
+            display: .timeWindow(display)
+        )
+        let entry = timeWindowEntry(
+            metricName: "Weekly (all models)",
+            resetAt: "2026-04-20T05:30:00Z"
+        )
+        let now = ISO8601DateFormatter().date(from: "2026-04-17T00:00:00Z")!
+        let result = firstResolved(chip: chip, entries: [entry], now: now)
+        #expect(result.rendered?.text == "W 3d 6h")
+    }
+
+    @Test("all toggles off yields nil segment")
+    func allOff() {
+        // The decoder rejects this shape, but the resolver must still be
+        // defensive: a TimeWindowDisplay built directly in Swift can bypass
+        // the invariant, and we don't want the menu bar to surface an empty
+        // pill in that case.
+        let seg = resolveWith(TimeWindowDisplay(
+            showLetter: false, letter: "S",
+            showPercent: false, showReset: false
+        ))
+        #expect(seg == nil)
+    }
+}
+
+@Suite("MenuBarChipResolver — unknown window (popover/menubar consistency)")
+struct ResolverUnknownWindowTests {
+    // When the reset is unknown, the percent has no interpretable window so
+    // both percent and remaining degrade to "???". The renderer collapses the
+    // pair into a single placeholder so the chip reads as "S ???" instead of
+    // the awkward "S ??? ???". Popover and menubar must agree on that — these
+    // tests guard the parity at the resolver boundary.
+
+    private static func segment(
+        resetAt: ISODate?,
+        usagePercent: Int = 1,
+        display: TimeWindowDisplay = TimeWindowDisplay(letter: "S")
+    ) -> MenuBarSegment? {
+        let entry = VendorUsageEntry(
+            vendor: .codex,
+            account: "user@openai.com",
+            isActive: true,
+            metrics: [.timeWindow(
+                name: "Session (5h)",
+                resetAt: resetAt,
+                windowDuration: 300,
+                usagePercent: UsagePercent(rawValue: usagePercent)
+            )]
+        )
+        let chip = MenuBarChipConfig(
+            vendor: .codex,
+            segments: [
+                MenuBarChipSegmentConfig(
+                    account: .currentlyActive,
+                    metricName: "Session (5h)",
+                    display: .timeWindow(display)
+                )
+            ]
+        )
+        return firstResolved(chip: chip, entries: [entry]).rendered
+    }
+
+    @Test("nil resetAt → single ??? placeholder (not duplicated for percent + remaining)")
+    func nilResetAtCollapsesToSinglePlaceholder() {
+        let result = ResolverUnknownWindowTests.segment(resetAt: nil, usagePercent: 1)
+        #expect(result?.text == "S ???")
+        #expect(result?.tier == nil)
+    }
+
+    @Test("elapsed resetAt → single ??? placeholder")
+    func elapsedResetAtCollapsesToSinglePlaceholder() {
+        let elapsed = ISODate(rawValue: "2026-04-17T10:00:00Z")
+        let result = ResolverUnknownWindowTests.segment(resetAt: elapsed, usagePercent: 42)
+        #expect(result?.text == "S ???")
+        #expect(result?.tier == nil)
+    }
+
+    @Test("unknown window with only percent shown → still renders single ???")
+    func unknownWithOnlyPercentDisplayed() {
+        let result = ResolverUnknownWindowTests.segment(
+            resetAt: nil,
+            usagePercent: 1,
+            display: TimeWindowDisplay(letter: "S", showReset: false)
+        )
+        #expect(result?.text == "S ???")
+    }
+
+    @Test("unknown window with only reset shown → still renders single ???")
+    func unknownWithOnlyResetDisplayed() {
+        let result = ResolverUnknownWindowTests.segment(
+            resetAt: nil,
+            usagePercent: 1,
+            display: TimeWindowDisplay(letter: "S", showPercent: false)
+        )
+        #expect(result?.text == "S ???")
+    }
+
+    @Test("known reset with 0% → percent stays visible (0% is meaningful when window is known)")
+    func knownResetWithZeroPercentStaysVisible() {
+        let active = ISODate(rawValue: "2026-04-17T15:00:00Z")
+        let result = ResolverUnknownWindowTests.segment(resetAt: active, usagePercent: 0)
+        #expect(result?.text == "S 0% 2h 13m")
+    }
+
+    @Test("in-progress resetAt → menubar renders the percent and remaining time")
+    func inProgressResetAtRendersValues() {
+        let active = ISODate(rawValue: "2026-04-17T15:00:00Z")
+        let result = ResolverUnknownWindowTests.segment(resetAt: active, usagePercent: 48)
+        #expect(result?.text == "S 48% 2h 13m")
+    }
+}
+
+@Suite("MenuBarChipResolver — multi-vendor isolation")
+struct ResolverMultiVendorTests {
+    @Test("an entry from another vendor is not picked up by the chip's resolver")
+    func ignoresEntriesFromOtherVendors() {
+        let claudeChip = singleSegmentChip(vendor: .claude)
+        let codexEntry = timeWindowEntry(vendor: .codex, isActive: true)
+        let result = firstResolved(chip: claudeChip, entries: [codexEntry])
+        #expect(result.issue == .noActiveAccount(vendor: .claude))
+        #expect(result.rendered == nil)
+    }
+
+    @Test("chip resolves only against entries of its own vendor when both are present")
+    func picksOwnVendorAmongMany() {
+        let codexChip = singleSegmentChip(
+            vendor: .codex,
+            metricName: "Session (5h)",
+            display: .timeWindow(TimeWindowDisplay(letter: "S"))
+        )
+        let claudeEntry = timeWindowEntry(vendor: .claude, isActive: true)
+        let codexEntry = VendorUsageEntry(
+            vendor: .codex,
+            account: "user@openai.com",
+            isActive: true,
+            metrics: [.timeWindow(
+                name: "Session (5h)",
+                resetAt: ISODate(rawValue: "2026-04-17T15:00:00Z"),
+                windowDuration: 300,
+                usagePercent: UsagePercent(rawValue: 48)
+            )]
+        )
+        let result = firstResolved(chip: codexChip, entries: [claudeEntry, codexEntry])
+        #expect(result.rendered?.text == "S 48% 2h 13m")
+        #expect(result.issue == nil)
     }
 }
 

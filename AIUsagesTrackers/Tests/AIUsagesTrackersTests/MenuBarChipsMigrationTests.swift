@@ -276,6 +276,90 @@ struct MenuBarChipsMigrationTests {
         #expect(defaults.object(forKey: Self.legacySeparatorKey) == nil)
     }
 
+    // MARK: - Ordering with OutageWarningMigration
+
+    @Test("OutageWarningMigration → MenuBarChipsMigration propagates legacy global warning to chip")
+    func outageThenChipsIntegration() {
+        let (defaults, name) = makeSuite()
+        defer { cleanUp(suiteName: name) }
+        let prefs = InMemoryAppPreferences()
+
+        // Legacy state: a segment without per-segment warning fields, plus the
+        // global outage warning enabled with custom text. Mirrors what an old
+        // build's UserDefaults would look like in the wild.
+        let segment: [String: Any] = [
+            "id": UUID().uuidString,
+            "vendor": "claude",
+            "account": ["kind": "currently-active"],
+            "metricName": "5h sessions (all models)",
+            "display": [
+                "kind": "time-window",
+                "timeWindow": [
+                    "showDot": true,
+                    "showLetter": true,
+                    "letter": "S",
+                    "showPercent": true,
+                    "showReset": true,
+                    "hideResetMinutesWhenOverOneDay": true,
+                    "showVendorIcon": false,
+                ],
+            ],
+            "showOutageWarning": false,
+            "outageWarningText": "",
+        ]
+        writeLegacyPayload([segment], to: defaults)
+        defaults.set(true, forKey: "ai-tracker.menuBarOutageWarningEnabledInitialized")
+        defaults.set(true, forKey: "ai-tracker.menuBarOutageWarningEnabled")
+        defaults.set("🚨", forKey: "ai-tracker.menuBarOutageWarningText")
+
+        OutageWarningMigration.migrateIfNeeded(defaults: defaults)
+        MenuBarChipsMigration.migrateIfNeeded(preferences: prefs, defaults: defaults)
+
+        let chip = prefs.menuBarChips.first
+        #expect(chip?.showOutageWarning == true)
+        #expect(chip?.outageWarningText == "🚨")
+    }
+
+    @Test("inverted order leaves the global warning silently un-applied — documents the dependency")
+    func chipsBeforeOutageLosesWarning() {
+        let (defaults, name) = makeSuite()
+        defer { cleanUp(suiteName: name) }
+        let prefs = InMemoryAppPreferences()
+
+        let segment: [String: Any] = [
+            "id": UUID().uuidString,
+            "vendor": "claude",
+            "account": ["kind": "currently-active"],
+            "metricName": "5h sessions (all models)",
+            "display": [
+                "kind": "time-window",
+                "timeWindow": [
+                    "showDot": true,
+                    "showLetter": true,
+                    "letter": "S",
+                    "showPercent": true,
+                    "showReset": true,
+                    "hideResetMinutesWhenOverOneDay": true,
+                    "showVendorIcon": false,
+                ],
+            ],
+            "showOutageWarning": false,
+            "outageWarningText": "",
+        ]
+        writeLegacyPayload([segment], to: defaults)
+        defaults.set(true, forKey: "ai-tracker.menuBarOutageWarningEnabledInitialized")
+        defaults.set(true, forKey: "ai-tracker.menuBarOutageWarningEnabled")
+        defaults.set("🚨", forKey: "ai-tracker.menuBarOutageWarningText")
+
+        // Wrong order: chips first → legacy segments key cleared → outage
+        // migration can no longer reach the segment payload, so the chip ends
+        // up without the warning the user had explicitly enabled.
+        MenuBarChipsMigration.migrateIfNeeded(preferences: prefs, defaults: defaults)
+        OutageWarningMigration.migrateIfNeeded(defaults: defaults)
+
+        #expect(prefs.menuBarChips.first?.showOutageWarning == false)
+    }
+
     @Test("second invocation is a no-op")
     func idempotent() {
         let (defaults, name) = makeSuite()

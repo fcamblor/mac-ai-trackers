@@ -469,13 +469,13 @@ struct ChipCardView: View {
 
     private func segmentDropIndicatorY(chip: MenuBarChipConfig, atIndex index: Int) -> CGFloat? {
         let visible = chip.segments.filter { $0.id != draggingSegmentID }
-        guard !visible.isEmpty else { return 0 }
+        guard let first = visible.first, let last = visible.last else { return 0 }
         let clamped = max(0, min(index, visible.count))
         if clamped == 0 {
-            return segmentRowFrames[visible[0].id]?.minY
+            return segmentRowFrames[first.id]?.minY
         }
         if clamped >= visible.count {
-            return segmentRowFrames[visible.last!.id]?.maxY
+            return segmentRowFrames[last.id]?.maxY
         }
         let prev = segmentRowFrames[visible[clamped - 1].id]?.maxY ?? 0
         let next = segmentRowFrames[visible[clamped].id]?.minY ?? prev

@@ -237,7 +237,7 @@ private struct MenubarHintContent: View {
             canMoveUp: index > 0,
             canMoveDown: index < count - 1,
             onMoveUp: { move(from: index, to: index - 1) },
-            onMoveDown: { move(from: index, to: index + 2) },
+            onMoveDown: { move(from: index, to: index + 1) },
             onDuplicate: { duplicate(chipID: chip.id) },
             onRequestDelete: { pendingDelete = chip.id },
             isBeingDragged: isDragging,
@@ -275,13 +275,13 @@ private struct MenubarHintContent: View {
 
     private func dropIndicatorY(chips: [MenuBarChipConfig], atIndex index: Int) -> CGFloat? {
         let visible = chips.filter { $0.id != draggingID }
-        guard !visible.isEmpty else { return 0 }
+        guard let first = visible.first, let last = visible.last else { return 0 }
         let clamped = max(0, min(index, visible.count))
         if clamped == 0 {
-            return rowFrames[visible[0].id]?.minY
+            return rowFrames[first.id]?.minY
         }
         if clamped >= visible.count {
-            return rowFrames[visible.last!.id]?.maxY
+            return rowFrames[last.id]?.maxY
         }
         let prev = rowFrames[visible[clamped - 1].id]?.maxY ?? 0
         let next = rowFrames[visible[clamped].id]?.minY ?? prev
@@ -418,8 +418,10 @@ private struct MenubarHintContent: View {
         let prefs = AppDelegate.sharedPreferences
         var chips = prefs.menuBarChips
         guard source >= 0, source < chips.count else { return }
-        let dest = max(0, min(destination, chips.count))
-        chips.move(fromOffsets: IndexSet(integer: source), toOffset: dest)
+        let dest = max(0, min(destination, chips.count - 1))
+        guard dest != source else { return }
+        let element = chips.remove(at: source)
+        chips.insert(element, at: dest)
         prefs.menuBarChips = chips
     }
 

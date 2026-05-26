@@ -22,7 +22,7 @@ public enum OutageWarningMigration {
     private static let legacyEnabledKey = "ai-tracker.menuBarOutageWarningEnabled"
     private static let legacyEnabledInitializedKey = "ai-tracker.menuBarOutageWarningEnabledInitialized"
     private static let legacyTextKey = "ai-tracker.menuBarOutageWarningText"
-    private static let migrationCompletedKey = "ai-tracker.menuBarOutageWarningMigrationCompleted"
+    private static let migrationCompletedKey = AppPreferenceKeys.menuBarOutageWarningMigrationCompleted.rawValue
     private static let legacySegmentsKey = "ai-tracker.menuBarSegments"
     /// Mirrors the default that `MenuBarChipConfig.defaultOutageWarningText`
     /// exposes — kept inline so this migration doesn't depend on a runtime

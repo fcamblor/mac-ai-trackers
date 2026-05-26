@@ -12,6 +12,11 @@ public enum AppPreferenceKeys: String {
     /// legacy `[MenuBarSegmentConfig]` payload (formerly under
     /// `ai-tracker.menuBarSegments`) into the chip-based model.
     case menuBarChipsMigrationCompleted = "ai-tracker.menuBarChipsMigrationCompleted"
+    /// One-shot flag set by `OutageWarningMigration` once it has promoted the
+    /// legacy global outage warning preference to per-segment fields on the
+    /// (still-legacy) `[MenuBarSegmentConfig]` payload. Runs before
+    /// `menuBarChipsMigrationCompleted`, but the flags are independent.
+    case menuBarOutageWarningMigrationCompleted = "ai-tracker.menuBarOutageWarningMigrationCompleted"
     /// Persisted name of the chip pill colour scheme. Decoded into a
     /// `ChipBackground` value object — defaults to `.paper` (light pill).
     case menuBarChipBackground = "ai-tracker.menuBarChipBackground"

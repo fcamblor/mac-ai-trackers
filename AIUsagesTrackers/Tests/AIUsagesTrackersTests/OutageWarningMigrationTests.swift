@@ -137,4 +137,66 @@ struct OutageWarningMigrationTests {
         let segments = readLegacySegments(from: defaults)
         #expect(segments.first?["outageWarningText"] as? String == "⚠️")
     }
+
+    /// Mirrors the legacy `MenuBarSegmentConfig` payload as it would be
+    /// produced by a `JSONEncoder` in an old build — typed Swift values, not
+    /// a hand-built `[String: Any]` dict. Guards against an asymmetry where
+    /// `JSONSerialization` (used by the migration) could read a payload that
+    /// `JSONDecoder` then fails to decode.
+    private struct LegacyEncoderPayload: Encodable {
+        struct LegacyTimeWindow: Encodable {
+            var showDot: Bool = true
+            var showLetter: Bool = true
+            var letter: String = "S"
+            var showPercent: Bool = true
+            var showReset: Bool = true
+            var hideResetMinutesWhenOverOneDay: Bool = true
+            var showVendorIcon: Bool = false
+        }
+        struct LegacyDisplay: Encodable {
+            let kind: String
+            let timeWindow: LegacyTimeWindow
+        }
+        struct LegacyAccount: Encodable {
+            var kind: String = "currently-active"
+        }
+        let id: UUID
+        var vendor: String = "claude"
+        var account: LegacyAccount = LegacyAccount()
+        var metricName: String = "5h sessions (all models)"
+        let display: LegacyDisplay
+        var showOutageWarning: Bool = false
+        var outageWarningText: String = ""
+    }
+
+    @Test("payload encoded by JSONEncoder survives OutageWarningMigration → MenuBarChipsMigration")
+    func encoderProducedPayloadRoundTripsThroughBothMigrations() throws {
+        let (defaults, name) = makeSuite()
+        defer { cleanUp(suiteName: name) }
+        let prefs = InMemoryAppPreferences()
+
+        let payload = [
+            LegacyEncoderPayload(
+                id: UUID(),
+                display: .init(kind: "time-window", timeWindow: .init())
+            )
+        ]
+        let encoded = try JSONEncoder().encode(payload)
+        defaults.set(encoded, forKey: "ai-tracker.menuBarSegments")
+        defaults.set(true, forKey: "ai-tracker.menuBarOutageWarningEnabledInitialized")
+        defaults.set(true, forKey: "ai-tracker.menuBarOutageWarningEnabled")
+        defaults.set("🚨", forKey: "ai-tracker.menuBarOutageWarningText")
+
+        OutageWarningMigration.migrateIfNeeded(defaults: defaults)
+        MenuBarChipsMigration.migrateIfNeeded(preferences: prefs, defaults: defaults)
+
+        // The end-to-end signal: the chip exists, decoded successfully from
+        // the JSONSerialization-rewritten payload, and carries the warning
+        // text that OutageWarningMigration injected.
+        #expect(prefs.menuBarChips.count == 1)
+        #expect(prefs.menuBarChips.first?.showOutageWarning == true)
+        #expect(prefs.menuBarChips.first?.outageWarningText == "🚨")
+        // No corruption fallback path was triggered.
+        #expect(defaults.data(forKey: MenuBarChipsMigration.corruptedBackupKey) == nil)
+    }
 }
