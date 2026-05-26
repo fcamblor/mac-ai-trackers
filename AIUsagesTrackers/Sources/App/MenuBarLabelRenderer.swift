@@ -2,15 +2,20 @@ import AppKit
 import AIUsagesTrackersLib
 
 /// Rasterises the full menu bar label into a non-template `NSImage`. Each
-/// configured chip is drawn as a rounded pill ("chip background") containing
-/// the vendor icon + optional outage warning + every rendered sub-segment.
-/// The colours that fill the pill and tint the text come from `ChipBackground`
-/// — three curated palettes keep the tier colours legible without per-chip
-/// tuning.
+/// configured chip is drawn as a single rounded pill enclosing every piece:
+///   1. An optional "header" zone carrying the vendor icon and/or the outage
+///      warning, painted with the user-selected `ChipBackground` palette
+///      (paper/slate/system → off-white or slate-grey, picked against the menu
+///      bar appearance).
+///   2. One rectangular zone per rendered sub-segment, filled with the
+///      segment's tier colour. The text colour for each zone is chosen
+///      automatically to maximise contrast against the fill (pure black or
+///      pure white). Segment zones share the chip's rounded outline — they're
+///      clipped against it so the chip looks like one solid pill.
 ///
-/// `MenuBarExtra`'s template tinting would strip the pill background and the
-/// per-tier dot colours, so we keep the existing `NSStatusItem` + custom
-/// rasterisation strategy and set `isTemplate = false` on the output.
+/// `MenuBarExtra`'s template tinting would strip the pill colours, so we keep
+/// the existing `NSStatusItem` + custom rasterisation strategy and set
+/// `isTemplate = false` on the output.
 @MainActor
 enum MenuBarLabelRenderer {
     private static let font: NSFont = .menuBarFont(ofSize: chipFontSize)
@@ -25,31 +30,31 @@ enum MenuBarLabelRenderer {
     // glyph.
     private static let vendorIconHeightRatio: CGFloat = 1.35
     private static let menuBarHeight: CGFloat = 22
-    // The pill is inset from the menu bar so it never butts against the
+    // Pills are inset from the menu bar so they never butt against the
     // system-drawn separators on either side.
     private static let chipVerticalInset: CGFloat = 2
-    private static let chipHorizontalPaddingH: CGFloat = 6
+    // Horizontal breathing room between a zone's text content and the edges
+    // of that zone. The leading and trailing edges of the chip inherit the
+    // rounded corners, so they keep the larger padding; inner edges (where
+    // two zones meet) get a tighter inset because there's no curvature
+    // eating into the space.
+    private static let zoneOuterHorizontalPadding: CGFloat = 6
+    private static let zoneInnerHorizontalPadding: CGFloat = 3
     private static let chipCornerRadius: CGFloat = 7
     // Horizontal gap between two adjacent chips.
     private static let interChipGap: CGFloat = 4
-    // Diameter of the tier dot as a fraction of the font's cap height.
-    private static let dotDiameterRatio: CGFloat = 1.15
-    // Narrow space between a dot and the text that follows it.
-    private static let dotTrailingGap: String = " "
-    // Thin space between two adjacent sub-segments inside the same chip.
-    private static let intraChipSegmentGap: String = "  "
-    // Gap between the vendor icon (or outage warning) and the first segment.
-    private static let chipLeadInGap: String = " "
+    // Gap between the vendor icon and the outage warning inside the header
+    // zone, when both are present.
+    private static let headerIconWarningGap: String = " "
     // Outside padding around the rasterised image — keeps the pill from
     // touching the system clock or the next status item.
     private static let outerHorizontalPadding: CGFloat = 2
 
     static let unconfiguredCallToAction = "Configure AI Metrics"
 
-    /// Resolved palette derived from `ChipBackground` + the menu bar
-    /// appearance. Both colours are concrete (no light/dark/auto runtime
-    /// switching past this point) so the renderer can ask once and stop
-    /// branching.
+    /// Background + text colour pair used by pills whose colour isn't derived
+    /// from a tier — i.e. the chip header pill (vendor icon / outage warning)
+    /// and segments that have no resolved tier (pay-as-you-go, unknown state).
     struct ResolvedChipPalette {
         let pillColor: NSColor
         let textColor: NSColor
@@ -116,25 +121,51 @@ enum MenuBarLabelRenderer {
 
     // MARK: - Chip composition
 
+    /// One painted zone inside a chip — the header (vendor icon + warning) or
+    /// one of the segments. Zones sit side-by-side inside the chip's single
+    /// rounded outline; the leftmost and rightmost are clipped against that
+    /// outline so they pick up its corner curvature.
+    private struct ZonePlan {
+        let attributed: NSAttributedString
+        let textSize: CGSize
+        let fillColor: NSColor
+        /// True for the chip header — it stays on the chip palette and is the
+        /// only zone whose fill matches the chip's "default" pill colour.
+        let isHeader: Bool
+    }
+
     private static func renderChips(
         chips: [RenderedChip],
         palette: ResolvedChipPalette,
         tierOverride: ConsumptionTier?
     ) -> NSImage {
-        let chipContents: [(NSAttributedString, CGSize)] = chips.map { chip in
-            let attributed = chipAttributedString(
-                chip: chip,
-                palette: palette,
-                tierOverride: tierOverride
-            )
-            return (attributed, attributed.size())
+        let chipPlans: [[ZonePlan]] = chips.map { chip in
+            buildZonePlans(chip: chip, palette: palette, tierOverride: tierOverride)
         }
+        let zonePaddings: [[(left: CGFloat, right: CGFloat)]] = chipPlans.map { zones in
+            (0..<zones.count).map { index in
+                let left: CGFloat = index == 0
+                    ? zoneOuterHorizontalPadding
+                    : zoneInnerHorizontalPadding
+                let right: CGFloat = index == zones.count - 1
+                    ? zoneOuterHorizontalPadding
+                    : zoneInnerHorizontalPadding
+                return (left, right)
+            }
+        }
+        let zoneWidths: [[CGFloat]] = chipPlans.enumerated().map { chipIndex, zones in
+            zones.enumerated().map { zoneIndex, zone in
+                let pad = zonePaddings[chipIndex][zoneIndex]
+                return ceil(zone.textSize.width) + pad.left + pad.right
+            }
+        }
+        let chipWidths: [CGFloat] = zoneWidths.map { $0.reduce(0, +) }
+        let chipHeight = menuBarHeight - chipVerticalInset * 2
 
-        let chipPillHeight = menuBarHeight - chipVerticalInset * 2
         var totalWidth: CGFloat = outerHorizontalPadding
-        for (index, content) in chipContents.enumerated() {
+        for (index, width) in chipWidths.enumerated() {
             if index > 0 { totalWidth += interChipGap }
-            totalWidth += ceil(content.1.width) + chipHorizontalPaddingH * 2
+            totalWidth += width
         }
         totalWidth += outerHorizontalPadding
 
@@ -142,23 +173,53 @@ enum MenuBarLabelRenderer {
         image.lockFocus()
 
         var x: CGFloat = outerHorizontalPadding
-        for (index, content) in chipContents.enumerated() {
-            if index > 0 { x += interChipGap }
-            let pillWidth = ceil(content.1.width) + chipHorizontalPaddingH * 2
-            let pillRect = NSRect(
+        for (chipIndex, zones) in chipPlans.enumerated() {
+            if chipIndex > 0 { x += interChipGap }
+            let chipWidth = chipWidths[chipIndex]
+            guard chipWidth > 0 else { continue }
+            let chipRect = NSRect(
                 x: x,
                 y: chipVerticalInset,
-                width: pillWidth,
-                height: chipPillHeight
+                width: chipWidth,
+                height: chipHeight
             )
-            let pillPath = NSBezierPath(roundedRect: pillRect, xRadius: chipCornerRadius, yRadius: chipCornerRadius)
-            palette.pillColor.setFill()
-            pillPath.fill()
+            let chipPath = NSBezierPath(
+                roundedRect: chipRect,
+                xRadius: chipCornerRadius,
+                yRadius: chipCornerRadius
+            )
 
-            let textHeight = ceil(content.1.height)
-            let textY = pillRect.minY + (pillRect.height - textHeight) / 2
-            content.0.draw(at: NSPoint(x: x + chipHorizontalPaddingH, y: textY))
-            x += pillWidth
+            // Paint the chip background once with the palette colour so the
+            // header zone (which never has its own fill) gets the right colour
+            // without a per-zone draw. Segment zones overpaint a rectangle on
+            // top, clipped to the chip's rounded outline.
+            NSGraphicsContext.current?.saveGraphicsState()
+            chipPath.addClip()
+            palette.pillColor.setFill()
+            chipRect.fill()
+
+            var zoneX: CGFloat = x
+            for (zoneIndex, zone) in zones.enumerated() {
+                let zoneWidth = zoneWidths[chipIndex][zoneIndex]
+                let zoneRect = NSRect(
+                    x: zoneX,
+                    y: chipRect.minY,
+                    width: zoneWidth,
+                    height: chipRect.height
+                )
+                if !zone.isHeader {
+                    zone.fillColor.setFill()
+                    zoneRect.fill()
+                }
+                let textHeight = ceil(zone.textSize.height)
+                let textY = zoneRect.minY + (zoneRect.height - textHeight) / 2
+                let leftPad = zonePaddings[chipIndex][zoneIndex].left
+                zone.attributed.draw(at: NSPoint(x: zoneX + leftPad, y: textY))
+                zoneX += zoneWidth
+            }
+
+            NSGraphicsContext.current?.restoreGraphicsState()
+            x += chipWidth
         }
 
         image.unlockFocus()
@@ -166,14 +227,53 @@ enum MenuBarLabelRenderer {
         return image
     }
 
-    /// Builds the attributed string drawn inside a single chip pill.
-    /// Composition order: vendor icon (optional) + outage warning (optional)
-    /// + segments separated by a thin space.
-    private static func chipAttributedString(
+    private static func buildZonePlans(
         chip: RenderedChip,
         palette: ResolvedChipPalette,
         tierOverride: ConsumptionTier?
-    ) -> NSAttributedString {
+    ) -> [ZonePlan] {
+        var plans: [ZonePlan] = []
+
+        if let header = headerAttributedString(chip: chip, palette: palette) {
+            plans.append(ZonePlan(
+                attributed: header,
+                textSize: header.size(),
+                fillColor: palette.pillColor,
+                isHeader: true
+            ))
+        }
+
+        for segment in chip.segments {
+            let effectiveTier: ConsumptionTier? = tierOverride ?? segment.tier
+            let fillColor: NSColor = effectiveTier?.nsColor ?? palette.pillColor
+            let textColor: NSColor = effectiveTier?.chipTextNSColor ?? palette.textColor
+            let attributed = NSAttributedString(
+                string: segment.text,
+                attributes: [.font: font, .foregroundColor: textColor]
+            )
+            plans.append(ZonePlan(
+                attributed: attributed,
+                textSize: attributed.size(),
+                fillColor: fillColor,
+                // Pay-as-you-go / unknown segments share the chip palette but
+                // still want their fill drawn explicitly: a header sitting to
+                // their left would otherwise bleed the palette through and we
+                // get a coherent rectangle by overpainting either way. The
+                // overpaint is the same colour, so it's visually a no-op.
+                isHeader: false
+            ))
+        }
+
+        return plans
+    }
+
+    /// Builds the attributed string drawn inside the chip header zone (vendor
+    /// icon + optional outage warning). Returns `nil` when the chip carries
+    /// neither piece — there's no header to draw in that case.
+    private static func headerAttributedString(
+        chip: RenderedChip,
+        palette: ResolvedChipPalette
+    ) -> NSAttributedString? {
         let result = NSMutableAttributedString()
         let defaultAttrs: [NSAttributedString.Key: Any] = [
             .font: font,
@@ -198,88 +298,16 @@ enum MenuBarLabelRenderer {
                 height: icon.size.height
             )
             result.append(NSAttributedString(attachment: attachment))
-            result.append(NSAttributedString(string: chipLeadInGap, attributes: defaultAttrs))
         }
 
         if let warning = chip.outageWarningText, !warning.isEmpty {
-            result.append(NSAttributedString(string: warning + chipLeadInGap, attributes: defaultAttrs))
-        }
-
-        for (index, segment) in chip.segments.enumerated() {
-            if index > 0 {
-                result.append(NSAttributedString(string: intraChipSegmentGap, attributes: defaultAttrs))
+            if result.length > 0 {
+                result.append(NSAttributedString(string: headerIconWarningGap, attributes: defaultAttrs))
             }
-            result.append(segmentAttributedString(
-                segment: segment,
-                palette: palette,
-                tierOverride: tierOverride
-            ))
-        }
-        return result
-    }
-
-    private static func segmentAttributedString(
-        segment: MenuBarSegment,
-        palette: ResolvedChipPalette,
-        tierOverride: ConsumptionTier?
-    ) -> NSAttributedString {
-        let result = NSMutableAttributedString()
-        let defaultAttrs: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: palette.textColor,
-        ]
-
-        // The override forces a specific tier (used by the dev "cycle pacing
-        // colours" timer). Production code keeps the tier resolved by the
-        // chip resolver.
-        let effectiveTier: ConsumptionTier? = tierOverride ?? segment.tier
-
-        if segment.showDot {
-            let diameter = ceil(font.capHeight * dotDiameterRatio)
-            let dotImage = makeDotImage(
-                fillColor: effectiveTier.dotNSColor,
-                diameter: diameter
-            )
-            let attachment = NSTextAttachment()
-            attachment.image = dotImage
-            attachment.bounds = CGRect(
-                x: 0,
-                y: (font.capHeight - diameter) / 2,
-                width: diameter,
-                height: diameter
-            )
-            result.append(NSAttributedString(attachment: attachment))
-            result.append(NSAttributedString(string: dotTrailingGap, attributes: defaultAttrs))
+            result.append(NSAttributedString(string: warning, attributes: defaultAttrs))
         }
 
-        if !segment.text.isEmpty {
-            let textAttrs: [NSAttributedString.Key: Any]
-            if segment.colorizeText, let tier = effectiveTier {
-                textAttrs = [.font: font, .foregroundColor: tier.nsColor]
-            } else {
-                textAttrs = defaultAttrs
-            }
-            result.append(NSAttributedString(string: segment.text, attributes: textAttrs))
-        }
-
-        return result
-    }
-
-    // MARK: - Dot drawing
-
-    /// Solid disc filled with the tier colour. The chip pill already provides
-    /// a contrasted background, so no stroke is needed (the original
-    /// implementation drew one to defend against arbitrary wallpapers).
-    private static func makeDotImage(fillColor: NSColor, diameter: CGFloat) -> NSImage {
-        let size = NSSize(width: diameter, height: diameter)
-        let image = NSImage(size: size)
-        image.lockFocus()
-        let path = NSBezierPath(ovalIn: NSRect(origin: .zero, size: size))
-        fillColor.setFill()
-        path.fill()
-        image.unlockFocus()
-        image.isTemplate = false
-        return image
+        return result.length > 0 ? result : nil
     }
 
     // MARK: - Unconfigured state
@@ -333,4 +361,3 @@ enum MenuBarLabelRenderer {
         return image
     }
 }
-

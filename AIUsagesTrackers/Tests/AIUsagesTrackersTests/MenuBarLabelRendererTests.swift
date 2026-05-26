@@ -15,79 +15,45 @@ struct MenuBarLabelRendererTests {
 
     private func makeChip(
         segment: MenuBarSegment,
+        showVendorIcon: Bool = false,
         outageWarningText: String? = nil
     ) -> RenderedChip {
         RenderedChip(
             vendor: .claude,
-            showVendorIcon: false,
+            showVendorIcon: showVendorIcon,
             outageWarningText: outageWarningText,
             segments: [segment]
         )
     }
 
-    @Test("segment.colorizeText paints tier-coloured text — bitmap differs from plain render")
-    func colorizeChangesBitmapWhenTierPresent() {
-        let plain = MenuBarLabelRenderer.render(
-            chips: [makeChip(segment: MenuBarSegment(text: "42%", tier: .comfortable, showDot: true, colorizeText: false))],
+    @Test("segment tier drives the pill bitmap — different tiers → different bitmaps")
+    func tierChangesBitmap() {
+        let comfortable = MenuBarLabelRenderer.render(
+            chips: [makeChip(segment: MenuBarSegment(text: "42%", tier: .comfortable))],
             background: .paper,
             fallbackText: "--",
             isDarkMenuBar: true
         )
-        let colorized = MenuBarLabelRenderer.render(
-            chips: [makeChip(segment: MenuBarSegment(text: "42%", tier: .comfortable, showDot: true, colorizeText: true))],
+        let critical = MenuBarLabelRenderer.render(
+            chips: [makeChip(segment: MenuBarSegment(text: "42%", tier: .critical))],
             background: .paper,
             fallbackText: "--",
             isDarkMenuBar: true
         )
-        #expect(plain.size == colorized.size)
-        #expect(bitmapData(plain) != bitmapData(colorized))
-    }
-
-    @Test("colorize without dot still tints the text — Dot and Color are independent")
-    func colorizeWithoutDotStillTintsText() {
-        let plain = MenuBarLabelRenderer.render(
-            chips: [makeChip(segment: MenuBarSegment(text: "42%", tier: .comfortable, showDot: false, colorizeText: false))],
-            background: .paper,
-            fallbackText: "--",
-            isDarkMenuBar: true
-        )
-        let colorized = MenuBarLabelRenderer.render(
-            chips: [makeChip(segment: MenuBarSegment(text: "42%", tier: .comfortable, showDot: false, colorizeText: true))],
-            background: .paper,
-            fallbackText: "--",
-            isDarkMenuBar: true
-        )
-        #expect(bitmapData(plain) != bitmapData(colorized))
-    }
-
-    @Test("segment.colorizeText has no visible effect when tier is nil")
-    func colorizeNoOpWhenTierMissing() {
-        let plain = MenuBarLabelRenderer.render(
-            chips: [makeChip(segment: MenuBarSegment(text: "$12.34", tier: nil, showDot: false, colorizeText: false))],
-            background: .paper,
-            fallbackText: "--",
-            isDarkMenuBar: true
-        )
-        let colorized = MenuBarLabelRenderer.render(
-            chips: [makeChip(segment: MenuBarSegment(text: "$12.34", tier: nil, showDot: false, colorizeText: true))],
-            background: .paper,
-            fallbackText: "--",
-            isDarkMenuBar: true
-        )
-        #expect(bitmapData(plain) == bitmapData(colorized))
+        #expect(bitmapData(comfortable) != bitmapData(critical))
     }
 
     @Test("chip outage warning widens the rendered label")
     func outageWarningWidensChip() {
         let base = MenuBarLabelRenderer.render(
-            chips: [makeChip(segment: MenuBarSegment(text: "100%", tier: nil, showDot: false))],
+            chips: [makeChip(segment: MenuBarSegment(text: "100%", tier: nil))],
             background: .paper,
             fallbackText: "--",
             isDarkMenuBar: false
         )
         let warned = MenuBarLabelRenderer.render(
             chips: [makeChip(
-                segment: MenuBarSegment(text: "100%", tier: nil, showDot: false),
+                segment: MenuBarSegment(text: "100%", tier: nil),
                 outageWarningText: "⚠️"
             )],
             background: .paper,
@@ -98,17 +64,17 @@ struct MenuBarLabelRendererTests {
         #expect(warned.size.width > base.size.width)
     }
 
-    @Test("paper and slate backgrounds produce different bitmaps for the same chip")
-    func backgroundChangesBitmap() {
-        let segment = MenuBarSegment(text: "42%", tier: .comfortable, showDot: true)
+    @Test("paper and slate backgrounds change the header zone bitmap when a warning is shown")
+    func backgroundChangesHeaderBitmap() {
+        let segment = MenuBarSegment(text: "42%", tier: .comfortable)
         let paper = MenuBarLabelRenderer.render(
-            chips: [makeChip(segment: segment)],
+            chips: [makeChip(segment: segment, outageWarningText: "⚠️")],
             background: .paper,
             fallbackText: "--",
             isDarkMenuBar: false
         )
         let slate = MenuBarLabelRenderer.render(
-            chips: [makeChip(segment: segment)],
+            chips: [makeChip(segment: segment, outageWarningText: "⚠️")],
             background: .slate,
             fallbackText: "--",
             isDarkMenuBar: false
@@ -116,9 +82,9 @@ struct MenuBarLabelRendererTests {
         #expect(bitmapData(paper) != bitmapData(slate))
     }
 
-    @Test("tierOverride forces the dot colour regardless of segment tier")
+    @Test("tierOverride forces the segment pill colour regardless of the segment tier")
     func tierOverrideOverridesSegmentTier() {
-        let segment = MenuBarSegment(text: "42%", tier: .comfortable, showDot: true, colorizeText: true)
+        let segment = MenuBarSegment(text: "42%", tier: .comfortable)
         let withoutOverride = MenuBarLabelRenderer.render(
             chips: [makeChip(segment: segment)],
             background: .paper,

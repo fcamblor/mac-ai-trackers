@@ -41,7 +41,6 @@ struct SegmentDisplayTests {
     @Test("timeWindow round-trips preserving all flags")
     func timeWindowRoundTrip() throws {
         let original = SegmentDisplay.timeWindow(TimeWindowDisplay(
-            showDot: false,
             showLetter: true,
             letter: "X",
             showPercent: false,
@@ -65,25 +64,33 @@ struct SegmentDisplayTests {
     @Test("TimeWindowDisplay default init enables all toggles")
     func timeWindowDefaults() {
         let display = TimeWindowDisplay()
-        #expect(display.showDot)
         #expect(display.showLetter)
         #expect(display.showPercent)
         #expect(display.percentDisplayMode == .consumed)
         #expect(display.showReset)
         #expect(display.hideResetMinutesWhenOverOneDay)
-        #expect(display.colorizeText)
     }
 
     @Test("TimeWindowDisplay JSON without newer fields decodes to defaults")
     func newerFieldsMissingDefault() throws {
         let json = """
-        {"showDot":true,"showLetter":true,"letter":"S","showPercent":true,"showReset":true}
+        {"showLetter":true,"letter":"S","showPercent":true,"showReset":true}
         """
         let data = json.data(using: .utf8)!
         let decoded = try JSONDecoder().decode(TimeWindowDisplay.self, from: data)
         #expect(decoded.percentDisplayMode == .consumed)
         #expect(decoded.hideResetMinutesWhenOverOneDay)
-        #expect(decoded.colorizeText)
+    }
+
+    @Test("Legacy JSON carrying only showDot:true gets promoted to showLetter=true on decode")
+    func legacyDotOnlyPromotesToLetter() throws {
+        let json = """
+        {"showDot":true,"showLetter":false,"letter":"","showPercent":false,"showReset":false,"colorizeText":true}
+        """
+        let data = json.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(TimeWindowDisplay.self, from: data)
+        #expect(decoded.hasAnyVisibleElement)
+        #expect(decoded.showLetter)
     }
 
     @Test("TimeWindowDisplay with remaining percent and compact reset round-trips")
@@ -100,7 +107,7 @@ struct SegmentDisplayTests {
 
     @Test("TimeWindowDisplay hasAnyVisibleElement requires at least one toggle on")
     func hasAnyVisibleElement() {
-        var d = TimeWindowDisplay(showDot: false, showLetter: false, showPercent: false, showReset: false)
+        var d = TimeWindowDisplay(showLetter: false, showPercent: false, showReset: false)
         #expect(!d.hasAnyVisibleElement)
         d.showLetter = true
         #expect(d.hasAnyVisibleElement)
@@ -121,18 +128,26 @@ struct MenuBarChipSegmentConfigTests {
         #expect(decoded == original)
     }
 
-    @Test("decoder rejects segment with no visible element")
-    func decoderRejectsEmptyDisplay() {
+    /// The TimeWindowDisplay decoder promotes `showLetter` to true when every
+    /// visible toggle would otherwise be off, so segments that round-trip
+    /// through Codable always come back with at least one visible element.
+    /// This keeps existing user JSON (notably legacy showDot-only segments)
+    /// from being silently dropped on upgrade.
+    @Test("decoder repairs segment with no visible element by promoting showLetter")
+    func decoderRepairsEmptyDisplay() throws {
         let segment = MenuBarChipSegmentConfig(
             account: .currentlyActive,
             metricName: "X",
             display: .timeWindow(TimeWindowDisplay(
-                showDot: false, showLetter: false, showPercent: false, showReset: false
+                showLetter: false, showPercent: false, showReset: false
             ))
         )
-        let data = try! JSONEncoder().encode(segment)
-        #expect(throws: (any Error).self) {
-            _ = try JSONDecoder().decode(MenuBarChipSegmentConfig.self, from: data)
+        let data = try JSONEncoder().encode(segment)
+        let decoded = try JSONDecoder().decode(MenuBarChipSegmentConfig.self, from: data)
+        if case .timeWindow(let tw) = decoded.display {
+            #expect(tw.showLetter)
+        } else {
+            Issue.record("expected .timeWindow display")
         }
     }
 }

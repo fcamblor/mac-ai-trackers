@@ -205,23 +205,18 @@ public enum MenuBarChipResolver {
         }
         let text = parts.joined(separator: " ")
 
-        // The tier reflects the underlying usage state and is exposed
-        // independently of `showDot` — the dot is just one consumer of it.
-        // Text colorisation (see TimeWindowDisplay.colorizeText) also reads
-        // the tier, so a user who hides the dot can still tint the text.
+        // The tier drives the pill background colour. It still reflects the
+        // underlying usage state regardless of which textual toggles are on.
         let tier: ConsumptionTier? = state.tier
 
-        // If the user turned every visible element off, there's nothing to render
-        if text.isEmpty, !display.showDot {
+        // Display invariants guarantee at least one toggle is on, so `text`
+        // shouldn't be empty under normal use — but a payload with all toggles
+        // off would still surface as an empty pill, which is meaningless.
+        if text.isEmpty {
             return nil
         }
 
-        return MenuBarSegment(
-            text: text,
-            tier: tier,
-            showDot: display.showDot,
-            colorizeText: display.colorizeText
-        )
+        return MenuBarSegment(text: text, tier: tier)
     }
 
     private static func formatUsagePercent(_ usagePercent: UsagePercent, mode: UsagePercentDisplayMode) -> String {
@@ -235,6 +230,6 @@ public enum MenuBarChipResolver {
 
     private static func renderPayAsYouGo(currentAmount: Double, currency: String) -> MenuBarSegment {
         let amount = String(format: "%.2f", currentAmount)
-        return MenuBarSegment(text: "\(amount) \(currency)", tier: nil, showDot: false)
+        return MenuBarSegment(text: "\(amount) \(currency)", tier: nil)
     }
 }

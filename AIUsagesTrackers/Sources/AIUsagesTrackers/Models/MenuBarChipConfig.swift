@@ -100,69 +100,64 @@ public enum UsagePercentDisplayMode: String, Codable, Equatable, Hashable, CaseI
 }
 
 public struct TimeWindowDisplay: Codable, Equatable, Hashable, Sendable {
-    public var showDot: Bool
     public var showLetter: Bool
     public var letter: String
     public var showPercent: Bool
     public var percentDisplayMode: UsagePercentDisplayMode
     public var showReset: Bool
     public var hideResetMinutesWhenOverOneDay: Bool
-    /// When true and the segment carries a tier, the rendered text picks up the
-    /// dot's tier color. Independent from `showDot`: users can hide the dot
-    /// while keeping tier-coloured text. Default true so the feature is opt-out.
-    public var colorizeText: Bool
 
     public init(
-        showDot: Bool = true,
         showLetter: Bool = true,
         letter: String = "",
         showPercent: Bool = true,
         percentDisplayMode: UsagePercentDisplayMode = .consumed,
         showReset: Bool = true,
-        hideResetMinutesWhenOverOneDay: Bool = true,
-        colorizeText: Bool = true
+        hideResetMinutesWhenOverOneDay: Bool = true
     ) {
-        self.showDot = showDot
         self.showLetter = showLetter
         self.letter = letter
         self.showPercent = showPercent
         self.percentDisplayMode = percentDisplayMode
         self.showReset = showReset
         self.hideResetMinutesWhenOverOneDay = hideResetMinutesWhenOverOneDay
-        self.colorizeText = colorizeText
     }
 
     private enum CodingKeys: String, CodingKey {
-        case showDot, showLetter, letter, showPercent, percentDisplayMode, showReset
-        case hideResetMinutesWhenOverOneDay, colorizeText
+        case showLetter, letter, showPercent, percentDisplayMode, showReset
+        case hideResetMinutesWhenOverOneDay
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        showDot = try c.decode(Bool.self, forKey: .showDot)
-        showLetter = try c.decode(Bool.self, forKey: .showLetter)
-        letter = try c.decode(String.self, forKey: .letter)
-        showPercent = try c.decode(Bool.self, forKey: .showPercent)
+        // Tolerate JSON written by older builds where each toggle was present
+        // unconditionally — and where `showDot` could legitimately be the only
+        // visible piece. We default any missing toggle to false and then
+        // promote `showLetter` if the resulting display would be invisible, so
+        // existing chips don't silently drop on first read after the upgrade.
+        showLetter = try c.decodeIfPresent(Bool.self, forKey: .showLetter) ?? false
+        letter = try c.decodeIfPresent(String.self, forKey: .letter) ?? ""
+        showPercent = try c.decodeIfPresent(Bool.self, forKey: .showPercent) ?? false
         percentDisplayMode = try c.decodeIfPresent(
             UsagePercentDisplayMode.self,
             forKey: .percentDisplayMode
         ) ?? .consumed
-        showReset = try c.decode(Bool.self, forKey: .showReset)
+        showReset = try c.decodeIfPresent(Bool.self, forKey: .showReset) ?? false
         hideResetMinutesWhenOverOneDay = try c.decodeIfPresent(
             Bool.self,
             forKey: .hideResetMinutesWhenOverOneDay
         ) ?? true
-        // Missing key on existing JSON means a pre-feature config — default ON
-        // so the user immediately sees the new behaviour without re-editing.
-        colorizeText = try c.decodeIfPresent(Bool.self, forKey: .colorizeText) ?? true
+        if !(showLetter || showPercent || showReset) {
+            showLetter = true
+        }
     }
 
-    /// At least one of the four visible toggles must be on — `colorizeText`
-    /// is a modifier, not content. Enforced as the "non-empty segment"
-    /// invariant: a segment whose every toggle is off would render an empty
-    /// chip slot that the user cannot see and cannot interact with.
+    /// At least one of the three visible toggles must be on. Enforced as the
+    /// "non-empty segment" invariant: a segment whose every toggle is off
+    /// would render an empty chip slot that the user cannot see and cannot
+    /// interact with.
     public var hasAnyVisibleElement: Bool {
-        showDot || showLetter || showPercent || showReset
+        showLetter || showPercent || showReset
     }
 }
 

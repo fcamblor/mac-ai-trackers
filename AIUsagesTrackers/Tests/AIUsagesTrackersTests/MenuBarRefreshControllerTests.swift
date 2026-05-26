@@ -8,15 +8,13 @@ struct MenuBarRefreshControllerTests {
     private func makeChip(
         vendor: Vendor = .claude,
         segmentText: String = "Claude",
-        tier: ConsumptionTier? = nil,
-        showDot: Bool = true,
-        colorizeText: Bool = false
+        tier: ConsumptionTier? = nil
     ) -> RenderedChip {
         RenderedChip(
             vendor: vendor,
             showVendorIcon: false,
             outageWarningText: nil,
-            segments: [MenuBarSegment(text: segmentText, tier: tier, showDot: showDot, colorizeText: colorizeText)]
+            segments: [MenuBarSegment(text: segmentText, tier: tier)]
         )
     }
 
@@ -132,7 +130,7 @@ struct MenuBarRefreshControllerTests {
     @Test("Changing chips invalidates dedup")
     func chipsChangeInvalidates() {
         let k = makeKey()
-        let other = [makeChip(segmentText: "Codex", showDot: false)]
+        let other = [makeChip(segmentText: "Codex")]
         assertFieldInvalidatesDedup(
             field: "chips",
             original: k,
@@ -143,16 +141,16 @@ struct MenuBarRefreshControllerTests {
         )
     }
 
-    @Test("Toggling colorizeText on a segment invalidates dedup")
-    func colorizeTextChangeInvalidates() {
-        let plain = [makeChip(segmentText: "S", tier: .comfortable, colorizeText: false)]
-        let colorized = [makeChip(segmentText: "S", tier: .comfortable, colorizeText: true)]
+    @Test("Changing a segment tier invalidates dedup — drives the pill background")
+    func tierChangeInvalidates() {
+        let plain = [makeChip(segmentText: "S", tier: .comfortable)]
+        let critical = [makeChip(segmentText: "S", tier: .critical)]
         let k = makeKey(chips: plain)
         assertFieldInvalidatesDedup(
-            field: "colorizeText",
+            field: "tier",
             original: k,
             mutated: MenuBarRenderKey(
-                chips: colorized, text: k.text, background: k.background,
+                chips: critical, text: k.text, background: k.background,
                 isDark: k.isDark, isUnconfigured: k.isUnconfigured, tierOverride: k.tierOverride
             )
         )

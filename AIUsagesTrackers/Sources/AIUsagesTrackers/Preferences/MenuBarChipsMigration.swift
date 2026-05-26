@@ -176,16 +176,17 @@ private struct LegacyTimeWindowDisplay: Decodable {
         colorizeText = try c.decodeIfPresent(Bool.self, forKey: .colorizeText)
     }
 
+    /// Maps the legacy display flags onto the current model. `showDot` and
+    /// `colorizeText` no longer exist — the pill background now carries the
+    /// tier signal — so they're dropped silently.
     func toTimeWindowDisplay() -> TimeWindowDisplay {
         TimeWindowDisplay(
-            showDot: showDot,
             showLetter: showLetter,
             letter: letter,
             showPercent: showPercent,
             percentDisplayMode: percentDisplayMode ?? .consumed,
             showReset: showReset,
-            hideResetMinutesWhenOverOneDay: hideResetMinutesWhenOverOneDay ?? true,
-            colorizeText: colorizeText ?? true
+            hideResetMinutesWhenOverOneDay: hideResetMinutesWhenOverOneDay ?? true
         )
     }
 }

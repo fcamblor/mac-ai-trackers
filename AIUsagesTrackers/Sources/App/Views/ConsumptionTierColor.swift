@@ -23,6 +23,21 @@ extension ConsumptionTier {
         case .exhausted:   return NSColor(red: 0x7B / 255.0, green: 0x2F / 255.0, blue: 0xBE / 255.0, alpha: 1.0)
         }
     }
+
+    /// Text colour used when this tier is painted as the menu-bar chip
+    /// segment background. Hand-tuned per tier rather than computed: WCAG
+    /// luminance picks black on systemBlue / systemGreen, but the saturated
+    /// hues read better with white text in practice (less harsh, matches
+    /// Apple's own UI). Yellow and the warm warnings (orange, red) take
+    /// black; the dark purple exhausted state keeps white.
+    var chipTextNSColor: NSColor {
+        switch self {
+        case .comfortable, .onTrack, .exhausted:
+            return .white
+        case .approaching, .over, .critical:
+            return .black
+        }
+    }
 }
 
 extension Optional where Wrapped == ConsumptionTier {

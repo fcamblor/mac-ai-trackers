@@ -182,7 +182,7 @@ struct ResolverTimeWindowTogglesTests {
     @Test("only percent")
     func percentOnly() {
         let seg = resolveWith(TimeWindowDisplay(
-            showDot: false, showLetter: false, letter: "", showPercent: true, showReset: false
+            showLetter: false, letter: "", showPercent: true, showReset: false
         ))
         #expect(seg?.text == "48%")
     }
@@ -190,7 +190,7 @@ struct ResolverTimeWindowTogglesTests {
     @Test("only reset")
     func resetOnly() {
         let seg = resolveWith(TimeWindowDisplay(
-            showDot: false, showLetter: false, letter: "", showPercent: false, showReset: true
+            showLetter: false, letter: "", showPercent: false, showReset: true
         ))
         #expect(seg?.text == "2h 13m")
     }
@@ -198,7 +198,7 @@ struct ResolverTimeWindowTogglesTests {
     @Test("remaining percent mode")
     func remainingPercent() {
         let seg = resolveWith(TimeWindowDisplay(
-            showDot: false, showLetter: false, letter: "", showPercent: true,
+            showLetter: false, letter: "", showPercent: true,
             percentDisplayMode: .remaining, showReset: false
         ))
         #expect(seg?.text == "52%")
@@ -214,7 +214,7 @@ struct ResolverPayAsYouGoTests {
             entries: [payAsYouGoEntry(amount: 42.1, currency: "EUR")]
         )
         #expect(result.rendered?.text == "42.10 EUR")
-        #expect(result.rendered?.showDot == false)
+        #expect(result.rendered?.tier == nil)
     }
 }
 

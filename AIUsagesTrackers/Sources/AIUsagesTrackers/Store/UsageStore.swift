@@ -15,29 +15,20 @@ public struct SystemClock: ClockProvider {
 
 // MARK: - Store
 
-/// One segment of the menu bar label — a single metric's formatted text, its
-/// tier, and whether the leading colored dot should be drawn. Pay-as-you-go
-/// segments render without a dot; time-window segments respect the user's
-/// `showDot` toggle. Vendor icon and outage warning are no longer carried
-/// here: they are chip-level chrome owned by `RenderedChip`.
+/// One segment of the menu bar label — a single metric's formatted text and
+/// the tier that drives its pill background colour. Vendor icon and outage
+/// warning are not carried here: they are chip-level chrome owned by
+/// `RenderedChip`.
 public struct MenuBarSegment: Sendable, Equatable {
     public let text: String
     public let tier: ConsumptionTier?
-    public let showDot: Bool
-    /// Resolved from `TimeWindowDisplay.colorizeText`. When true and `tier`
-    /// is non-nil, the renderer tints the segment text with the tier color.
-    public let colorizeText: Bool
 
     public init(
         text: String,
-        tier: ConsumptionTier?,
-        showDot: Bool,
-        colorizeText: Bool = false
+        tier: ConsumptionTier?
     ) {
         self.text = text
         self.tier = tier
-        self.showDot = showDot
-        self.colorizeText = colorizeText
     }
 }
 

@@ -2,11 +2,19 @@ import SwiftUI
 import AppKit
 import AIUsagesTrackersLib
 
+private struct SegmentRowFramePreferenceKey: PreferenceKey {
+    static let defaultValue: [UUID: CGRect] = [:]
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
 /// Card view for a single menu-bar chip. Shows the chip-level chrome (vendor,
 /// icon toggle, outage warning) and a nested list of editable sub-segments.
 /// The chip itself is reorderable through the drag handle (drag & drop is
-/// handled by the parent `MenubarHintSettingsView`); the sub-segments inside
-/// a chip use add/remove + up/down buttons rather than a second drag layer.
+/// handled by the parent `MenubarHintSettingsView`); sub-segments inside the
+/// chip also support drag-and-drop reordering, scoped to this card via its
+/// own coordinate space.
 struct ChipCardView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -32,6 +40,16 @@ struct ChipCardView: View {
     @State private var isExpanded: Bool = false
     @State private var isHovering: Bool = false
     @State private var expandedSegmentID: UUID?
+
+    // Segment drag state — scoped to this chip card.
+    @State private var segmentRowFrames: [UUID: CGRect] = [:]
+    @State private var draggingSegmentID: UUID?
+    @State private var segmentDragCursorY: CGFloat = 0
+    @State private var segmentDropIndex: Int?
+
+    private var segmentListCoordinateSpace: String {
+        "chipCard.segments.\(chip.id.uuidString)"
+    }
 
     private var chipID: UUID { chip.id }
 
@@ -368,6 +386,11 @@ struct ChipCardView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 chromeSectionTitle("Segments")
+                if chip.segments.count > 1 {
+                    Text("· drag the handle to reorder")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
                 Spacer()
                 Button {
                     addSegment(binding: binding)
@@ -378,15 +401,154 @@ struct ChipCardView: View {
                 .controlSize(.small)
                 .disabled(availableMetricName(for: chip) == nil)
             }
-            ForEach(Array(chip.segments.enumerated()), id: \.element.id) { index, segment in
-                segmentRow(
-                    chip: chip,
-                    chipBinding: binding,
-                    segment: segment,
-                    index: index
+            segmentsListBody(chip: chip, binding: binding)
+        }
+    }
+
+    private func segmentsListBody(chip: MenuBarChipConfig, binding: Binding<MenuBarChipConfig>) -> some View {
+        ZStack(alignment: .topLeading) {
+            VStack(spacing: 0) {
+                ForEach(Array(chip.segments.enumerated()), id: \.element.id) { index, segment in
+                    segmentRowContainer(
+                        chip: chip,
+                        chipBinding: binding,
+                        segment: segment,
+                        index: index
+                    )
+                }
+            }
+            .animation(.spring(response: 0.34, dampingFraction: 0.85), value: draggingSegmentID)
+            .animation(.spring(response: 0.34, dampingFraction: 0.85), value: segmentDropIndex)
+
+            segmentDropIndicator(chip: chip)
+            segmentFloatingPreview(chip: chip)
+        }
+        .coordinateSpace(name: segmentListCoordinateSpace)
+        .onPreferenceChange(SegmentRowFramePreferenceKey.self) { segmentRowFrames = $0 }
+    }
+
+    private func segmentRowContainer(
+        chip: MenuBarChipConfig,
+        chipBinding: Binding<MenuBarChipConfig>,
+        segment: MenuBarChipSegmentConfig,
+        index: Int
+    ) -> some View {
+        let isDragging = draggingSegmentID == segment.id
+        return segmentRow(
+            chip: chip,
+            chipBinding: chipBinding,
+            segment: segment,
+            index: index
+        )
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: SegmentRowFramePreferenceKey.self,
+                    value: [segment.id: geo.frame(in: .named(segmentListCoordinateSpace))]
                 )
             }
+        )
+        .opacity(isDragging ? 0.0 : 1.0)
+        .frame(maxHeight: isDragging ? 0 : nil)
+        .clipped()
+    }
+
+    @ViewBuilder
+    private func segmentDropIndicator(chip: MenuBarChipConfig) -> some View {
+        if let segmentDropIndex,
+           let y = segmentDropIndicatorY(chip: chip, atIndex: segmentDropIndex) {
+            Capsule()
+                .fill(Color.accentColor)
+                .frame(height: 2)
+                .padding(.horizontal, 4)
+                .offset(y: y - 1)
+                .allowsHitTesting(false)
+                .transition(.opacity)
         }
+    }
+
+    private func segmentDropIndicatorY(chip: MenuBarChipConfig, atIndex index: Int) -> CGFloat? {
+        let visible = chip.segments.filter { $0.id != draggingSegmentID }
+        guard !visible.isEmpty else { return 0 }
+        let clamped = max(0, min(index, visible.count))
+        if clamped == 0 {
+            return segmentRowFrames[visible[0].id]?.minY
+        }
+        if clamped >= visible.count {
+            return segmentRowFrames[visible.last!.id]?.maxY
+        }
+        let prev = segmentRowFrames[visible[clamped - 1].id]?.maxY ?? 0
+        let next = segmentRowFrames[visible[clamped].id]?.minY ?? prev
+        return (prev + next) / 2
+    }
+
+    @ViewBuilder
+    private func segmentFloatingPreview(chip: MenuBarChipConfig) -> some View {
+        if let id = draggingSegmentID,
+           let segment = chip.segments.first(where: { $0.id == id }),
+           let frame = segmentRowFrames[id] {
+            SegmentDragPreviewCard(metricName: segment.metricName)
+                .frame(width: max(frame.width, 200))
+                .offset(
+                    x: frame.minX,
+                    y: segmentDragCursorY - frame.height / 2
+                )
+                .allowsHitTesting(false)
+                .transition(.opacity)
+        }
+    }
+
+    // MARK: Segment drag handling
+
+    private func handleSegmentDragChanged(value: DragGesture.Value, segmentID: UUID, chip: MenuBarChipConfig) {
+        if draggingSegmentID == nil {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                draggingSegmentID = segmentID
+            }
+            // Collapse any expanded segment so the drop indicator stays
+            // visually anchored on uniform row heights.
+            if expandedSegmentID != nil {
+                expandedSegmentID = nil
+            }
+        }
+        segmentDragCursorY = value.location.y
+        segmentDropIndex = computeSegmentDropIndex(at: value.location.y, chip: chip)
+    }
+
+    private func handleSegmentDragEnded(value: DragGesture.Value, segmentID: UUID, binding: Binding<MenuBarChipConfig>) {
+        let finalIndex = computeSegmentDropIndex(at: value.location.y, chip: binding.wrappedValue)
+        performSegmentDrop(in: binding, draggedID: segmentID, toVisibleIndex: finalIndex)
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
+            draggingSegmentID = nil
+            segmentDropIndex = nil
+        }
+    }
+
+    private func computeSegmentDropIndex(at y: CGFloat, chip: MenuBarChipConfig) -> Int {
+        let visible = chip.segments.filter { $0.id != draggingSegmentID }
+        for (idx, s) in visible.enumerated() {
+            guard let frame = segmentRowFrames[s.id] else { continue }
+            if y < frame.midY {
+                return idx
+            }
+        }
+        return visible.count
+    }
+
+    private func performSegmentDrop(in binding: Binding<MenuBarChipConfig>, draggedID: UUID, toVisibleIndex visibleIndex: Int) {
+        var chip = binding.wrappedValue
+        guard let sourceIdx = chip.segments.firstIndex(where: { $0.id == draggedID }) else { return }
+        let destOffset: Int
+        if visibleIndex >= sourceIdx {
+            destOffset = visibleIndex + 1
+        } else {
+            destOffset = visibleIndex
+        }
+        if destOffset == sourceIdx || destOffset == sourceIdx + 1 {
+            return
+        }
+        chip.segments.move(fromOffsets: IndexSet(integer: sourceIdx), toOffset: destOffset)
+        binding.wrappedValue = chip
     }
 
     private func segmentRow(
@@ -399,6 +561,12 @@ struct ChipCardView: View {
         let expanded = expandedSegmentID == segment.id
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
+                segmentDragHandle(
+                    chip: chip,
+                    chipBinding: chipBinding,
+                    segmentID: segment.id,
+                    enabled: !isOnly
+                )
                 Image(systemName: "chevron.right")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.secondary)
@@ -495,6 +663,38 @@ struct ChipCardView: View {
         if expandedSegmentID == segmentID { expandedSegmentID = nil }
     }
 
+    @ViewBuilder
+    private func segmentDragHandle(
+        chip: MenuBarChipConfig,
+        chipBinding: Binding<MenuBarChipConfig>,
+        segmentID: UUID,
+        enabled: Bool
+    ) -> some View {
+        let base = Image(systemName: "line.3.horizontal")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(enabled ? Color.secondary.opacity(0.7) : Color.secondary.opacity(0.25))
+            .frame(width: 16, height: 22)
+            .contentShape(Rectangle())
+            .help(enabled ? "Drag to reorder" : "A chip needs at least one segment")
+            .onHover { hovering in
+                guard enabled else { return }
+                if hovering { NSCursor.openHand.push() } else { NSCursor.pop() }
+            }
+        if enabled {
+            base.gesture(
+                DragGesture(minimumDistance: 4, coordinateSpace: .named(segmentListCoordinateSpace))
+                    .onChanged { value in
+                        handleSegmentDragChanged(value: value, segmentID: segmentID, chip: chip)
+                    }
+                    .onEnded { value in
+                        handleSegmentDragEnded(value: value, segmentID: segmentID, binding: chipBinding)
+                    }
+            )
+        } else {
+            base
+        }
+    }
+
     private func moveSegment(in binding: Binding<MenuBarChipConfig>, from source: Int, to dest: Int) {
         var chip = binding.wrappedValue
         guard source >= 0, source < chip.segments.count,
@@ -502,5 +702,35 @@ struct ChipCardView: View {
         let element = chip.segments.remove(at: source)
         chip.segments.insert(element, at: dest)
         binding.wrappedValue = chip
+    }
+}
+
+// MARK: - Segment drag preview card
+
+private struct SegmentDragPreviewCard: View {
+    let metricName: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.secondary)
+            Text(metricName.isEmpty ? "(no metric)" : metricName)
+                .font(.callout)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(.background)
+                .shadow(color: .black.opacity(0.22), radius: 10, x: 0, y: 4)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.accentColor.opacity(0.5), lineWidth: 1)
+        )
+        .rotationEffect(.degrees(-1.0))
+        .scaleEffect(1.02)
     }
 }

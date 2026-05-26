@@ -92,32 +92,6 @@ struct SegmentEditor: View {
     private func chipStrip(display: Binding<TimeWindowDisplay>) -> some View {
         HStack(alignment: .top, spacing: 6) {
             chip(
-                caption: "Dot",
-                isOn: display.wrappedValue.showDot,
-                canToggleOff: canToggleOff(display: display.wrappedValue, candidate: \.showDot),
-                toggle: { toggleVisibility(display: display, keyPath: \.showDot) }
-            ) {
-                Circle()
-                    .fill(Color.green)
-                    .frame(width: 9, height: 9)
-            }
-
-            chipConnector
-
-            chip(
-                caption: "Color",
-                isOn: display.wrappedValue.colorizeText,
-                canToggleOff: true,
-                toggle: { display.wrappedValue.colorizeText.toggle() }
-            ) {
-                Text("Aa")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Color.green)
-            }
-
-            chipConnector
-
-            chip(
                 caption: "Label",
                 isOn: display.wrappedValue.showLetter,
                 canToggleOff: canToggleOff(display: display.wrappedValue, candidate: \.showLetter),
@@ -155,9 +129,8 @@ struct SegmentEditor: View {
         }
     }
 
-    /// Enforces the per-segment Q4 invariant: at least one of the four
-    /// visible toggles must stay on. The colour modifier is irrelevant —
-    /// it is always free to toggle.
+    /// Enforces the per-segment invariant: at least one of the three visible
+    /// toggles must stay on.
     private func canToggleOff(
         display: TimeWindowDisplay,
         candidate keyPath: WritableKeyPath<TimeWindowDisplay, Bool>
