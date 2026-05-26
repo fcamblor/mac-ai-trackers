@@ -1,64 +1,288 @@
 import AppKit
 import AIUsagesTrackersLib
 
-/// Rasterises the full menu bar label into a non-template `NSImage`.
-/// MenuBarExtra's label was unusable: template tinting stripped the per-tier
-/// dot colors, and mixed HStacks silently truncated segments past the first.
-/// With a custom `NSStatusItem`, we control `isTemplate = false` so hues
-/// survive and we pick the text color from the status button's effective
-/// appearance (which tracks the menu bar, not the app).
+/// Rasterises the full menu bar label into a non-template `NSImage`. Each
+/// configured chip is drawn as a rounded pill ("chip background") containing
+/// the vendor icon + optional outage warning + every rendered sub-segment.
+/// The colours that fill the pill and tint the text come from `ChipBackground`
+/// — three curated palettes keep the tier colours legible without per-chip
+/// tuning.
+///
+/// `MenuBarExtra`'s template tinting would strip the pill background and the
+/// per-tier dot colours, so we keep the existing `NSStatusItem` + custom
+/// rasterisation strategy and set `isTemplate = false` on the output.
 @MainActor
 enum MenuBarLabelRenderer {
-    private static let font: NSFont = .menuBarFont(ofSize: 0)
-    private static let horizontalPadding: CGFloat = 4
-    private static let height: CGFloat = 18
-    // Diameter of the colored dot as a fraction of the font's cap height.
-    // Slightly bigger than the cap height so the disc reads as a deliberate
-    // status indicator rather than a punctuation glyph.
+    private static let font: NSFont = .menuBarFont(ofSize: chipFontSize)
+    // Slightly below the default menu bar font (~13pt) so two chips with
+    // multiple sub-segments stay within a reasonable horizontal budget while
+    // staying comfortable to read against the pill background.
+    private static let chipFontSize: CGFloat = 12
+    // Vendor icons are sized from the font, but capHeight alone yields a
+    // shape that reads as smaller than text glyphs at the same point size —
+    // multi-stroke logos (Codex, Claude) lose detail. Bumping above capHeight
+    // gives the icon the visual weight of an emoji rather than a punctuation
+    // glyph.
+    private static let vendorIconHeightRatio: CGFloat = 1.35
+    private static let menuBarHeight: CGFloat = 22
+    // The pill is inset from the menu bar so it never butts against the
+    // system-drawn separators on either side.
+    private static let chipVerticalInset: CGFloat = 2
+    private static let chipHorizontalPaddingH: CGFloat = 6
+    private static let chipCornerRadius: CGFloat = 7
+    // Horizontal gap between two adjacent chips.
+    private static let interChipGap: CGFloat = 4
+    // Diameter of the tier dot as a fraction of the font's cap height.
     private static let dotDiameterRatio: CGFloat = 1.15
-    // Thin enough not to swallow small fills, thick enough to stay legible
-    // against arbitrary menu-bar wallpapers — including ones that happen to
-    // match the dot's fill color.
-    private static let dotStrokeLineWidth: CGFloat = 1.0
-    // Horizontal whitespace after the dot, before the segment's text.
+    // Narrow space between a dot and the text that follows it.
     private static let dotTrailingGap: String = " "
-    // Negative `.strokeWidth` tells NSStringDrawing to fill AND stroke each
-    // glyph. The value is a percentage of font point size, so −3 ≈ 0.4pt on
-    // the menu bar's ~13pt font — visually balanced against the dot's 1pt
-    // border without making small text feel bolded.
-    private static let colorizedTextStrokeWidth: CGFloat = -3.0
+    // Thin space between two adjacent sub-segments inside the same chip.
+    private static let intraChipSegmentGap: String = "  "
+    // Gap between the vendor icon (or outage warning) and the first segment.
+    private static let chipLeadInGap: String = " "
+    // Outside padding around the rasterised image — keeps the pill from
+    // touching the system clock or the next status item.
+    private static let outerHorizontalPadding: CGFloat = 2
+
     static let unconfiguredCallToAction = "Configure AI Metrics"
 
+    /// Resolved palette derived from `ChipBackground` + the menu bar
+    /// appearance. Both colours are concrete (no light/dark/auto runtime
+    /// switching past this point) so the renderer can ask once and stop
+    /// branching.
+    struct ResolvedChipPalette {
+        let pillColor: NSColor
+        let textColor: NSColor
+    }
+
+    static func resolvePalette(
+        background: ChipBackground,
+        isDarkMenuBar: Bool
+    ) -> ResolvedChipPalette {
+        switch background {
+        case .paper:
+            return ResolvedChipPalette(pillColor: paperPill, textColor: darkOnPaper)
+        case .slate:
+            return ResolvedChipPalette(pillColor: slatePill, textColor: lightOnSlate)
+        case .system:
+            return isDarkMenuBar
+                ? ResolvedChipPalette(pillColor: slatePill, textColor: lightOnSlate)
+                : ResolvedChipPalette(pillColor: paperPill, textColor: darkOnPaper)
+        }
+    }
+
+    // Curated pill / text colour pairs. Pure black/white avoided to keep the
+    // pill feeling like part of the wallpaper rather than a print artefact.
+    private static let paperPill = NSColor(white: 0.98, alpha: 1.0)
+    private static let darkOnPaper = NSColor(white: 0.08, alpha: 1.0)
+    private static let slatePill = NSColor(red: 0.16, green: 0.18, blue: 0.20, alpha: 1.0)
+    private static let lightOnSlate = NSColor(white: 0.96, alpha: 1.0)
+
+    // MARK: - Public API
+
     static func render(
-        segments: [MenuBarSegment],
-        separator: String,
+        chips: [RenderedChip],
+        background: ChipBackground,
         fallbackText: String,
         isDarkMenuBar: Bool,
+        tierOverride: ConsumptionTier? = nil,
         isUnconfigured: Bool = false
     ) -> NSImage {
-        let textColor: NSColor = isDarkMenuBar ? .white : .black
-        let attributed: NSAttributedString
-        if isUnconfigured && segments.isEmpty {
-            attributed = unconfiguredAttributedString(textColor: textColor)
-        } else {
-            attributed = attributedString(
-                segments: segments,
-                separator: separator,
-                fallbackText: fallbackText,
-                textColor: textColor
-            )
+        let menuBarTextColor: NSColor = isDarkMenuBar ? .white : .black
+
+        // Unconfigured state stays outside the pill metaphor — drawing a chip
+        // around the gear + "Configure" text would visually claim the feature
+        // is in a working state, which it isn't.
+        if isUnconfigured && chips.isEmpty {
+            let attributed = unconfiguredAttributedString(textColor: menuBarTextColor)
+            return rasterise(attributed: attributed, height: menuBarHeight)
         }
-        let textSize = attributed.size()
-        let width = ceil(textSize.width) + horizontalPadding * 2
-        let size = NSSize(width: max(width, 1), height: height)
-        let image = NSImage(size: size)
+
+        if chips.isEmpty {
+            let attributed = NSAttributedString(
+                string: fallbackText,
+                attributes: [.font: font, .foregroundColor: menuBarTextColor]
+            )
+            return rasterise(attributed: attributed, height: menuBarHeight)
+        }
+
+        let palette = resolvePalette(background: background, isDarkMenuBar: isDarkMenuBar)
+        return renderChips(
+            chips: chips,
+            palette: palette,
+            tierOverride: tierOverride
+        )
+    }
+
+    // MARK: - Chip composition
+
+    private static func renderChips(
+        chips: [RenderedChip],
+        palette: ResolvedChipPalette,
+        tierOverride: ConsumptionTier?
+    ) -> NSImage {
+        let chipContents: [(NSAttributedString, CGSize)] = chips.map { chip in
+            let attributed = chipAttributedString(
+                chip: chip,
+                palette: palette,
+                tierOverride: tierOverride
+            )
+            return (attributed, attributed.size())
+        }
+
+        let chipPillHeight = menuBarHeight - chipVerticalInset * 2
+        var totalWidth: CGFloat = outerHorizontalPadding
+        for (index, content) in chipContents.enumerated() {
+            if index > 0 { totalWidth += interChipGap }
+            totalWidth += ceil(content.1.width) + chipHorizontalPaddingH * 2
+        }
+        totalWidth += outerHorizontalPadding
+
+        let image = NSImage(size: NSSize(width: max(totalWidth, 1), height: menuBarHeight))
         image.lockFocus()
-        let textY = (height - ceil(textSize.height)) / 2
-        attributed.draw(at: NSPoint(x: horizontalPadding, y: textY))
+
+        var x: CGFloat = outerHorizontalPadding
+        for (index, content) in chipContents.enumerated() {
+            if index > 0 { x += interChipGap }
+            let pillWidth = ceil(content.1.width) + chipHorizontalPaddingH * 2
+            let pillRect = NSRect(
+                x: x,
+                y: chipVerticalInset,
+                width: pillWidth,
+                height: chipPillHeight
+            )
+            let pillPath = NSBezierPath(roundedRect: pillRect, xRadius: chipCornerRadius, yRadius: chipCornerRadius)
+            palette.pillColor.setFill()
+            pillPath.fill()
+
+            let textHeight = ceil(content.1.height)
+            let textY = pillRect.minY + (pillRect.height - textHeight) / 2
+            content.0.draw(at: NSPoint(x: x + chipHorizontalPaddingH, y: textY))
+            x += pillWidth
+        }
+
         image.unlockFocus()
         image.isTemplate = false
         return image
     }
+
+    /// Builds the attributed string drawn inside a single chip pill.
+    /// Composition order: vendor icon (optional) + outage warning (optional)
+    /// + segments separated by a thin space.
+    private static func chipAttributedString(
+        chip: RenderedChip,
+        palette: ResolvedChipPalette,
+        tierOverride: ConsumptionTier?
+    ) -> NSAttributedString {
+        let result = NSMutableAttributedString()
+        let defaultAttrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: palette.textColor,
+        ]
+
+        if chip.showVendorIcon,
+           let icon = VendorBrandingResolver.tintedNSImage(
+                for: chip.vendor,
+                height: ceil(font.capHeight * vendorIconHeightRatio)
+           ) {
+            let attachment = NSTextAttachment()
+            attachment.image = icon
+            // Pull the icon down so its visual centre sits on the cap-height
+            // line — without this offset the bigger glyph hangs above the
+            // text baseline and the chip looks top-heavy.
+            let verticalOffset = -(icon.size.height - font.capHeight) / 2
+            attachment.bounds = CGRect(
+                x: 0,
+                y: verticalOffset,
+                width: icon.size.width,
+                height: icon.size.height
+            )
+            result.append(NSAttributedString(attachment: attachment))
+            result.append(NSAttributedString(string: chipLeadInGap, attributes: defaultAttrs))
+        }
+
+        if let warning = chip.outageWarningText, !warning.isEmpty {
+            result.append(NSAttributedString(string: warning + chipLeadInGap, attributes: defaultAttrs))
+        }
+
+        for (index, segment) in chip.segments.enumerated() {
+            if index > 0 {
+                result.append(NSAttributedString(string: intraChipSegmentGap, attributes: defaultAttrs))
+            }
+            result.append(segmentAttributedString(
+                segment: segment,
+                palette: palette,
+                tierOverride: tierOverride
+            ))
+        }
+        return result
+    }
+
+    private static func segmentAttributedString(
+        segment: MenuBarSegment,
+        palette: ResolvedChipPalette,
+        tierOverride: ConsumptionTier?
+    ) -> NSAttributedString {
+        let result = NSMutableAttributedString()
+        let defaultAttrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: palette.textColor,
+        ]
+
+        // The override forces a specific tier (used by the dev "cycle pacing
+        // colours" timer). Production code keeps the tier resolved by the
+        // chip resolver.
+        let effectiveTier: ConsumptionTier? = tierOverride ?? segment.tier
+
+        if segment.showDot {
+            let diameter = ceil(font.capHeight * dotDiameterRatio)
+            let dotImage = makeDotImage(
+                fillColor: effectiveTier.dotNSColor,
+                diameter: diameter
+            )
+            let attachment = NSTextAttachment()
+            attachment.image = dotImage
+            attachment.bounds = CGRect(
+                x: 0,
+                y: (font.capHeight - diameter) / 2,
+                width: diameter,
+                height: diameter
+            )
+            result.append(NSAttributedString(attachment: attachment))
+            result.append(NSAttributedString(string: dotTrailingGap, attributes: defaultAttrs))
+        }
+
+        if !segment.text.isEmpty {
+            let textAttrs: [NSAttributedString.Key: Any]
+            if segment.colorizeText, let tier = effectiveTier {
+                textAttrs = [.font: font, .foregroundColor: tier.nsColor]
+            } else {
+                textAttrs = defaultAttrs
+            }
+            result.append(NSAttributedString(string: segment.text, attributes: textAttrs))
+        }
+
+        return result
+    }
+
+    // MARK: - Dot drawing
+
+    /// Solid disc filled with the tier colour. The chip pill already provides
+    /// a contrasted background, so no stroke is needed (the original
+    /// implementation drew one to defend against arbitrary wallpapers).
+    private static func makeDotImage(fillColor: NSColor, diameter: CGFloat) -> NSImage {
+        let size = NSSize(width: diameter, height: diameter)
+        let image = NSImage(size: size)
+        image.lockFocus()
+        let path = NSBezierPath(ovalIn: NSRect(origin: .zero, size: size))
+        fillColor.setFill()
+        path.fill()
+        image.unlockFocus()
+        image.isTemplate = false
+        return image
+    }
+
+    // MARK: - Unconfigured state
 
     private static func unconfiguredAttributedString(textColor: NSColor) -> NSAttributedString {
         let result = NSMutableAttributedString()
@@ -96,143 +320,17 @@ enum MenuBarLabelRenderer {
         return result
     }
 
-    /// Renders the colored pastille as a filled disc with a contrasted outline.
-    /// The fill carries the dot's identity (its tier, or the unknown gray); the
-    /// stroke carries the surrounding text color so the disc stays legible
-    /// even when its fill blends into the menu-bar wallpaper. The stroke is
-    /// inset by half its width so the visible diameter matches `diameter`.
-    private static func makeDotImage(
-        fillColor: NSColor,
-        strokeColor: NSColor,
-        diameter: CGFloat
-    ) -> NSImage {
-        let size = NSSize(width: diameter, height: diameter)
+    private static func rasterise(attributed: NSAttributedString, height: CGFloat) -> NSImage {
+        let textSize = attributed.size()
+        let width = ceil(textSize.width) + outerHorizontalPadding * 2
+        let size = NSSize(width: max(width, 1), height: height)
         let image = NSImage(size: size)
         image.lockFocus()
-        let inset = dotStrokeLineWidth / 2
-        let ovalRect = NSRect(
-            x: inset,
-            y: inset,
-            width: diameter - 2 * inset,
-            height: diameter - 2 * inset
-        )
-        let path = NSBezierPath(ovalIn: ovalRect)
-        fillColor.setFill()
-        path.fill()
-        strokeColor.setStroke()
-        path.lineWidth = dotStrokeLineWidth
-        path.stroke()
+        let textY = (height - ceil(textSize.height)) / 2
+        attributed.draw(at: NSPoint(x: outerHorizontalPadding, y: textY))
         image.unlockFocus()
         image.isTemplate = false
         return image
     }
-
-    /// Returns the attributes used for the visible content of a segment when
-    /// `colorizeText` is on and the segment carries a tier. The fill matches
-    /// the dot's fill (so the text reads as the same identity as the dot),
-    /// and a thin outline in the surrounding `textColor` matches the dot's
-    /// stroke — same role: keep the colored shape legible against arbitrary
-    /// menu-bar wallpapers.
-    private static func colorizedAttributes(
-        tierColor: NSColor,
-        outlineColor: NSColor
-    ) -> [NSAttributedString.Key: Any] {
-        [
-            .font: font,
-            .foregroundColor: tierColor,
-            .strokeColor: outlineColor,
-            .strokeWidth: colorizedTextStrokeWidth
-        ]
-    }
-
-    private static func attributedString(
-        segments: [MenuBarSegment],
-        separator: String,
-        fallbackText: String,
-        textColor: NSColor
-    ) -> NSAttributedString {
-        guard !segments.isEmpty else {
-            return NSAttributedString(
-                string: fallbackText,
-                attributes: [.font: font, .foregroundColor: textColor]
-            )
-        }
-        let result = NSMutableAttributedString()
-        for (index, segment) in segments.enumerated() {
-            if index > 0, !separator.isEmpty {
-                result.append(NSAttributedString(
-                    string: separator,
-                    attributes: [.font: font, .foregroundColor: textColor]
-                ))
-            }
-            if let vendor = segment.vendorIcon,
-               let icon = VendorBrandingResolver.tintedNSImage(for: vendor, height: font.capHeight) {
-                let attachment = NSTextAttachment()
-                attachment.image = icon
-                let pad = VendorBrandingResolver.iconGlowPadding
-                attachment.bounds = CGRect(
-                    x: -pad,
-                    y: -pad,
-                    width: icon.size.width,
-                    height: icon.size.height
-                )
-                result.append(NSAttributedString(attachment: attachment))
-                result.append(NSAttributedString(
-                    string: "\u{2009}",
-                    attributes: [.font: font, .foregroundColor: textColor]
-                ))
-            }
-            if let warning = segment.outageWarningText, !warning.isEmpty {
-                result.append(NSAttributedString(
-                    string: warning + "\u{2009}",
-                    attributes: [.font: font, .foregroundColor: textColor]
-                ))
-            }
-            if segment.showDot {
-                // Fill is data-driven (see Optional<ConsumptionTier>.dotNSColor)
-                // so menu bar and Settings preview always agree. The stroke
-                // tracks the surrounding text color, giving the dot a
-                // contrasted outline against menu-bar wallpapers that happen
-                // to match its fill (e.g. a green wallpaper behind a green
-                // "comfortable" tier, or any wallpaper behind the "unknown"
-                // mid-gray). Drawn as a custom NSImage attachment because
-                // NSAttributedString.strokeWidth on a "●" glyph is absorbed
-                // by the glyph's own fill — only a true bezier stroke gives
-                // a visible outline.
-                let diameter = ceil(font.capHeight * dotDiameterRatio)
-                let dotImage = makeDotImage(
-                    fillColor: segment.tier.dotNSColor,
-                    strokeColor: textColor,
-                    diameter: diameter
-                )
-                let attachment = NSTextAttachment()
-                attachment.image = dotImage
-                attachment.bounds = CGRect(
-                    x: 0,
-                    y: (font.capHeight - diameter) / 2,
-                    width: diameter,
-                    height: diameter
-                )
-                result.append(NSAttributedString(attachment: attachment))
-                result.append(NSAttributedString(
-                    string: dotTrailingGap,
-                    attributes: [.font: font, .foregroundColor: textColor]
-                ))
-            }
-            let textAttributes: [NSAttributedString.Key: Any]
-            if segment.colorizeText, let tier = segment.tier {
-                textAttributes = colorizedAttributes(
-                    tierColor: tier.nsColor,
-                    outlineColor: textColor
-                )
-            } else {
-                textAttributes = [.font: font, .foregroundColor: textColor]
-            }
-            result.append(NSAttributedString(
-                string: segment.text,
-                attributes: textAttributes
-            ))
-        }
-        return result
-    }
 }
+

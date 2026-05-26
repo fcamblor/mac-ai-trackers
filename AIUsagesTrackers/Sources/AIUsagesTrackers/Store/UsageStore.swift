@@ -15,62 +15,66 @@ public struct SystemClock: ClockProvider {
 
 // MARK: - Store
 
-/// One segment of the menu bar label — a single metric's formatted text, its tier,
-/// and whether the leading colored dot should be drawn. Pay-as-you-go segments
-/// render without a dot; time-window segments respect the user's `showDot` toggle.
+/// One segment of the menu bar label — a single metric's formatted text, its
+/// tier, and whether the leading colored dot should be drawn. Pay-as-you-go
+/// segments render without a dot; time-window segments respect the user's
+/// `showDot` toggle. Vendor icon and outage warning are no longer carried
+/// here: they are chip-level chrome owned by `RenderedChip`.
 public struct MenuBarSegment: Sendable, Equatable {
     public let text: String
     public let tier: ConsumptionTier?
     public let showDot: Bool
-    public let vendorIcon: Vendor?
-    /// When non-nil, the renderer inserts this text immediately after the
-    /// vendor icon (or at the segment's start when no icon is shown). Set by
-    /// `UsageStore.applyFormat` when the segment's config opts in and the
-    /// vendor currently has an active outage.
-    public let outageWarningText: String?
     /// Resolved from `TimeWindowDisplay.colorizeText`. When true and `tier`
-    /// is non-nil, the renderer tints the segment text with the tier color
-    /// (and adds a thin outline matching the dot's stroke).
+    /// is non-nil, the renderer tints the segment text with the tier color.
     public let colorizeText: Bool
 
     public init(
         text: String,
         tier: ConsumptionTier?,
         showDot: Bool,
-        vendorIcon: Vendor? = nil,
-        outageWarningText: String? = nil,
         colorizeText: Bool = false
     ) {
         self.text = text
         self.tier = tier
         self.showDot = showDot
-        self.vendorIcon = vendorIcon
-        self.outageWarningText = outageWarningText
         self.colorizeText = colorizeText
-    }
-
-    public func withOutageWarning(_ text: String?) -> MenuBarSegment {
-        MenuBarSegment(
-            text: self.text,
-            tier: tier,
-            showDot: showDot,
-            vendorIcon: vendorIcon,
-            outageWarningText: text,
-            colorizeText: colorizeText
-        )
     }
 }
 
-/// Formats the user-configured menu bar segments. Iterates the segments declared
-/// in `AppPreferences.menuBarSegments`, resolves each against the latest usages
-/// file contents, and exposes the rendered label text + per-segment payloads.
-/// Falls back to `"--"` when no segment can be rendered.
+/// A chip ready to be drawn on the menu bar: vendor icon + optional outage
+/// warning + a non-empty list of rendered sub-segments. Built by `UsageStore`
+/// from a `ResolvedMenuBarChip`, then handed to `MenuBarLabelRenderer`.
+public struct RenderedChip: Sendable, Equatable {
+    public let vendor: Vendor
+    public let showVendorIcon: Bool
+    /// Non-nil only when the chip opted into the warning AND the vendor
+    /// currently has at least one active outage.
+    public let outageWarningText: String?
+    public let segments: [MenuBarSegment]
+
+    public init(
+        vendor: Vendor,
+        showVendorIcon: Bool,
+        outageWarningText: String?,
+        segments: [MenuBarSegment]
+    ) {
+        self.vendor = vendor
+        self.showVendorIcon = showVendorIcon
+        self.outageWarningText = outageWarningText
+        self.segments = segments
+    }
+}
+
+/// Formats the user-configured menu bar chips. Iterates the chips declared
+/// in `AppPreferences.menuBarChips`, resolves each against the latest usages
+/// file contents, and exposes the rendered chips for the menu bar renderer.
+/// Falls back to `"--"` (and an empty chip list) when no chip can be rendered.
 @Observable
 @MainActor
 public final class UsageStore {
     public private(set) var menuBarText: String = "--"
     public private(set) var menuBarTier: ConsumptionTier?
-    public private(set) var menuBarSegments: [MenuBarSegment] = []
+    public private(set) var menuBarChips: [RenderedChip] = []
     /// Incremented each time handleNewData is called, whether the data is valid or malformed.
     /// Tests use this as a reliable signal that the store has consumed the latest yielded item.
     public private(set) var dataProcessedCount: Int = 0
@@ -122,28 +126,30 @@ public final class UsageStore {
     }
 
     private static func makeDefaultPreferences() -> any AppPreferences {
-        // Pre-settings-window defaults (S + W for currently-active Claude account).
-        // Kept inline so onboarding can ship an empty seed via
-        // `MenuBarSegmentsSeeder.defaultSegments()` without breaking tests and
-        // callers that rely on `UsageStore` rendering meaningful output without
-        // an explicit preferences store.
-        let segments: [MenuBarSegmentConfig] = [
-            MenuBarSegmentConfig(
-                vendor: .claude,
-                account: .currentlyActive,
-                metricName: "5h sessions (all models)",
-                display: .timeWindow(TimeWindowDisplay(letter: "S"))
-            ),
-            MenuBarSegmentConfig(
-                vendor: .claude,
-                account: .currentlyActive,
-                metricName: "Weekly (all models)",
-                display: .timeWindow(TimeWindowDisplay(letter: "W"))
-            ),
-        ]
+        // Pre-settings-window defaults: one Claude chip with two segments
+        // (5h session + Weekly) for the currently-active account. Kept inline
+        // so onboarding can ship an empty seed via
+        // `MenuBarChipsSeeder.defaultChips()` without breaking tests and
+        // callers that rely on `UsageStore` rendering meaningful output
+        // without an explicit preferences store.
+        let chip = MenuBarChipConfig(
+            vendor: .claude,
+            segments: [
+                MenuBarChipSegmentConfig(
+                    account: .currentlyActive,
+                    metricName: "5h sessions (all models)",
+                    display: .timeWindow(TimeWindowDisplay(letter: "S"))
+                ),
+                MenuBarChipSegmentConfig(
+                    account: .currentlyActive,
+                    metricName: "Weekly (all models)",
+                    display: .timeWindow(TimeWindowDisplay(letter: "W"))
+                ),
+            ]
+        )
         return InMemoryAppPreferences(
-            menuBarSegments: segments,
-            menuBarSegmentsInitialized: true
+            menuBarChips: [chip],
+            menuBarChipsInitialized: true
         )
     }
 
@@ -205,7 +211,7 @@ public final class UsageStore {
             outagesByVendor = [:]
             menuBarText = Self.fallbackText
             menuBarTier = nil
-            menuBarSegments = []
+            menuBarChips = []
         }
     }
 
@@ -214,13 +220,12 @@ public final class UsageStore {
         applyFormat()
     }
 
-    /// Re-runs formatting whenever `preferences.menuBarSegments` changes so the
-    /// menu bar updates as the user edits the segment configuration. Tracking
+    /// Re-runs formatting whenever `preferences.menuBarChips` changes so the
+    /// menu bar updates as the user edits the chip configuration. Tracking
     /// fires once per registration — re-arm inside the callback.
     private func trackPreferencesChanges() {
         withObservationTracking {
-            _ = preferences.menuBarSegments
-            _ = preferences.menuBarSeparator
+            _ = preferences.menuBarChips
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
@@ -234,28 +239,46 @@ public final class UsageStore {
 
     private func applyFormat() {
         let now = clock.now()
-        let configs = preferences.menuBarSegments
-        var rendered: [MenuBarSegment] = []
-        for config in configs {
-            let resolution = MenuBarSegmentResolver.resolve(config: config, entries: entries, now: now)
-            if let segment = resolution.rendered {
-                let warning = outageWarningText(for: config)
-                rendered.append(warning != nil ? segment.withOutageWarning(warning) : segment)
-            } else if let issue = resolution.issue {
-                logger.log(.debug, "UsageStore: skipping segment \(config.metricName) — \(issue)")
+        let chipConfigs = preferences.menuBarChips
+        var renderedChips: [RenderedChip] = []
+        var allSegmentTexts: [String] = []
+        var maxTier: ConsumptionTier?
+        for chipConfig in chipConfigs {
+            let resolution = MenuBarChipResolver.resolve(
+                chip: chipConfig,
+                entries: entries,
+                outagesByVendor: outagesByVendor,
+                now: now
+            )
+            var renderedSegments: [MenuBarSegment] = []
+            for resolvedSegment in resolution.segments {
+                if let segment = resolvedSegment.rendered {
+                    renderedSegments.append(segment)
+                    allSegmentTexts.append(segment.text)
+                    if let tier = segment.tier {
+                        maxTier = maxTier.map { Swift.max($0, tier) } ?? tier
+                    }
+                } else if let issue = resolvedSegment.issue {
+                    logger.log(.debug, "UsageStore: skipping segment \(resolvedSegment.config.metricName) — \(issue)")
+                }
             }
+            // A chip with zero rendered segments is dropped from the menu bar
+            // entirely (rather than drawn as an empty pill) — same end-state
+            // as the legacy per-segment skip.
+            guard !renderedSegments.isEmpty else { continue }
+            renderedChips.append(RenderedChip(
+                vendor: chipConfig.vendor,
+                showVendorIcon: chipConfig.showVendorIcon,
+                outageWarningText: resolution.outageWarningText,
+                segments: renderedSegments
+            ))
         }
-        menuBarSegments = rendered
-        menuBarText = rendered.isEmpty ? Self.fallbackText : rendered.map(\.text).joined(separator: preferences.menuBarSeparator)
-        menuBarTier = rendered.compactMap(\.tier).max()
-    }
-
-    /// Returns the per-segment warning text when the config opts in and the
-    /// segment's vendor currently has at least one active outage. Nil otherwise.
-    private func outageWarningText(for config: MenuBarSegmentConfig) -> String? {
-        guard config.showOutageWarning else { return nil }
-        guard !config.outageWarningText.isEmpty else { return nil }
-        guard let vendorOutages = outagesByVendor[config.vendor], !vendorOutages.isEmpty else { return nil }
-        return config.outageWarningText
+        menuBarChips = renderedChips
+        // `menuBarText` is kept around for plain-text consumers (e.g. tests,
+        // refresh dedup keys). Chips drop the configurable separator, so we
+        // join segment texts with a single space — purely an aggregation
+        // signal, never rendered to the user as-is.
+        menuBarText = allSegmentTexts.isEmpty ? Self.fallbackText : allSegmentTexts.joined(separator: " ")
+        menuBarTier = maxTier
     }
 }

@@ -112,6 +112,9 @@ struct MetricSelectionEditor: View {
     let labelWidth: CGFloat
     let layout: Layout
     let options: MetricSelectionOptions?
+    /// Hide the vendor picker when the parent UI owns the vendor selection
+    /// (e.g. a chip header that scopes all of its segments to the same vendor).
+    let showVendorPicker: Bool
     let onMetricChanged: (UsageMetric?) -> Void
 
     init(
@@ -122,6 +125,7 @@ struct MetricSelectionEditor: View {
         labelWidth: CGFloat = 80,
         layout: Layout = .stacked,
         options: MetricSelectionOptions? = nil,
+        showVendorPicker: Bool = true,
         onMetricChanged: @escaping (UsageMetric?) -> Void = { _ in }
     ) {
         self.store = store
@@ -131,6 +135,7 @@ struct MetricSelectionEditor: View {
         self.labelWidth = labelWidth
         self.layout = layout
         self.options = options
+        self.showVendorPicker = showVendorPicker
         self.onMetricChanged = onMetricChanged
     }
 
@@ -138,14 +143,18 @@ struct MetricSelectionEditor: View {
         switch layout {
         case .stacked:
             VStack(alignment: .leading, spacing: 12) {
-                vendorPicker
+                if showVendorPicker { vendorPicker }
                 accountPicker
                 metricPicker
             }
         case .grid:
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .top, spacing: 12) {
-                    captionedPicker("Vendor") { vendorPickerControl }
+                if showVendorPicker {
+                    HStack(alignment: .top, spacing: 12) {
+                        captionedPicker("Vendor") { vendorPickerControl }
+                        captionedPicker("Account") { accountPickerControl }
+                    }
+                } else {
                     captionedPicker("Account") { accountPickerControl }
                 }
                 captionedPicker("Metric") { metricPickerControl }

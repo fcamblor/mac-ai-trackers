@@ -33,6 +33,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// two seconds. Used by the integration smoke test to detect a return of
     /// the status item render feedback loop without sampling CPU directly.
     private var renderCountExportTask: Task<Void, Never>?
+    /// Drives the debug-only "cycle pacing colors" affordance. Non-nil holds
+    /// the tier currently being shown; nil means the feature is off (or this
+    /// is a production build) and the renderer must use real tiers.
+    private var pacingCycleTier: ConsumptionTier?
+    private var pacingCycleTask: Task<Void, Never>?
 
     /// Shared preferences store — exposed as static so the SwiftUI Settings scene
     /// (constructed before applicationDidFinishLaunching) can access it.
@@ -94,9 +99,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         Loggers.setPreferences(Self.sharedPreferences)
 
-        MenuBarSegmentsSeeder.seedIfNeeded(preferences: Self.sharedPreferences)
         ChartConfigurationsSeeder.seedIfNeeded(preferences: Self.sharedPreferences)
-        OutageWarningMigration.migrateIfNeeded(preferences: Self.sharedPreferences)
+        // OutageWarningMigration MUST run before MenuBarChipsMigration: it
+        // rewrites the legacy per-segment outage fields (still stored under
+        // the legacy `ai-tracker.menuBarSegments` payload) that the chip
+        // migration then reads and promotes to the chip level.
+        OutageWarningMigration.migrateIfNeeded()
+        MenuBarChipsMigration.migrateIfNeeded(preferences: Self.sharedPreferences)
+        MenuBarChipsSeeder.seedIfNeeded(preferences: Self.sharedPreferences)
 
         // Reconcile launch-at-login preference with system state — the user may
         // have disabled the entry in System Settings > Login Items directly.
@@ -318,10 +328,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarRefreshController = MenuBarRefreshController { [weak self] key in
             guard let self, let button = self.statusItem?.button else { return }
             button.image = MenuBarLabelRenderer.render(
-                segments: key.segments,
-                separator: key.separator,
+                chips: key.chips,
+                background: key.background,
                 fallbackText: key.text,
                 isDarkMenuBar: key.isDark,
+                tierOverride: key.tierOverride,
                 isUnconfigured: key.isUnconfigured
             )
         }
@@ -372,11 +383,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               let controller = menuBarRefreshController else { return }
         let isDark = button.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
         controller.refresh(key: MenuBarRenderKey(
-            segments: store.menuBarSegments,
+            chips: store.menuBarChips,
             text: store.menuBarText,
-            separator: Self.sharedPreferences.menuBarSeparator,
+            background: Self.sharedPreferences.menuBarChipBackground,
             isDark: isDark,
-            isUnconfigured: Self.sharedPreferences.menuBarSegments.isEmpty
+            isUnconfigured: Self.sharedPreferences.menuBarChips.isEmpty,
+            tierOverride: pacingCycleTier
         ))
     }
 
@@ -402,21 +414,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// keeps mirroring the store. Tracking fires exactly once per registration.
     private func trackStoreChanges(store: UsageStore) {
         withObservationTracking {
-            _ = store.menuBarSegments
+            _ = store.menuBarChips
             _ = store.menuBarText
-            // The separator is read on each refresh too — track it so toggling
-            // it in Settings refreshes the status item immediately instead of
-            // waiting for the next data event. (Per-segment options live in
-            // store.menuBarSegments above; the resolver already re-resolves
-            // when segment configs change.)
-            _ = Self.sharedPreferences.menuBarSeparator
+            // Track the chip background pref so the user sees the new pill
+            // colour without restarting; the cycle toggle is tracked too so
+            // the timer can be started/stopped from Settings live.
+            _ = Self.sharedPreferences.menuBarChipBackground
+            _ = Self.sharedPreferences.menuBarPacingColorCycleEnabled
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self, let store = self.usageStore else { return }
+                self.reconcilePacingCycle()
                 self.refreshStatusItemImage()
                 self.trackStoreChanges(store: store)
             }
         }
+    }
+
+    /// Starts or stops the debug-only pacing-colour cycle to match the current
+    /// preference. The timer is only ever armed under `#if DEBUG` so a
+    /// production build that somehow had the pref set to true (e.g. via direct
+    /// UserDefaults manipulation) silently ignores it.
+    private func reconcilePacingCycle() {
+        #if DEBUG
+        let wantCycle = Self.sharedPreferences.menuBarPacingColorCycleEnabled
+        if wantCycle, pacingCycleTask == nil {
+            pacingCycleTier = ConsumptionTier.allCases.first
+            pacingCycleTask = Task { @MainActor [weak self] in
+                let allCases = ConsumptionTier.allCases
+                var index = 0
+                while !Task.isCancelled {
+                    // CancellationError swallowed; loop guard re-checks above.
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    guard !Task.isCancelled else { break }
+                    index = (index + 1) % allCases.count
+                    guard let self else { return }
+                    self.pacingCycleTier = allCases[index]
+                    self.refreshStatusItemImage()
+                }
+            }
+        } else if !wantCycle, pacingCycleTask != nil {
+            pacingCycleTask?.cancel()
+            pacingCycleTask = nil
+            pacingCycleTier = nil
+        }
+        #else
+        // No-op in release: keep the field nil so the renderer uses real tiers.
+        pacingCycleTier = nil
+        #endif
     }
 
     // MARK: - Settings

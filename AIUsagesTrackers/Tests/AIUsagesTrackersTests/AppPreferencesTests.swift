@@ -103,96 +103,105 @@ struct UserDefaultsAppPreferencesTests {
         #expect(prefs.refreshInterval == .default)
         #expect(prefs.launchAtLogin == false)
         #expect(prefs.logLevel == .info)
-        #expect(prefs.menuBarSegments.isEmpty)
-        #expect(prefs.menuBarSegmentsInitialized == false)
-        #expect(prefs.menuBarSeparator == " | ")
+        #expect(prefs.menuBarChips.isEmpty)
+        #expect(prefs.menuBarChipsInitialized == false)
+        #expect(prefs.menuBarChipBackground == .default)
+        #expect(prefs.menuBarPacingColorCycleEnabled == false)
         #expect(prefs.chartConfigurations.isEmpty)
         #expect(prefs.chartConfigurationsInitialized == false)
     }
 
-    @Test("menuBarSeparator round-trips through UserDefaults")
+    @Test("menuBarChipBackground round-trips through UserDefaults")
     @MainActor
-    func menuBarSeparatorRoundTrip() {
+    func menuBarChipBackgroundRoundTrip() {
         let (defaults, name) = makeSuite()
         defer { cleanUp(suiteName: name) }
 
         let prefs = UserDefaultsAppPreferences(defaults: defaults)
-        prefs.menuBarSeparator = " · "
-        #expect(prefs.menuBarSeparator == " · ")
+        prefs.menuBarChipBackground = .slate
+        #expect(prefs.menuBarChipBackground == .slate)
 
         let reader = UserDefaultsAppPreferences(defaults: defaults)
-        #expect(reader.menuBarSeparator == " · ")
+        #expect(reader.menuBarChipBackground == .slate)
     }
 
-    @Test("menuBarSeparator can be set to empty string")
+    @Test("menuBarPacingColorCycleEnabled round-trips")
     @MainActor
-    func menuBarSeparatorEmpty() {
+    func menuBarPacingColorCycleRoundTrip() {
         let (defaults, name) = makeSuite()
         defer { cleanUp(suiteName: name) }
 
         let prefs = UserDefaultsAppPreferences(defaults: defaults)
-        prefs.menuBarSeparator = ""
-        #expect(prefs.menuBarSeparator == "")
+        prefs.menuBarPacingColorCycleEnabled = true
+        #expect(prefs.menuBarPacingColorCycleEnabled == true)
     }
 
-    @Test("menuBarSegments round-trips through UserDefaults")
+    @Test("menuBarChips round-trips through UserDefaults")
     @MainActor
-    func menuBarSegmentsRoundTrip() {
+    func menuBarChipsRoundTrip() {
         let (defaults, name) = makeSuite()
         defer { cleanUp(suiteName: name) }
 
         let prefs = UserDefaultsAppPreferences(defaults: defaults)
-        let segments = [
-            MenuBarSegmentConfig(
+        let chips = [
+            MenuBarChipConfig(
                 vendor: .claude,
-                account: .currentlyActive,
-                metricName: "Weekly (all models)",
-                display: .timeWindow(TimeWindowDisplay(letter: "W"))
+                segments: [
+                    MenuBarChipSegmentConfig(
+                        account: .currentlyActive,
+                        metricName: "Weekly (all models)",
+                        display: .timeWindow(TimeWindowDisplay(letter: "W"))
+                    )
+                ]
             ),
         ]
-        prefs.menuBarSegments = segments
-        #expect(prefs.menuBarSegments == segments)
+        prefs.menuBarChips = chips
+        #expect(prefs.menuBarChips == chips)
     }
 
-    @Test("menuBarSegments persists across instances")
+    @Test("menuBarChips persists across instances")
     @MainActor
-    func menuBarSegmentsPersist() {
+    func menuBarChipsPersist() {
         let (defaults, name) = makeSuite()
         defer { cleanUp(suiteName: name) }
 
         let writer = UserDefaultsAppPreferences(defaults: defaults)
-        let segment = MenuBarSegmentConfig(
+        let chip = MenuBarChipConfig(
             vendor: .claude,
-            account: .specific("a@b.com"),
-            metricName: "Cost",
-            display: .payAsYouGo
+            segments: [
+                MenuBarChipSegmentConfig(
+                    account: .specific("a@b.com"),
+                    metricName: "Cost",
+                    display: .payAsYouGo
+                )
+            ]
         )
-        writer.menuBarSegments = [segment]
+        writer.menuBarChips = [chip]
 
         let reader = UserDefaultsAppPreferences(defaults: defaults)
-        #expect(reader.menuBarSegments == [segment])
+        #expect(reader.menuBarChips == [chip])
     }
 
-    @Test("menuBarSegmentsInitialized round-trips")
+    @Test("menuBarChipsInitialized round-trips")
     @MainActor
-    func menuBarSegmentsInitializedRoundTrip() {
+    func menuBarChipsInitializedRoundTrip() {
         let (defaults, name) = makeSuite()
         defer { cleanUp(suiteName: name) }
 
         let prefs = UserDefaultsAppPreferences(defaults: defaults)
-        prefs.menuBarSegmentsInitialized = true
-        #expect(prefs.menuBarSegmentsInitialized == true)
+        prefs.menuBarChipsInitialized = true
+        #expect(prefs.menuBarChipsInitialized == true)
     }
 
-    @Test("corrupt menuBarSegments JSON returns empty array")
+    @Test("corrupt menuBarChips JSON returns empty array")
     @MainActor
-    func corruptMenuBarSegments() {
+    func corruptMenuBarChips() {
         let (defaults, name) = makeSuite()
         defer { cleanUp(suiteName: name) }
 
-        defaults.set(Data("not json".utf8), forKey: AppPreferenceKeys.menuBarSegments.rawValue)
+        defaults.set(Data("not json".utf8), forKey: AppPreferenceKeys.menuBarChips.rawValue)
         let prefs = UserDefaultsAppPreferences(defaults: defaults)
-        #expect(prefs.menuBarSegments.isEmpty)
+        #expect(prefs.menuBarChips.isEmpty)
     }
 
     @Test("chartConfigurations round-trips through UserDefaults")

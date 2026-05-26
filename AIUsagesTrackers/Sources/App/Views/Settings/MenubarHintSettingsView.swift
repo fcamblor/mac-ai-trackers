@@ -40,7 +40,7 @@ private struct MenubarHintContent: View {
     @Bindable var store: UsageStore
     let isDark: Bool
 
-    private static let segmentListCoordinateSpace = "menubarHint.segmentList"
+    private static let chipListCoordinateSpace = "menubarHint.chipList"
 
     @State private var pendingDelete: UUID?
 
@@ -56,7 +56,7 @@ private struct MenubarHintContent: View {
             VStack(alignment: .leading, spacing: 0) {
                 globalPanel
                 Divider()
-                segmentsPanel
+                chipsPanel
             }
         }
         .confirmationDialog(
@@ -64,9 +64,9 @@ private struct MenubarHintContent: View {
             isPresented: deleteConfirmationBinding,
             titleVisibility: .visible
         ) {
-            Button("Delete segment", role: .destructive) {
+            Button("Delete chip", role: .destructive) {
                 if let id = pendingDelete {
-                    delete(segmentID: id)
+                    delete(chipID: id)
                 }
                 pendingDelete = nil
             }
@@ -74,11 +74,11 @@ private struct MenubarHintContent: View {
                 pendingDelete = nil
             }
         } message: {
-            Text("This segment will no longer appear in the menu bar.")
+            Text("This chip will no longer appear in the menu bar.")
         }
     }
 
-    // MARK: Global (preview + separator)
+    // MARK: Global (preview + appearance)
 
     private var globalPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -86,13 +86,13 @@ private struct MenubarHintContent: View {
                 Text("Menu bar preview")
                     .font(.headline)
                 Spacer()
-                separatorField
+                backgroundPicker
             }
 
             HStack {
                 Image(nsImage: MenuBarLabelRenderer.render(
-                    segments: store.menuBarSegments,
-                    separator: preferences.menuBarSeparator,
+                    chips: store.menuBarChips,
+                    background: preferences.menuBarChipBackground,
                     fallbackText: store.menuBarText,
                     isDarkMenuBar: isDark
                 ))
@@ -108,47 +108,74 @@ private struct MenubarHintContent: View {
                 RoundedRectangle(cornerRadius: 6)
                     .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
             )
+
+            #if DEBUG
+            devPacingCycleToggle
+            #endif
         }
         .padding(16)
     }
 
-    private var separatorField: some View {
+    private var backgroundPicker: some View {
         HStack(spacing: 6) {
-            Text("Separator")
+            Text("Chip background")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            TextField("", text: Binding(
-                get: { preferences.menuBarSeparator },
-                set: { preferences.menuBarSeparator = $0 }
-            ))
-            .textFieldStyle(.roundedBorder)
-            .frame(width: 64)
+            Picker("", selection: Binding(
+                get: { preferences.menuBarChipBackground },
+                set: { preferences.menuBarChipBackground = $0 }
+            )) {
+                Text("Paper").tag(ChipBackground.paper)
+                Text("Slate").tag(ChipBackground.slate)
+                Text("System").tag(ChipBackground.system)
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .frame(width: 220)
         }
     }
 
-    // MARK: Segments
+    #if DEBUG
+    private var devPacingCycleToggle: some View {
+        Toggle(isOn: Binding(
+            get: { preferences.menuBarPacingColorCycleEnabled },
+            set: { preferences.menuBarPacingColorCycleEnabled = $0 }
+        )) {
+            HStack(spacing: 6) {
+                Image(systemName: "paintpalette")
+                    .foregroundStyle(.tertiary)
+                Text("Cycle pacing colors (dev)")
+                    .font(.caption)
+            }
+        }
+        .toggleStyle(.checkbox)
+        .help("Cycles every visible chip segment through ConsumptionTier.allCases at 1 Hz so the chosen background can be QA'd against each tier colour.")
+    }
+    #endif
+
+    // MARK: Chips list
 
     @ViewBuilder
-    private var segmentsPanel: some View {
-        if AppDelegate.sharedPreferences.menuBarSegments.isEmpty {
+    private var chipsPanel: some View {
+        if AppDelegate.sharedPreferences.menuBarChips.isEmpty {
             emptyState
         } else {
-            segmentsList
+            chipsList
         }
     }
 
     private var emptyState: some View {
         VStack(spacing: 12) {
             Spacer(minLength: 24)
-            Text("No segments configured")
+            Text("No chips configured")
                 .font(.headline)
-            Text("The menu bar will show \"--\" until you add a segment.")
+            Text("The menu bar will show \"--\" until you add a chip.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Button {
-                addSegment()
+                addChip()
             } label: {
-                Label("Add your first segment", systemImage: "plus")
+                Label("Add your first chip", systemImage: "plus")
             }
             .disabled(availableVendors.isEmpty)
             Spacer(minLength: 24)
@@ -157,17 +184,17 @@ private struct MenubarHintContent: View {
         .padding(16)
     }
 
-    private var segmentsList: some View {
+    private var chipsList: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Segments")
+                Text("Chips")
                     .font(.headline)
                 Text("· drag the handle to reorder")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                 Spacer()
                 Button {
-                    addSegment()
+                    addChip()
                 } label: {
                     Label("Add", systemImage: "plus")
                 }
@@ -175,54 +202,54 @@ private struct MenubarHintContent: View {
             }
             .padding(.bottom, 2)
 
-            segmentsListBody
+            chipsListBody
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)
         .padding(.bottom, 16)
     }
 
-    private var segmentsListBody: some View {
-        let segments = AppDelegate.sharedPreferences.menuBarSegments
+    private var chipsListBody: some View {
+        let chips = AppDelegate.sharedPreferences.menuBarChips
         return ZStack(alignment: .topLeading) {
             VStack(spacing: 4) {
-                ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
-                    rowContainer(segment: segment, index: index, count: segments.count)
+                ForEach(Array(chips.enumerated()), id: \.element.id) { index, chip in
+                    rowContainer(chip: chip, index: index, count: chips.count)
                 }
             }
             .animation(.spring(response: 0.34, dampingFraction: 0.85), value: draggingID)
             .animation(.spring(response: 0.34, dampingFraction: 0.85), value: dropIndex)
 
-            dropIndicator(segments: segments)
-            floatingPreview(segments: segments)
+            dropIndicator(chips: chips)
+            floatingPreview(chips: chips)
         }
-        .coordinateSpace(name: Self.segmentListCoordinateSpace)
+        .coordinateSpace(name: Self.chipListCoordinateSpace)
         .onPreferenceChange(RowFramePreferenceKey.self) { rowFrames = $0 }
     }
 
-    private func rowContainer(segment: MenuBarSegmentConfig, index: Int, count: Int) -> some View {
-        let isDragging = draggingID == segment.id
-        return SegmentCardView(
+    private func rowContainer(chip: MenuBarChipConfig, index: Int, count: Int) -> some View {
+        let isDragging = draggingID == chip.id
+        return ChipCardView(
             preferences: preferences,
             store: store,
             isDark: isDark,
-            segmentID: segment.id,
+            chip: chip,
             canMoveUp: index > 0,
             canMoveDown: index < count - 1,
             onMoveUp: { move(from: index, to: index - 1) },
             onMoveDown: { move(from: index, to: index + 2) },
-            onDuplicate: { duplicate(segmentID: segment.id) },
-            onRequestDelete: { pendingDelete = segment.id },
+            onDuplicate: { duplicate(chipID: chip.id) },
+            onRequestDelete: { pendingDelete = chip.id },
             isBeingDragged: isDragging,
-            dragCoordinateSpace: Self.segmentListCoordinateSpace,
-            onDragChanged: { value in handleDragChanged(value: value, segmentID: segment.id) },
-            onDragEnded: { value in handleDragEnded(value: value, segmentID: segment.id) }
+            dragCoordinateSpace: Self.chipListCoordinateSpace,
+            onDragChanged: { value in handleDragChanged(value: value, chipID: chip.id) },
+            onDragEnded: { value in handleDragEnded(value: value, chipID: chip.id) }
         )
         .background(
             GeometryReader { geo in
                 Color.clear.preference(
                     key: RowFramePreferenceKey.self,
-                    value: [segment.id: geo.frame(in: .named(Self.segmentListCoordinateSpace))]
+                    value: [chip.id: geo.frame(in: .named(Self.chipListCoordinateSpace))]
                 )
             }
         )
@@ -234,8 +261,8 @@ private struct MenubarHintContent: View {
     // MARK: Drop indicator + floating preview
 
     @ViewBuilder
-    private func dropIndicator(segments: [MenuBarSegmentConfig]) -> some View {
-        if let dropIndex, let y = dropIndicatorY(segments: segments, atIndex: dropIndex) {
+    private func dropIndicator(chips: [MenuBarChipConfig]) -> some View {
+        if let dropIndex, let y = dropIndicatorY(chips: chips, atIndex: dropIndex) {
             Capsule()
                 .fill(Color.accentColor)
                 .frame(height: 2)
@@ -246,8 +273,8 @@ private struct MenubarHintContent: View {
         }
     }
 
-    private func dropIndicatorY(segments: [MenuBarSegmentConfig], atIndex index: Int) -> CGFloat? {
-        let visible = segments.filter { $0.id != draggingID }
+    private func dropIndicatorY(chips: [MenuBarChipConfig], atIndex index: Int) -> CGFloat? {
+        let visible = chips.filter { $0.id != draggingID }
         guard !visible.isEmpty else { return 0 }
         let clamped = max(0, min(index, visible.count))
         if clamped == 0 {
@@ -256,22 +283,21 @@ private struct MenubarHintContent: View {
         if clamped >= visible.count {
             return rowFrames[visible.last!.id]?.maxY
         }
-        // Halfway between previous row's bottom and next row's top
         let prev = rowFrames[visible[clamped - 1].id]?.maxY ?? 0
         let next = rowFrames[visible[clamped].id]?.minY ?? prev
         return (prev + next) / 2
     }
 
     @ViewBuilder
-    private func floatingPreview(segments: [MenuBarSegmentConfig]) -> some View {
+    private func floatingPreview(chips: [MenuBarChipConfig]) -> some View {
         if let id = draggingID,
-           let segment = segments.first(where: { $0.id == id }),
+           let chip = chips.first(where: { $0.id == id }),
            let frame = rowFrames[id] {
             DragPreviewCard(
                 preferences: preferences,
                 store: store,
                 isDark: isDark,
-                segment: segment
+                chip: chip
             )
             .frame(width: max(frame.width, 200))
             .offset(
@@ -285,22 +311,22 @@ private struct MenubarHintContent: View {
 
     // MARK: Drag handling
 
-    private func handleDragChanged(value: DragGesture.Value, segmentID: UUID) {
+    private func handleDragChanged(value: DragGesture.Value, chipID: UUID) {
         if draggingID == nil {
             withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
-                draggingID = segmentID
+                draggingID = chipID
             }
         }
         dragTranslation = value.translation
         dragCursorY = value.location.y
-        let segments = AppDelegate.sharedPreferences.menuBarSegments
-        dropIndex = computeDropIndex(at: value.location.y, segments: segments)
+        let chips = AppDelegate.sharedPreferences.menuBarChips
+        dropIndex = computeDropIndex(at: value.location.y, chips: chips)
     }
 
-    private func handleDragEnded(value: DragGesture.Value, segmentID: UUID) {
-        let segments = AppDelegate.sharedPreferences.menuBarSegments
-        let finalIndex = computeDropIndex(at: value.location.y, segments: segments)
-        performDrop(draggedID: segmentID, toVisibleIndex: finalIndex)
+    private func handleDragEnded(value: DragGesture.Value, chipID: UUID) {
+        let chips = AppDelegate.sharedPreferences.menuBarChips
+        let finalIndex = computeDropIndex(at: value.location.y, chips: chips)
+        performDrop(draggedID: chipID, toVisibleIndex: finalIndex)
         withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
             draggingID = nil
             dropIndex = nil
@@ -308,10 +334,10 @@ private struct MenubarHintContent: View {
         }
     }
 
-    private func computeDropIndex(at y: CGFloat, segments: [MenuBarSegmentConfig]) -> Int {
-        let visible = segments.filter { $0.id != draggingID }
-        for (idx, seg) in visible.enumerated() {
-            guard let frame = rowFrames[seg.id] else { continue }
+    private func computeDropIndex(at y: CGFloat, chips: [MenuBarChipConfig]) -> Int {
+        let visible = chips.filter { $0.id != draggingID }
+        for (idx, c) in visible.enumerated() {
+            guard let frame = rowFrames[c.id] else { continue }
             if y < frame.midY {
                 return idx
             }
@@ -321,76 +347,80 @@ private struct MenubarHintContent: View {
 
     private func performDrop(draggedID: UUID, toVisibleIndex visibleIndex: Int) {
         let prefs = AppDelegate.sharedPreferences
-        var segments = prefs.menuBarSegments
-        guard let sourceIdx = segments.firstIndex(where: { $0.id == draggedID }) else { return }
+        var chips = prefs.menuBarChips
+        guard let sourceIdx = chips.firstIndex(where: { $0.id == draggedID }) else { return }
 
-        // visibleIndex is in the list with the source removed; translate to an
-        // insertion offset for the full list using `move(fromOffsets:toOffset:)`,
-        // which expects the destination expressed in pre-removal coordinates.
         let destOffset: Int
         if visibleIndex >= sourceIdx {
             destOffset = visibleIndex + 1
         } else {
             destOffset = visibleIndex
         }
-
         if destOffset == sourceIdx || destOffset == sourceIdx + 1 {
-            return // no-op move
+            return
         }
-
-        segments.move(fromOffsets: IndexSet(integer: sourceIdx), toOffset: destOffset)
-        prefs.menuBarSegments = segments
+        chips.move(fromOffsets: IndexSet(integer: sourceIdx), toOffset: destOffset)
+        prefs.menuBarChips = chips
     }
 
     // MARK: Mutations
 
-    private func addSegment() {
+    private func addChip() {
         let prefs = AppDelegate.sharedPreferences
         guard let vendor = availableVendors.first else { return }
-        let defaultMetricName = firstAvailableMetricName(for: vendor, account: .currentlyActive) ?? ""
-        let display: SegmentDisplay = makeDefaultDisplay(
+        let metricName = firstAvailableMetricName(for: vendor, account: .currentlyActive) ?? ""
+        let display = makeDefaultDisplay(
             vendor: vendor,
             account: .currentlyActive,
-            metricName: defaultMetricName
+            metricName: metricName
         )
-        let new = MenuBarSegmentConfig(
+        let newChip = MenuBarChipConfig(
             vendor: vendor,
-            account: .currentlyActive,
-            metricName: defaultMetricName,
-            display: display
+            segments: [
+                MenuBarChipSegmentConfig(
+                    account: .currentlyActive,
+                    metricName: metricName,
+                    display: display
+                )
+            ]
         )
-        prefs.menuBarSegments.append(new)
+        prefs.menuBarChips.append(newChip)
     }
 
-    private func duplicate(segmentID: UUID) {
+    private func duplicate(chipID: UUID) {
         let prefs = AppDelegate.sharedPreferences
-        var segments = prefs.menuBarSegments
-        guard let idx = segments.firstIndex(where: { $0.id == segmentID }) else { return }
-        let source = segments[idx]
-        let copy = MenuBarSegmentConfig(
+        var chips = prefs.menuBarChips
+        guard let idx = chips.firstIndex(where: { $0.id == chipID }) else { return }
+        let source = chips[idx]
+        let copy = MenuBarChipConfig(
             vendor: source.vendor,
-            account: source.account,
-            metricName: source.metricName,
-            display: source.display,
+            showVendorIcon: source.showVendorIcon,
             showOutageWarning: source.showOutageWarning,
-            outageWarningText: source.outageWarningText
+            outageWarningText: source.outageWarningText,
+            segments: source.segments.map {
+                MenuBarChipSegmentConfig(
+                    account: $0.account,
+                    metricName: $0.metricName,
+                    display: $0.display
+                )
+            }
         )
-        segments.insert(copy, at: idx + 1)
-        prefs.menuBarSegments = segments
+        chips.insert(copy, at: idx + 1)
+        prefs.menuBarChips = chips
     }
 
-    private func delete(segmentID: UUID) {
+    private func delete(chipID: UUID) {
         let prefs = AppDelegate.sharedPreferences
-        prefs.menuBarSegments.removeAll { $0.id == segmentID }
+        prefs.menuBarChips.removeAll { $0.id == chipID }
     }
 
     private func move(from source: Int, to destination: Int) {
         let prefs = AppDelegate.sharedPreferences
-        var segments = prefs.menuBarSegments
-        guard source >= 0, source < segments.count else { return }
-        let dest = max(0, min(destination, segments.count))
-        segments.move(fromOffsets: IndexSet(integer: source), toOffset: dest)
-        prefs.menuBarSegments = segments
+        var chips = prefs.menuBarChips
+        guard source >= 0, source < chips.count else { return }
+        let dest = max(0, min(destination, chips.count))
+        chips.move(fromOffsets: IndexSet(integer: source), toOffset: dest)
+        prefs.menuBarChips = chips
     }
 
     // MARK: Helpers
@@ -449,10 +479,10 @@ private struct MenubarHintContent: View {
 
     private var deleteConfirmationTitle: String {
         guard let id = pendingDelete,
-              let segment = AppDelegate.sharedPreferences.menuBarSegments.first(where: { $0.id == id }) else {
-            return "Delete segment?"
+              let chip = AppDelegate.sharedPreferences.menuBarChips.first(where: { $0.id == id }) else {
+            return "Delete chip?"
         }
-        return "Delete \(segment.metricName) segment?"
+        return "Delete \(VendorBrandingResolver.displayName(for: chip.vendor)) chip?"
     }
 }
 
@@ -462,31 +492,39 @@ private struct DragPreviewCard: View {
     let preferences: any AppPreferences
     @Bindable var store: UsageStore
     let isDark: Bool
-    let segment: MenuBarSegmentConfig
+    let chip: MenuBarChipConfig
 
     var body: some View {
-        let resolution = MenuBarSegmentResolver.resolve(
-            config: segment,
+        let resolution = MenuBarChipResolver.resolve(
+            chip: chip,
             entries: store.entries,
+            outagesByVendor: store.outagesByVendor,
             now: Date()
         )
-        HStack(spacing: 10) {
+        let renderedSegments = resolution.segments.compactMap(\.rendered)
+        return HStack(spacing: 10) {
             Image(systemName: "line.3.horizontal")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
-                if let rendered = resolution.rendered {
+                if !renderedSegments.isEmpty {
+                    let preview = RenderedChip(
+                        vendor: chip.vendor,
+                        showVendorIcon: chip.showVendorIcon,
+                        outageWarningText: resolution.outageWarningText,
+                        segments: renderedSegments
+                    )
                     Image(nsImage: MenuBarLabelRenderer.render(
-                        segments: [rendered],
-                        separator: preferences.menuBarSeparator,
+                        chips: [preview],
+                        background: preferences.menuBarChipBackground,
                         fallbackText: "",
                         isDarkMenuBar: isDark
                     ))
                 } else {
-                    Text(VendorBrandingResolver.displayName(for: segment.vendor))
+                    Text(VendorBrandingResolver.displayName(for: chip.vendor))
                         .fontWeight(.semibold)
                 }
-                Text("\(VendorBrandingResolver.displayName(for: segment.vendor)) · \(segment.metricName)")
+                Text("\(VendorBrandingResolver.displayName(for: chip.vendor)) · \(chip.segments.count) segment(s)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)

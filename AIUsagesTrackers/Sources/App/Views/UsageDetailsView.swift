@@ -271,7 +271,7 @@ struct UsageDetailsView: View {
 
     @ViewBuilder
     private var emptyState: some View {
-        if AppDelegate.sharedPreferences.menuBarSegments.isEmpty {
+        if AppDelegate.sharedPreferences.menuBarChips.isEmpty {
             unconfiguredEmptyState
         } else {
             VStack(spacing: 8) {

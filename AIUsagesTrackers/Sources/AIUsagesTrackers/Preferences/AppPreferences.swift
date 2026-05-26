@@ -10,12 +10,20 @@ public protocol AppPreferences: AnyObject, Observable, Sendable {
     var refreshInterval: RefreshInterval { get set }
     var launchAtLogin: Bool { get set }
     var logLevel: LogLevel { get set }
-    var menuBarSegments: [MenuBarSegmentConfig] { get set }
+    var menuBarChips: [MenuBarChipConfig] { get set }
     /// Tracks whether seeding has already run — distinguishes "fresh install"
-    /// from "user deleted all segments." False on a brand-new UserDefaults suite.
-    var menuBarSegmentsInitialized: Bool { get set }
-    /// String inserted between adjacent segments in the menu bar label. Defaults to " | ".
-    var menuBarSeparator: String { get set }
+    /// from "user deleted all chips." False on a brand-new UserDefaults suite.
+    var menuBarChipsInitialized: Bool { get set }
+    /// Pill colour for every chip in the menu bar. Global by design — per-chip
+    /// colours would defeat the "stay consistent with tier colours" guarantee.
+    var menuBarChipBackground: ChipBackground { get set }
+    /// Debug-build affordance: when true, the menu bar renderer cycles every
+    /// chip segment's text & dot through `ConsumptionTier.allCases` at 1 Hz so
+    /// the user can visually QA each pacing colour against the chosen
+    /// `menuBarChipBackground`. AppDelegate only arms the timer under
+    /// `#if DEBUG`, but the preference is exposed unconditionally to keep the
+    /// protocol stable across build configurations.
+    var menuBarPacingColorCycleEnabled: Bool { get set }
     var chartConfigurations: [ChartConfiguration] { get set }
     /// Tracks whether chart seeding has already run so an intentionally empty
     /// configuration list is preserved after first initialization.
@@ -95,47 +103,59 @@ public final class UserDefaultsAppPreferences: AppPreferences {
         }
     }
 
-    public var menuBarSegments: [MenuBarSegmentConfig] {
+    public var menuBarChips: [MenuBarChipConfig] {
         get {
             // @Observable wraps stored properties; computed ones need manual tracking so
             // SwiftUI / withObservationTracking observers are notified on mutation.
-            access(keyPath: \.menuBarSegments)
-            guard let data = defaults.data(forKey: AppPreferenceKeys.menuBarSegments.rawValue) else {
+            access(keyPath: \.menuBarChips)
+            guard let data = defaults.data(forKey: AppPreferenceKeys.menuBarChips.rawValue) else {
                 return []
             }
             do {
-                return try JSONDecoder().decode([MenuBarSegmentConfig].self, from: data)
+                return try JSONDecoder().decode([MenuBarChipConfig].self, from: data)
             } catch {
-                Loggers.app.log(.error, "Failed to decode menuBarSegments from UserDefaults: \(error)")
+                Loggers.app.log(.error, "Failed to decode menuBarChips from UserDefaults: \(error)")
                 return []
             }
         }
         set {
-            withMutation(keyPath: \.menuBarSegments) {
+            withMutation(keyPath: \.menuBarChips) {
                 do {
                     let data = try JSONEncoder().encode(newValue)
-                    defaults.set(data, forKey: AppPreferenceKeys.menuBarSegments.rawValue)
+                    defaults.set(data, forKey: AppPreferenceKeys.menuBarChips.rawValue)
                 } catch {
-                    Loggers.app.log(.error, "Failed to encode menuBarSegments to UserDefaults: \(error)")
+                    Loggers.app.log(.error, "Failed to encode menuBarChips to UserDefaults: \(error)")
                 }
             }
         }
     }
 
-    public var menuBarSegmentsInitialized: Bool {
-        get { defaults.bool(forKey: AppPreferenceKeys.menuBarSegmentsInitialized.rawValue) }
-        set { defaults.set(newValue, forKey: AppPreferenceKeys.menuBarSegmentsInitialized.rawValue) }
+    public var menuBarChipsInitialized: Bool {
+        get { defaults.bool(forKey: AppPreferenceKeys.menuBarChipsInitialized.rawValue) }
+        set { defaults.set(newValue, forKey: AppPreferenceKeys.menuBarChipsInitialized.rawValue) }
     }
 
-    public var menuBarSeparator: String {
+    public var menuBarChipBackground: ChipBackground {
         get {
-            access(keyPath: \.menuBarSeparator)
-            let stored = defaults.string(forKey: AppPreferenceKeys.menuBarSeparator.rawValue)
-            return stored ?? " | "
+            access(keyPath: \.menuBarChipBackground)
+            let raw = defaults.string(forKey: AppPreferenceKeys.menuBarChipBackground.rawValue) ?? ""
+            return ChipBackground(rawValue: raw) ?? .default
         }
         set {
-            withMutation(keyPath: \.menuBarSeparator) {
-                defaults.set(newValue, forKey: AppPreferenceKeys.menuBarSeparator.rawValue)
+            withMutation(keyPath: \.menuBarChipBackground) {
+                defaults.set(newValue.rawValue, forKey: AppPreferenceKeys.menuBarChipBackground.rawValue)
+            }
+        }
+    }
+
+    public var menuBarPacingColorCycleEnabled: Bool {
+        get {
+            access(keyPath: \.menuBarPacingColorCycleEnabled)
+            return defaults.bool(forKey: AppPreferenceKeys.menuBarPacingColorCycleEnabled.rawValue)
+        }
+        set {
+            withMutation(keyPath: \.menuBarPacingColorCycleEnabled) {
+                defaults.set(newValue, forKey: AppPreferenceKeys.menuBarPacingColorCycleEnabled.rawValue)
             }
         }
     }
@@ -295,9 +315,10 @@ public final class InMemoryAppPreferences: AppPreferences {
     public var refreshInterval: RefreshInterval
     public var launchAtLogin: Bool
     public var logLevel: LogLevel
-    public var menuBarSegments: [MenuBarSegmentConfig]
-    public var menuBarSegmentsInitialized: Bool
-    public var menuBarSeparator: String
+    public var menuBarChips: [MenuBarChipConfig]
+    public var menuBarChipsInitialized: Bool
+    public var menuBarChipBackground: ChipBackground
+    public var menuBarPacingColorCycleEnabled: Bool
     public var chartConfigurations: [ChartConfiguration]
     public var chartConfigurationsInitialized: Bool
     public var ignoredAccounts: [IgnoredAccount]
@@ -311,9 +332,10 @@ public final class InMemoryAppPreferences: AppPreferences {
         refreshInterval: RefreshInterval = .default,
         launchAtLogin: Bool = false,
         logLevel: LogLevel = .info,
-        menuBarSegments: [MenuBarSegmentConfig] = [],
-        menuBarSegmentsInitialized: Bool = false,
-        menuBarSeparator: String = " | ",
+        menuBarChips: [MenuBarChipConfig] = [],
+        menuBarChipsInitialized: Bool = false,
+        menuBarChipBackground: ChipBackground = .default,
+        menuBarPacingColorCycleEnabled: Bool = false,
         chartConfigurations: [ChartConfiguration] = [],
         chartConfigurationsInitialized: Bool = false,
         ignoredAccounts: [IgnoredAccount] = [],
@@ -326,9 +348,10 @@ public final class InMemoryAppPreferences: AppPreferences {
         self.refreshInterval = refreshInterval
         self.launchAtLogin = launchAtLogin
         self.logLevel = logLevel
-        self.menuBarSegments = menuBarSegments
-        self.menuBarSegmentsInitialized = menuBarSegmentsInitialized
-        self.menuBarSeparator = menuBarSeparator
+        self.menuBarChips = menuBarChips
+        self.menuBarChipsInitialized = menuBarChipsInitialized
+        self.menuBarChipBackground = menuBarChipBackground
+        self.menuBarPacingColorCycleEnabled = menuBarPacingColorCycleEnabled
         self.chartConfigurations = chartConfigurations
         self.chartConfigurationsInitialized = chartConfigurationsInitialized
         self.ignoredAccounts = ignoredAccounts

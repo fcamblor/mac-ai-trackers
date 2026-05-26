@@ -32,13 +32,11 @@ enum VendorBrandingResolver {
         return loadTemplateImage(named: assetName)
     }
 
-    /// Pixels of white halo added on each side around the vendor icon for legibility.
-    static let iconGlowPadding: CGFloat = 3.0
-
-    /// Returns a tinted, non-template copy of the vendor icon at the requested height.
-    /// Uses the brand's `tintHex` as fill color and the template PDF as an alpha mask.
-    /// A crisp white halo is produced by drawing a white silhouette at pixel offsets
-    /// in all directions — no blur, so the icon stays sharp on any menu bar tint color.
+    /// Returns a tinted, non-template copy of the vendor icon at the requested
+    /// height. Uses the brand's `tintHex` as fill colour and the template PDF
+    /// as an alpha mask. No halo: the chip pill provides its own legibility
+    /// background, so adding a white silhouette around the icon would only
+    /// muddy the brand colour against the pill.
     @MainActor
     static func tintedNSImage(for vendor: Vendor, height: CGFloat) -> NSImage? {
         guard let template = icon(for: vendor),
@@ -47,9 +45,6 @@ enum VendorBrandingResolver {
         let aspectRatio = template.size.height > 0
             ? template.size.width / template.size.height : 1
         let iconSize = NSSize(width: ceil(height * aspectRatio), height: ceil(height))
-        let pad = Self.iconGlowPadding
-        let canvasSize = NSSize(width: iconSize.width + pad * 2, height: iconSize.height + pad * 2)
-        let iconRect = NSRect(x: pad, y: pad, width: iconSize.width, height: iconSize.height)
 
         let tinted = NSImage(size: iconSize)
         tinted.lockFocus()
@@ -62,34 +57,8 @@ enum VendorBrandingResolver {
             fraction: 1.0
         )
         tinted.unlockFocus()
-
-        let white = NSImage(size: iconSize)
-        white.lockFocus()
-        NSColor.white.setFill()
-        NSRect(origin: .zero, size: iconSize).fill()
-        template.draw(
-            in: NSRect(origin: .zero, size: iconSize),
-            from: .zero,
-            operation: .destinationIn,
-            fraction: 1.0
-        )
-        white.unlockFocus()
-
-        let result = NSImage(size: canvasSize)
-        result.lockFocus()
-        // Draw the white silhouette at every surrounding pixel offset to build a crisp halo.
-        for dx: CGFloat in [-2, -1, 0, 1, 2] {
-            for dy: CGFloat in [-2, -1, 0, 1, 2] where !(dx == 0 && dy == 0) {
-                white.draw(in: NSRect(
-                    x: iconRect.minX + dx, y: iconRect.minY + dy,
-                    width: iconRect.width, height: iconRect.height
-                ))
-            }
-        }
-        tinted.draw(in: iconRect)
-        result.unlockFocus()
-        result.isTemplate = false
-        return result
+        tinted.isTemplate = false
+        return tinted
     }
 
     /// Resolves the SwiftPM resource bundle without ever touching `Bundle.module`,

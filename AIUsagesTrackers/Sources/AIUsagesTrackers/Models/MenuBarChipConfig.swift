@@ -2,8 +2,8 @@ import Foundation
 
 // MARK: - AccountSelection
 
-/// Which account a segment targets. `.currentlyActive` re-resolves at render time
-/// so the segment tracks whichever Claude account is currently active.
+/// Which account a chip segment targets. `.currentlyActive` re-resolves at render
+/// time so the segment tracks whichever vendor account is currently active.
 public enum AccountSelection: Codable, Equatable, Hashable, Sendable {
     case currentlyActive
     case specific(AccountEmail)
@@ -81,6 +81,17 @@ public enum SegmentDisplay: Codable, Equatable, Hashable, Sendable {
             try container.encode(Kind.payAsYouGo, forKey: .kind)
         }
     }
+
+    /// True when the variant carries at least one element the user might want
+    /// to render. `payAsYouGo` is unconditionally non-empty (the amount is
+    /// always shown). `timeWindow` requires at least one of its visible
+    /// toggles — see `TimeWindowDisplay.hasAnyVisibleElement`.
+    public var hasAnyVisibleElement: Bool {
+        switch self {
+        case .timeWindow(let tw): return tw.hasAnyVisibleElement
+        case .payAsYouGo:         return true
+        }
+    }
 }
 
 public enum UsagePercentDisplayMode: String, Codable, Equatable, Hashable, CaseIterable, Sendable {
@@ -96,12 +107,9 @@ public struct TimeWindowDisplay: Codable, Equatable, Hashable, Sendable {
     public var percentDisplayMode: UsagePercentDisplayMode
     public var showReset: Bool
     public var hideResetMinutesWhenOverOneDay: Bool
-    public var showVendorIcon: Bool
-    /// When true and the segment carries a tier, the rendered text picks up
-    /// the dot's tier color (with the menu-bar text color as a thin outline
-    /// matching the dot's stroke). Independent from `showDot`: users can hide
-    /// the dot while keeping tier-coloured text.
-    /// Default true so the feature is opt-out as requested.
+    /// When true and the segment carries a tier, the rendered text picks up the
+    /// dot's tier color. Independent from `showDot`: users can hide the dot
+    /// while keeping tier-coloured text. Default true so the feature is opt-out.
     public var colorizeText: Bool
 
     public init(
@@ -112,7 +120,6 @@ public struct TimeWindowDisplay: Codable, Equatable, Hashable, Sendable {
         percentDisplayMode: UsagePercentDisplayMode = .consumed,
         showReset: Bool = true,
         hideResetMinutesWhenOverOneDay: Bool = true,
-        showVendorIcon: Bool = false,
         colorizeText: Bool = true
     ) {
         self.showDot = showDot
@@ -122,13 +129,12 @@ public struct TimeWindowDisplay: Codable, Equatable, Hashable, Sendable {
         self.percentDisplayMode = percentDisplayMode
         self.showReset = showReset
         self.hideResetMinutesWhenOverOneDay = hideResetMinutesWhenOverOneDay
-        self.showVendorIcon = showVendorIcon
         self.colorizeText = colorizeText
     }
 
     private enum CodingKeys: String, CodingKey {
         case showDot, showLetter, letter, showPercent, percentDisplayMode, showReset
-        case hideResetMinutesWhenOverOneDay, showVendorIcon, colorizeText
+        case hideResetMinutesWhenOverOneDay, colorizeText
     }
 
     public init(from decoder: Decoder) throws {
@@ -146,77 +152,125 @@ public struct TimeWindowDisplay: Codable, Equatable, Hashable, Sendable {
             Bool.self,
             forKey: .hideResetMinutesWhenOverOneDay
         ) ?? true
-        showVendorIcon = try c.decodeIfPresent(Bool.self, forKey: .showVendorIcon) ?? false
         // Missing key on existing JSON means a pre-feature config — default ON
         // so the user immediately sees the new behaviour without re-editing.
         colorizeText = try c.decodeIfPresent(Bool.self, forKey: .colorizeText) ?? true
     }
+
+    /// At least one of the four visible toggles must be on — `colorizeText`
+    /// is a modifier, not content. Enforced as the "non-empty segment"
+    /// invariant: a segment whose every toggle is off would render an empty
+    /// chip slot that the user cannot see and cannot interact with.
+    public var hasAnyVisibleElement: Bool {
+        showDot || showLetter || showPercent || showReset
+    }
 }
 
-// MARK: - MenuBarSegmentConfig
+// MARK: - MenuBarChipSegmentConfig
 
-/// A user-configured menu bar segment: which metric to read (vendor/account/metric)
-/// and how to display it. Persisted as JSON in UserDefaults.
-public struct MenuBarSegmentConfig: Codable, Equatable, Hashable, Sendable, Identifiable {
+/// One sub-segment inside a chip. Targets a single account + metric and
+/// carries the display variant. The parent chip's `segments` is constrained
+/// to be non-empty and each segment is constrained to be non-empty via
+/// `SegmentDisplay.hasAnyVisibleElement`.
+public struct MenuBarChipSegmentConfig: Codable, Equatable, Hashable, Sendable, Identifiable {
     public let id: UUID
-    public var vendor: Vendor
     public var account: AccountSelection
     public var metricName: String
     public var display: SegmentDisplay
-    /// When true and the segment's vendor currently has an active outage,
-    /// `outageWarningText` is rendered in the menu bar immediately after the
-    /// vendor icon (or at the segment's start when no icon is shown).
+
+    public init(
+        id: UUID = UUID(),
+        account: AccountSelection,
+        metricName: String,
+        display: SegmentDisplay
+    ) {
+        self.id = id
+        self.account = account
+        self.metricName = metricName
+        self.display = display
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, account, metricName, display
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        account = try c.decode(AccountSelection.self, forKey: .account)
+        metricName = try c.decode(String.self, forKey: .metricName)
+        display = try c.decode(SegmentDisplay.self, forKey: .display)
+        if !display.hasAnyVisibleElement {
+            throw DecodingError.dataCorruptedError(
+                forKey: .display,
+                in: c,
+                debugDescription: "Chip segment must have at least one visible element"
+            )
+        }
+    }
+}
+
+// MARK: - MenuBarChipConfig
+
+/// A user-configured menu bar chip rendered as a coloured pill. Carries
+/// vendor-level chrome (icon, outage warning) shared across its segments, and
+/// holds at least one `MenuBarChipSegmentConfig` — the empty case is rejected
+/// at decode time and the UI must prevent deletion of the last segment.
+public struct MenuBarChipConfig: Codable, Equatable, Hashable, Sendable, Identifiable {
+    public let id: UUID
+    public var vendor: Vendor
+    /// Vendor icon prepended to the chip when true. Carries the role the
+    /// legacy per-segment `TimeWindowDisplay.showVendorIcon` used to play.
+    public var showVendorIcon: Bool
+    /// When true and the chip's vendor currently has an active outage,
+    /// `outageWarningText` is rendered right after the vendor icon. The flag
+    /// is vendor-wide (one outage = one warning per chip, not per segment).
     public var showOutageWarning: Bool
-    /// Short label rendered while the segment's vendor has an active outage.
+    /// Short label rendered while the chip's vendor has an active outage.
     /// Defaults to "⚠️". Ignored when `showOutageWarning` is false.
     public var outageWarningText: String
+    /// Non-empty by construction. The UI must prevent deletion of the last
+    /// segment; the decoder rejects an empty array.
+    public var segments: [MenuBarChipSegmentConfig]
 
     public static let defaultOutageWarningText: String = "⚠️"
 
     public init(
         id: UUID = UUID(),
         vendor: Vendor,
-        account: AccountSelection,
-        metricName: String,
-        display: SegmentDisplay,
+        showVendorIcon: Bool = false,
         showOutageWarning: Bool = false,
-        outageWarningText: String = MenuBarSegmentConfig.defaultOutageWarningText
+        outageWarningText: String = MenuBarChipConfig.defaultOutageWarningText,
+        segments: [MenuBarChipSegmentConfig]
     ) {
         self.id = id
         self.vendor = vendor
-        self.account = account
-        self.metricName = metricName
-        self.display = display
+        self.showVendorIcon = showVendorIcon
         self.showOutageWarning = showOutageWarning
         self.outageWarningText = outageWarningText
+        self.segments = segments
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, vendor, account, metricName, display
-        case showOutageWarning, outageWarningText
+        case id, vendor, showVendorIcon, showOutageWarning, outageWarningText, segments
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
         vendor = try c.decode(Vendor.self, forKey: .vendor)
-        account = try c.decode(AccountSelection.self, forKey: .account)
-        metricName = try c.decode(String.self, forKey: .metricName)
-        display = try c.decode(SegmentDisplay.self, forKey: .display)
+        showVendorIcon = try c.decodeIfPresent(Bool.self, forKey: .showVendorIcon) ?? false
         showOutageWarning = try c.decodeIfPresent(Bool.self, forKey: .showOutageWarning) ?? false
         outageWarningText = try c.decodeIfPresent(String.self, forKey: .outageWarningText)
-            ?? MenuBarSegmentConfig.defaultOutageWarningText
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(id, forKey: .id)
-        try c.encode(vendor, forKey: .vendor)
-        try c.encode(account, forKey: .account)
-        try c.encode(metricName, forKey: .metricName)
-        try c.encode(display, forKey: .display)
-        try c.encode(showOutageWarning, forKey: .showOutageWarning)
-        try c.encode(outageWarningText, forKey: .outageWarningText)
+            ?? MenuBarChipConfig.defaultOutageWarningText
+        segments = try c.decode([MenuBarChipSegmentConfig].self, forKey: .segments)
+        if segments.isEmpty {
+            throw DecodingError.dataCorruptedError(
+                forKey: .segments,
+                in: c,
+                debugDescription: "Chip must contain at least one segment"
+            )
+        }
     }
 }
 
