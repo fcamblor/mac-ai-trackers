@@ -28,13 +28,14 @@ extension ConsumptionTier {
     /// segment background. Hand-tuned per tier rather than computed: WCAG
     /// luminance picks black on systemBlue / systemGreen, but the saturated
     /// hues read better with white text in practice (less harsh, matches
-    /// Apple's own UI). Yellow and the warm warnings (orange, red) take
-    /// black; the dark purple exhausted state keeps white.
+    /// Apple's own UI). Yellow and orange keep black for legibility; the
+    /// saturated red (.critical) needs white for stronger contrast, matching
+    /// the dark purple exhausted state.
     var chipTextNSColor: NSColor {
         switch self {
-        case .comfortable, .onTrack, .exhausted:
+        case .comfortable, .onTrack, .critical, .exhausted:
             return .white
-        case .approaching, .over, .critical:
+        case .approaching, .over:
             return .black
         }
     }
