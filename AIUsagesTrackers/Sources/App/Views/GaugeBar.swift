@@ -3,6 +3,12 @@ import AIUsagesTrackersLib
 
 /// A horizontal progress bar with an actual fill and a theoretical consumption marker.
 /// The theoretical marker is a thin vertical tick showing expected consumption based on elapsed time.
+///
+/// Uses Canvas instead of GeometryReader to avoid LazyLayoutViewCache invalidation cycles
+/// when rendered inside a LazyVStack in a ScrollView. GeometryReader creates child
+/// AttributeGraph nodes whose size updates propagate dirty flags back into the scroll view,
+/// causing requestImmediateUpdate on every display frame (100% CPU). Canvas receives its
+/// size once from the layout system and draws in a single pass with no child nodes.
 struct GaugeBar: View {
     let actual: Double
     let theoretical: Double
@@ -13,32 +19,39 @@ struct GaugeBar: View {
     private static let cornerRadius: CGFloat = 3
 
     var body: some View {
-        GeometryReader { geo in
-            let width = geo.size.width
+        Canvas { context, size in
+            let w = size.width
+            let h = size.height
+            let cr = Self.cornerRadius
 
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: Self.cornerRadius)
-                    .fill(.quaternary)
+            context.fill(
+                RoundedRectangle(cornerRadius: cr).path(in: CGRect(x: 0, y: 0, width: w, height: h)),
+                with: .style(.quaternary)
+            )
 
-                RoundedRectangle(cornerRadius: Self.cornerRadius)
-                    .fill(fillColor)
-                    .frame(width: width * clamp(actual))
+            let fillW = w * clamp(actual)
+            if fillW > 0 {
+                context.fill(
+                    RoundedRectangle(cornerRadius: cr).path(in: CGRect(x: 0, y: 0, width: fillW, height: h)),
+                    with: .color(fillColor)
+                )
+            }
 
-                // Skip marker when no window data — avoids a tick pinned to the left edge at 0.
-                if theoretical > 0 {
+            // Skip marker when no window data — avoids a tick pinned to the left edge at 0.
+            if theoretical > 0 {
+                let mx = w * clamp(theoretical) - Self.markerWidth / 2
+                context.fill(
                     RoundedRectangle(cornerRadius: Self.markerWidth / 2)
-                        .fill(.primary)
-                        .frame(width: Self.markerWidth, height: Self.barHeight + 4)
-                        .offset(x: width * clamp(theoretical) - Self.markerWidth / 2)
-                }
+                        .path(in: CGRect(x: mx, y: -2, width: Self.markerWidth, height: h + 4)),
+                    with: .foreground
+                )
             }
         }
         .frame(height: Self.barHeight)
     }
 
     private var fillColor: Color {
-        if let tier { return tier.color }
-        return .accentColor
+        tier?.color ?? .accentColor
     }
 
     private func clamp(_ value: Double) -> CGFloat {
