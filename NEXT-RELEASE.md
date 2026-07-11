@@ -4,6 +4,23 @@
 
 ## Bug Fixes
 
+### "Session expired" error now explains how to fix it
+
+When a vendor token expires, the error message in the account card now tells
+you exactly which command to run to re-authenticate:
+
+- **Claude Code**: run `/login` in the Claude Code CLI
+- **GitHub Copilot**: run `gh auth login` in a terminal
+- **Codex**: run `codex login` in a terminal
+
+Previously the message just said "Re-authenticate with the vendor CLI" with no
+further guidance, which confused users who didn't know what CLI command to use.
+
+### Menu bar chip text contrast on critical tier
+
+Fixed low-contrast text on the red "critical" chip in the menu bar. The chip
+now uses white text (matching the dark "exhausted" chip) for better readability.
+
 ### 100% CPU usage while the usage popover is open
 
 Fixed a render loop that caused the main thread to spin at 100% CPU whenever
