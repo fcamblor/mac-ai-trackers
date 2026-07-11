@@ -153,8 +153,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
         )
         let copilotConnector = CopilotConnector()
+        let antigravityConnector = AntigravityConnector()
         let poller = UsagePoller(
-            connectors: [claudeConnector, codexConnector, copilotConnector],
+            connectors: [claudeConnector, codexConnector, copilotConnector, antigravityConnector],
             statusConnectors: [claudeStatus, codexStatus],
             fileManager: fileManager,
             refreshState: refreshState,
@@ -183,6 +184,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ClaudeCodePlugin.register(connector: claudeConnector, status: claudeStatus, monitor: claudeMonitor)
         CodexPlugin.register(connector: codexConnector, status: codexStatus, monitor: codexMonitor)
         CopilotCLIPlugin.register(connector: copilotConnector, monitor: copilotMonitor)
+        AntigravityPlugin.register(connector: antigravityConnector)
         let snapshotRecorder = SnapshotRecorder()
         let historyReader = UsageHistoryReader(rootPath: snapshotRecorder.rootPath)
         let snapshotScheduler = SnapshotScheduler(

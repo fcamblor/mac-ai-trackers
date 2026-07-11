@@ -29,6 +29,7 @@ struct VendorRegistryConformanceTests {
         let claudeConnector = ClaudeCodeConnector()
         let codexConnector = CodexConnector()
         let copilotConnector = CopilotConnector()
+        let antigravityConnector = AntigravityConnector()
         ClaudeCodePlugin.register(
             connector: claudeConnector,
             status: ClaudeStatusConnector(),
@@ -43,13 +44,14 @@ struct VendorRegistryConformanceTests {
             connector: copilotConnector,
             monitor: CopilotActiveAccountMonitor()
         )
+        AntigravityPlugin.register(connector: antigravityConnector)
     }
 
     @Test("registry exposes one bundle per known vendor")
     func registryHasAllVendors() {
         populateRegistry()
         let vendors = VendorRegistry.bundles.map(\.vendor.rawValue).sorted()
-        #expect(vendors == ["claude", "codex", "copilot"])
+        #expect(vendors == ["claude", "codex", "copilot", "google-antigravity"])
     }
 
     @Test("each branding asset resolves to a PDF file under App/Resources/VendorBranding/")

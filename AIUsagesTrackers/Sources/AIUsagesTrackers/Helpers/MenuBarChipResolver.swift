@@ -135,7 +135,7 @@ public enum MenuBarChipResolver {
         }
 
         switch (metric, segmentConfig.display) {
-        case let (.timeWindow(_, resetAt, windowDuration, usagePercent), .timeWindow(display)):
+        case let (.timeWindow(_, resetAt, windowDuration, usagePercent, _), .timeWindow(display)):
             let segment = renderTimeWindow(
                 display: display,
                 resetAt: resetAt,
@@ -156,7 +156,7 @@ public enum MenuBarChipResolver {
 
     private static func metricName(_ metric: UsageMetric) -> String? {
         switch metric {
-        case .timeWindow(let name, _, _, _):   return name
+        case .timeWindow(let name, _, _, _, _):   return name
         case .payAsYouGo(let name, _, _):      return name
         case .unknown:                         return nil
         }

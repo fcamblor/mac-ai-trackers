@@ -98,6 +98,30 @@ Invariants:
 - The connector emits whatever number of metrics the vendor exposes — no
   artificial cap, no "hide if zero" filter. The UI decides what to render.
 
+### Subtitle
+
+A `.timeWindow` metric MAY carry an optional `subtitle: String` that the
+popover renders in italics, on a second line, directly under the metric's
+title. Typical use case: a vendor's quota bucket covers several models at
+once and the user benefits from seeing which ones — `subtitle` carries a
+deduplicated, comma-separated list of the covered models' display names.
+
+Invariants:
+
+- `subtitle` is **opt-in**: the default value is `nil`. Vendors that have
+  nothing extra to surface omit it. The JSON encoder omits the key when
+  `nil` so existing `usages.json` files round-trip unchanged.
+- When present, the string SHOULD be a self-contained, plain-text label
+  (no Markdown, no embedded newlines). The popover applies ellipsis at a
+  fixed character budget and reveals the full string on a "show all"
+  affordance — the data layer stores the full text.
+- `subtitle` carries display content only. The vendor metric's identity
+  is still its `name`. When multiple metrics share the same cadence
+  label (e.g. several "Weekly" buckets with different reset times), the
+  connector MUST disambiguate via the `name` (suffix `"#1"`, `"#2"`, …
+  sorted deterministically); see the per-vendor doc for the cohorting
+  rule.
+
 ## 5. Credential locator
 
 The application **never** owns, refreshes, rotates, or persists tokens.
@@ -375,6 +399,7 @@ and asserts:
   `.unknown`).
 - Every `resetAt` parses as a strict ISO 8601 datetime via
   `ISODate.parsing(_:)`.
+- When present, `subtitle` is a non-empty single-line plain-text string.
 - Every branding entry resolves to an existing PDF asset under
   `App/Resources/VendorBranding/`.
 - Every `documentation` pointer points at an existing

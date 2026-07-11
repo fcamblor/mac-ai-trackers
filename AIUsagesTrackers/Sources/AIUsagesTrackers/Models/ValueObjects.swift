@@ -130,6 +130,7 @@ public struct Vendor: RawRepresentable, Codable, Equatable, Hashable, Sendable {
     public static let claude = Vendor(rawValue: "claude")
     public static let codex = Vendor(rawValue: "codex")
     public static let copilot = Vendor(rawValue: "copilot")
+    public static let antigravity = Vendor(rawValue: "google-antigravity")
 
     public init(from decoder: Decoder) throws {
         rawValue = try decoder.singleValueContainer().decode(String.self)
@@ -139,6 +140,18 @@ public struct Vendor: RawRepresentable, Codable, Equatable, Hashable, Sendable {
         var container = encoder.singleValueContainer()
         try container.encode(rawValue)
     }
+
+    /// Filename of the per-vendor connector log under
+    /// `~/.cache/ai-usages-tracker/`. Derived from `rawValue` so the
+    /// production `FileLogger` path and the in-app tester feedback path
+    /// can never drift apart — a single rename of `rawValue` propagates
+    /// to both.
+    public var connectorLogFilename: String { "\(rawValue)-usages-connector.log" }
+
+    /// Default PDF asset bundled in `App/Resources/VendorBranding/` for
+    /// this vendor's menu bar mark. Used as the default of
+    /// `VendorBranding.assetName`.
+    public var defaultBrandingAssetName: String { "\(rawValue)-mark" }
 }
 
 extension Vendor: ExpressibleByStringLiteral {

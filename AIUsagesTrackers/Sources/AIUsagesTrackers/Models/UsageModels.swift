@@ -149,7 +149,7 @@ public struct Outage: Codable, Equatable, Sendable, Identifiable {
 // MARK: - Metric (polymorphic on "type" discriminator)
 
 public enum UsageMetric: Codable, Equatable, Sendable {
-    case timeWindow(name: String, resetAt: ISODate?, windowDuration: DurationMinutes, usagePercent: UsagePercent)
+    case timeWindow(name: String, resetAt: ISODate?, windowDuration: DurationMinutes, usagePercent: UsagePercent, subtitle: String? = nil)
     case payAsYouGo(name: String, currentAmount: Double, currency: String)
     /// A metric type not yet known to this client; retained for round-trip fidelity.
     case unknown(String)
@@ -167,7 +167,7 @@ public enum UsageMetric: Codable, Equatable, Sendable {
     // MARK: Coding
 
     private enum CodingKeys: String, CodingKey {
-        case type, name, resetAt
+        case type, name, resetAt, subtitle
         case windowDuration = "windowDurationMinutes"
         case usagePercent, currentAmount, currency
     }
@@ -181,7 +181,8 @@ public enum UsageMetric: Codable, Equatable, Sendable {
                 name: try container.decode(String.self, forKey: .name),
                 resetAt: try container.decodeIfPresent(ISODate.self, forKey: .resetAt),
                 windowDuration: try container.decode(DurationMinutes.self, forKey: .windowDuration),
-                usagePercent: try container.decode(UsagePercent.self, forKey: .usagePercent)
+                usagePercent: try container.decode(UsagePercent.self, forKey: .usagePercent),
+                subtitle: try container.decodeIfPresent(String.self, forKey: .subtitle)
             )
         case .payAsYouGo:
             self = .payAsYouGo(
@@ -197,7 +198,7 @@ public enum UsageMetric: Codable, Equatable, Sendable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
-        case let .timeWindow(name, resetAt, windowDuration, usagePercent):
+        case let .timeWindow(name, resetAt, windowDuration, usagePercent, subtitle):
             // Connector contract: a present `resetAt` must be a strict ISO 8601
             // datetime. Enforced as a DEBUG assertion so that any new connector
             // emitting a date-only or otherwise unparseable string fails its
@@ -214,6 +215,7 @@ public enum UsageMetric: Codable, Equatable, Sendable {
             try container.encodeIfPresent(resetAt, forKey: .resetAt)
             try container.encode(windowDuration, forKey: .windowDuration)
             try container.encode(usagePercent, forKey: .usagePercent)
+            try container.encodeIfPresent(subtitle, forKey: .subtitle)
         case let .payAsYouGo(name, currentAmount, currency):
             try container.encode(MetricKind.payAsYouGo, forKey: .type)
             try container.encode(name, forKey: .name)

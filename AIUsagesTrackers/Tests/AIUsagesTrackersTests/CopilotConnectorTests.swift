@@ -163,7 +163,7 @@ struct CopilotConnectorFetchTests {
         #expect(entry.metrics.count == 2)
         #expect(entry.lastError == nil)
 
-        guard case let .timeWindow(name1, _, _, percent1) = entry.metrics[0] else {
+        guard case let .timeWindow(name1, _, _, percent1, _) = entry.metrics[0] else {
             Issue.record("Expected timeWindow metric, got \(entry.metrics[0])")
             return
         }
@@ -171,7 +171,7 @@ struct CopilotConnectorFetchTests {
         // 100 - 80 = 20% used
         #expect(percent1.rawValue == 20)
 
-        guard case let .timeWindow(name2, _, _, percent2) = entry.metrics[1] else {
+        guard case let .timeWindow(name2, _, _, percent2, _) = entry.metrics[1] else {
             Issue.record("Expected timeWindow metric, got \(entry.metrics[1])")
             return
         }
@@ -202,7 +202,7 @@ struct CopilotConnectorFetchTests {
         let entry = try #require(entries.first)
         #expect(entry.metrics.count == 2)
 
-        guard case let .timeWindow(name1, _, _, percent1) = entry.metrics[0] else {
+        guard case let .timeWindow(name1, _, _, percent1, _) = entry.metrics[0] else {
             Issue.record("Expected timeWindow metric, got \(entry.metrics[0])")
             return
         }
@@ -210,7 +210,7 @@ struct CopilotConnectorFetchTests {
         // 100 - 99.67 = 0.33 → rounds to 0
         #expect(percent1.rawValue == 0)
 
-        guard case let .timeWindow(name2, _, _, percent2) = entry.metrics[1] else {
+        guard case let .timeWindow(name2, _, _, percent2, _) = entry.metrics[1] else {
             Issue.record("Expected timeWindow metric, got \(entry.metrics[1])")
             return
         }
@@ -236,7 +236,7 @@ struct CopilotConnectorFetchTests {
         let entries = try await connector.fetchUsages()
         let entry = try #require(entries.first)
         #expect(entry.metrics.count == 1)
-        guard case let .timeWindow(_, _, _, percent) = entry.metrics[0] else {
+        guard case let .timeWindow(_, _, _, percent, _) = entry.metrics[0] else {
             Issue.record("Expected timeWindow")
             return
         }
@@ -262,7 +262,7 @@ struct CopilotConnectorFetchTests {
 
         let entries = try await connector.fetchUsages()
         let entry = try #require(entries.first)
-        guard case let .timeWindow(_, resetAt, _, _) = entry.metrics[0] else {
+        guard case let .timeWindow(_, resetAt, _, _, _) = entry.metrics[0] else {
             Issue.record("Expected timeWindow")
             return
         }
@@ -289,7 +289,7 @@ struct CopilotConnectorFetchTests {
         let entry = try #require(entries.first)
         #expect(entry.metrics.count == 2)
 
-        guard case let .timeWindow(name1, _, _, percent1) = entry.metrics[0] else {
+        guard case let .timeWindow(name1, _, _, percent1, _) = entry.metrics[0] else {
             Issue.record("Expected timeWindow")
             return
         }
@@ -297,7 +297,7 @@ struct CopilotConnectorFetchTests {
         // (500 - 410) / 500 = 18%
         #expect(percent1.rawValue == 18)
 
-        guard case let .timeWindow(name2, _, _, percent2) = entry.metrics[1] else {
+        guard case let .timeWindow(name2, _, _, percent2, _) = entry.metrics[1] else {
             Issue.record("Expected timeWindow")
             return
         }
@@ -495,11 +495,11 @@ struct CopilotConnectorFetchTests {
         #expect(alice.isActive == true)
         #expect(bob.isActive == false)
 
-        guard case let .timeWindow(_, _, _, alicePercent) = alice.metrics[0] else {
+        guard case let .timeWindow(_, _, _, alicePercent, _) = alice.metrics[0] else {
             Issue.record("Expected timeWindow for alice")
             return
         }
-        guard case let .timeWindow(_, _, _, bobPercent) = bob.metrics[0] else {
+        guard case let .timeWindow(_, _, _, bobPercent, _) = bob.metrics[0] else {
             Issue.record("Expected timeWindow for bob")
             return
         }
@@ -528,7 +528,7 @@ struct CopilotConnectorFetchTests {
         let entries = try await connector.fetchUsages()
         let entry = try #require(entries.first { $0.account.rawValue == "LivioMNC" })
         #expect(entry.isActive == false)
-        guard case let .timeWindow(_, _, _, percent) = entry.metrics[0] else {
+        guard case let .timeWindow(_, _, _, percent, _) = entry.metrics[0] else {
             Issue.record("Expected timeWindow")
             return
         }

@@ -144,13 +144,13 @@ struct ClaudeCodeConnectorFetchTests {
         #expect(entries[0].lastError == nil)
         #expect(entries[0].metrics.count == 2)
         // utilization is a Double from the API; connector rounds to nearest Int percent (42.0 → 42)
-        if case .timeWindow(let name, _, _, let pct) = entries[0].metrics[0] {
+        if case .timeWindow(let name, _, _, let pct, _) = entries[0].metrics[0] {
             #expect(name == "5h sessions (all models)")
             #expect(pct == 42)
         } else {
             Issue.record("Expected timeWindow metric for session")
         }
-        if case .timeWindow(let name, _, let duration, let pct) = entries[0].metrics[1] {
+        if case .timeWindow(let name, _, let duration, let pct, _) = entries[0].metrics[1] {
             #expect(name == "Weekly (all models)")
             #expect(pct == 8)
             #expect(duration == 10080)
@@ -415,14 +415,14 @@ struct ClaudeCodeConnectorFetchTests {
         #expect(entries[0].lastError == nil)
         #expect(entries[0].isActive == true)
         #expect(entries[0].metrics.count == 2)
-        if case .timeWindow(let name, let resetAt, _, let pct) = entries[0].metrics[0] {
+        if case .timeWindow(let name, let resetAt, _, let pct, _) = entries[0].metrics[0] {
             #expect(name == "5h sessions (all models)")
             #expect(resetAt == nil)
             #expect(pct.rawValue == 0)
         } else {
             Issue.record("Expected first metric to be a timeWindow for 5h sessions")
         }
-        if case .timeWindow(_, _, _, let pct) = entries[0].metrics[1] {
+        if case .timeWindow(_, _, _, let pct, _) = entries[0].metrics[1] {
             #expect(pct.rawValue == 38)
         } else {
             Issue.record("Expected second metric to be the weekly timeWindow")
@@ -440,14 +440,14 @@ struct ClaudeCodeConnectorFetchTests {
         let entries = try await connector.fetchUsages()
 
         #expect(entries.count == 1)
-        if case .timeWindow(_, let sessionResetAt, _, _) = entries[0].metrics[0] {
+        if case .timeWindow(_, let sessionResetAt, _, _, _) = entries[0].metrics[0] {
             // Fractional seconds must be stripped; standard ISO8601DateFormatter must parse the result
             #expect(sessionResetAt?.date != nil)
             #expect(sessionResetAt.map { !$0.rawValue.contains(".") } ?? false)
         } else {
             Issue.record("Expected timeWindow metric for session")
         }
-        if case .timeWindow(_, let weeklyResetAt, _, _) = entries[0].metrics[1] {
+        if case .timeWindow(_, let weeklyResetAt, _, _, _) = entries[0].metrics[1] {
             #expect(weeklyResetAt?.date != nil)
             #expect(weeklyResetAt.map { !$0.rawValue.contains(".") } ?? false)
         } else {
@@ -514,13 +514,13 @@ struct ClaudeCodeConnectorFetchTests {
         sourceLocation: SourceLocation = #_sourceLocation
     ) -> (name: String, resetAt: ISODate?, duration: DurationMinutes, pct: UsagePercent)? {
         guard let metric = metrics.first(where: {
-            if case .timeWindow(let n, _, _, _) = $0 { return n == name }
+            if case .timeWindow(let n, _, _, _, _) = $0 { return n == name }
             return false
         }) else {
             Issue.record("Expected timeWindow metric named '\(name)'", sourceLocation: sourceLocation)
             return nil
         }
-        if case .timeWindow(let n, let r, let d, let p) = metric {
+        if case .timeWindow(let n, let r, let d, let p, _) = metric {
             return (name: n, resetAt: r, duration: d, pct: p)
         }
         return nil
@@ -844,14 +844,14 @@ struct ClaudeCodeConnectorFetchTests {
         #expect(metrics.count == expected.count, "\(context): expected \(expected.count) metrics, got \(metrics.count)", sourceLocation: sourceLocation)
         for expectedMetric in expected {
             let found = metrics.first(where: {
-                if case .timeWindow(let name, _, _, _) = $0 { return name == expectedMetric.name }
+                if case .timeWindow(let name, _, _, _, _) = $0 { return name == expectedMetric.name }
                 return false
             })
             guard let metric = found else {
                 Issue.record("\(context): metric '\(expectedMetric.name)' missing — token expiry must not delete non-expired windows", sourceLocation: sourceLocation)
                 continue
             }
-            guard case .timeWindow(let name, let resetAt, let duration, let pct) = metric else {
+            guard case .timeWindow(let name, let resetAt, let duration, let pct, _) = metric else {
                 Issue.record("\(context): metric '\(expectedMetric.name)' has wrong kind", sourceLocation: sourceLocation)
                 continue
             }
@@ -973,7 +973,7 @@ struct ClaudeCodeConnectorFetchTests {
         let recovered = try await connector.fetchUsages()
         #expect(recovered[0].lastError == nil)
         #expect(recovered[0].metrics.count == 2)
-        if case .timeWindow(_, _, _, let pct) = recovered[0].metrics[0] {
+        if case .timeWindow(_, _, _, let pct, _) = recovered[0].metrics[0] {
             #expect(pct.rawValue == 50, "recovery must replace the seeded 42% with the fresh 50%")
         }
 

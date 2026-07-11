@@ -71,7 +71,7 @@ public struct TesterFeedbackContext: Sendable, Equatable {
         home
             .appendingPathComponent(".cache", isDirectory: true)
             .appendingPathComponent("ai-usages-tracker", isDirectory: true)
-            .appendingPathComponent("\(vendor.rawValue)-usages-connector.log", isDirectory: false)
+            .appendingPathComponent(vendor.connectorLogFilename, isDirectory: false)
     }
 
     private static func string(_ bundle: Bundle, _ key: String) -> String? {

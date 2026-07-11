@@ -145,7 +145,7 @@ struct CodexConnectorFetchTests {
         #expect(entries[0].lastError == nil)
         #expect(entries[0].metrics.count == 2)
 
-        if case .timeWindow(let name, let resetAt, let duration, let pct) = entries[0].metrics[0] {
+        if case .timeWindow(let name, let resetAt, let duration, let pct, _) = entries[0].metrics[0] {
             #expect(name == "Session (5h)")
             #expect(pct == 42)
             #expect(duration.rawValue == 300)   // 18000 / 60
@@ -153,7 +153,7 @@ struct CodexConnectorFetchTests {
         } else {
             Issue.record("Expected timeWindow for Session (5h)")
         }
-        if case .timeWindow(let name, _, let duration, let pct) = entries[0].metrics[1] {
+        if case .timeWindow(let name, _, let duration, let pct, _) = entries[0].metrics[1] {
             #expect(name == "Weekly (7d)")
             #expect(pct == 8)
             #expect(duration.rawValue == 10080) // 604800 / 60
@@ -185,7 +185,7 @@ struct CodexConnectorFetchTests {
         #expect(entries[0].metrics.count == 4)
 
         let names = entries[0].metrics.compactMap { metric -> String? in
-            if case .timeWindow(let n, _, _, _) = metric { return n }
+            if case .timeWindow(let n, _, _, _, _) = metric { return n }
             if case .payAsYouGo(let n, _, _) = metric { return n }
             return nil
         }
@@ -234,7 +234,7 @@ struct CodexConnectorFetchTests {
         #expect(entries[0].metrics.count == 4)
 
         let names = entries[0].metrics.compactMap { metric -> String? in
-            if case .timeWindow(let n, _, _, _) = metric { return n }
+            if case .timeWindow(let n, _, _, _, _) = metric { return n }
             return nil
         }
         #expect(names.contains("gpt-4.5 (5h)"))
@@ -493,12 +493,12 @@ struct CodexConnectorFetchTests {
         let connector = makeConnector(dir: dir)
         let entries = try await connector.fetchUsages()
 
-        if case .timeWindow(_, _, let duration, _) = entries[0].metrics[0] {
+        if case .timeWindow(_, _, let duration, _, _) = entries[0].metrics[0] {
             #expect(duration.rawValue == 300)
         } else {
             Issue.record("Expected timeWindow for primary window")
         }
-        if case .timeWindow(_, _, let duration, _) = entries[0].metrics[1] {
+        if case .timeWindow(_, _, let duration, _, _) = entries[0].metrics[1] {
             #expect(duration.rawValue == 10080)
         } else {
             Issue.record("Expected timeWindow for secondary window")
@@ -672,7 +672,7 @@ struct CodexConnectorFetchTests {
 
         #expect(entries[0].lastError == nil)
         #expect(entries[0].metrics.count == 2)
-        if case .timeWindow(_, let resetAt, _, _) = entries[0].metrics[0] {
+        if case .timeWindow(_, let resetAt, _, _, _) = entries[0].metrics[0] {
             #expect(resetAt == nil)
         } else {
             Issue.record("Expected timeWindow for primary window")
@@ -722,7 +722,7 @@ struct CodexConnectorFetchTests {
         #expect(entries[0].metrics.count == 2)
 
         // Primary window: idle-account signature → resetAt must be nil
-        if case .timeWindow(let name, let resetAt, _, _) = entries[0].metrics[0] {
+        if case .timeWindow(let name, let resetAt, _, _, _) = entries[0].metrics[0] {
             #expect(name == "Session (5h)")
             #expect(resetAt == nil, "Fresh-untouched-window signature must surface as resetAt: nil so the UI renders ???")
         } else {
@@ -731,7 +731,7 @@ struct CodexConnectorFetchTests {
 
         // Secondary window: reset_after_seconds (223950) < limit_window_seconds (604800)
         // → genuine in-progress window, resetAt must be preserved
-        if case .timeWindow(let name, let resetAt, _, _) = entries[0].metrics[1] {
+        if case .timeWindow(let name, let resetAt, _, _, _) = entries[0].metrics[1] {
             #expect(name == "Weekly (7d)")
             #expect(resetAt != nil, "In-progress window (reset_after_seconds < limit_window_seconds) must keep its resetAt")
         } else {

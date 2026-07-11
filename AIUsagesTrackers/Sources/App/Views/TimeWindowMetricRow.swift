@@ -8,6 +8,9 @@ struct TimeWindowMetricRow: View {
     let resetAt: ISODate?
     let windowDuration: DurationMinutes
     let usagePercent: UsagePercent
+    let subtitle: String?
+
+    @State private var isSubtitleExpanded = false
 
     var body: some View {
         // TimelineView re-renders every minute so remaining time and theoretical
@@ -29,10 +32,15 @@ struct TimeWindowMetricRow: View {
         )
 
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(name)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(name)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    if let subtitle {
+                        subtitleView(subtitle)
+                    }
+                }
                 Spacer()
                 Text(state.isUnknown ? "???" : "\(usagePercent.rawValue)%")
                     .font(.system(size: 11, weight: .semibold).monospacedDigit())
@@ -64,6 +72,29 @@ struct TimeWindowMetricRow: View {
                         .foregroundStyle(.secondary)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func subtitleView(_ subtitle: String) -> some View {
+        // Tap-to-expand: collapsed shows a single ellipsised line, tapping
+        // anywhere on the row (including the trailing empty space) expands
+        // the text over as many lines as it needs. Cheaper than a separate
+        // "Show all" affordance and avoids the toggle reserving space when
+        // the subtitle would have fit on one line anyway.
+        HStack(spacing: 0) {
+            Text(subtitle)
+                .font(.system(size: 9, weight: .regular))
+                .italic()
+                .foregroundStyle(.secondary)
+                .lineLimit(isSubtitleExpanded ? nil : 1)
+                .truncationMode(.tail)
+                .fixedSize(horizontal: false, vertical: isSubtitleExpanded)
+            Spacer(minLength: 0)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            isSubtitleExpanded.toggle()
         }
     }
 }

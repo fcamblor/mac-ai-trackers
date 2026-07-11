@@ -1,0 +1,263 @@
+{
+  "metadata": {
+    "captured": "2026-05-23T02:15:00Z",
+    "plan": "Workspace",
+    "sanitized": true,
+    "note": "Anonymized reference capture from Workspace account (2026-05-23). All sensitive fields redacted per docs/vendors/google-antigravity.md Sanitized fields section. Used to verify endpoint parsing, cohorting logic, and metrics calculation.",
+    "endpoints": ["userinfo", "loadCodeAssist", "fetchAvailableModels", "retrieveUserQuota"]
+  },
+  "userinfo": {
+    "sub": "<redacted>",
+    "name": "<redacted>",
+    "given_name": "<redacted>",
+    "family_name": "<redacted>",
+    "picture": "<redacted>",
+    "email": "<redacted>",
+    "email_verified": true,
+    "hd": "<redacted>"
+  },
+  "loadCodeAssist": {
+    "projectId": "example-project-12345",
+    "cloudaicompanionProject": "<redacted>",
+    "currentTier": {
+      "id": "free-tier",
+      "name": "Free",
+      "displayName": "Free Plan"
+    },
+    "insights": {
+      "features": ["chat", "code-completion"]
+    }
+  },
+  "fetchAvailableModels": {
+    "models": [
+      {
+        "modelId": "chat_20706",
+        "displayName": "Antigravity Chat (20706)",
+        "modelExperiments": "<redacted>",
+        "supportedMimeTypes": "<redacted>"
+      },
+      {
+        "modelId": "chat_23310",
+        "displayName": "Antigravity Chat (23310)",
+        "modelExperiments": "<redacted>",
+        "supportedMimeTypes": "<redacted>"
+      },
+      {
+        "modelId": "claude-opus-4-6-thinking",
+        "displayName": "Claude Opus 4.6 Thinking",
+        "modelExperiments": "<redacted>",
+        "supportedMimeTypes": "<redacted>"
+      },
+      {
+        "modelId": "claude-sonnet-4-6",
+        "displayName": "Claude Sonnet 4.6",
+        "modelExperiments": "<redacted>",
+        "supportedMimeTypes": "<redacted>"
+      },
+      {
+        "modelId": "gemini-2.5-flash",
+        "displayName": "Gemini 2.5 Flash",
+        "modelExperiments": "<redacted>",
+        "supportedMimeTypes": "<redacted>"
+      },
+      {
+        "modelId": "gemini-2.5-flash-lite",
+        "displayName": "Gemini 2.5 Flash Lite",
+        "modelExperiments": "<redacted>",
+        "supportedMimeTypes": "<redacted>"
+      },
+      {
+        "modelId": "gemini-2.5-flash-thinking",
+        "displayName": "Gemini 2.5 Flash Thinking",
+        "modelExperiments": "<redacted>",
+        "supportedMimeTypes": "<redacted>"
+      },
+      {
+        "modelId": "gemini-2.5-pro",
+        "displayName": "Gemini 2.5 Pro",
+        "modelExperiments": "<redacted>",
+        "supportedMimeTypes": "<redacted>"
+      },
+      {
+        "modelId": "gemini-3-flash",
+        "displayName": "Gemini 3 Flash",
+        "modelExperiments": "<redacted>",
+        "supportedMimeTypes": "<redacted>"
+      },
+      {
+        "modelId": "gemini-3-flash-agent",
+        "displayName": "Gemini 3 Flash Agent",
+        "modelExperiments": "<redacted>",
+        "supportedMimeTypes": "<redacted>"
+      },
+      {
+        "modelId": "gemini-3.1-flash-image",
+        "displayName": "Gemini 3.1 Flash Image",
+        "modelExperiments": "<redacted>",
+        "supportedMimeTypes": "<redacted>"
+      },
+      {
+        "modelId": "gemini-3.1-flash-lite",
+        "displayName": "Gemini 3.1 Flash Lite",
+        "modelExperiments": "<redacted>",
+        "supportedMimeTypes": "<redacted>"
+      },
+      {
+        "modelId": "gemini-3.1-pro-high",
+        "displayName": "Gemini 3.1 Pro High",
+        "modelExperiments": "<redacted>",
+        "supportedMimeTypes": "<redacted>"
+      },
+      {
+        "modelId": "gemini-3.1-pro-low",
+        "displayName": "Gemini 3.1 Pro Low",
+        "modelExperiments": "<redacted>",
+        "supportedMimeTypes": "<redacted>"
+      },
+      {
+        "modelId": "gemini-3.5-flash-low",
+        "displayName": "Gemini 3.5 Flash Low",
+        "modelExperiments": "<redacted>",
+        "supportedMimeTypes": "<redacted>"
+      },
+      {
+        "modelId": "gemini-pro-agent",
+        "displayName": "Gemini Pro Agent",
+        "modelExperiments": "<redacted>",
+        "supportedMimeTypes": "<redacted>"
+      },
+      {
+        "modelId": "gpt-oss-120b-medium",
+        "displayName": "GPT OSS 120B (Medium)",
+        "modelExperiments": "<redacted>",
+        "supportedMimeTypes": "<redacted>"
+      },
+      {
+        "modelId": "tab_flash_lite_preview",
+        "displayName": "Tab Flash Lite Preview",
+        "modelExperiments": "<redacted>",
+        "supportedMimeTypes": "<redacted>"
+      },
+      {
+        "modelId": "tab_jump_flash_lite_preview",
+        "displayName": "Tab Jump Flash Lite Preview",
+        "modelExperiments": "<redacted>",
+        "supportedMimeTypes": "<redacted>"
+      }
+    ]
+  },
+  "retrieveUserQuota": {
+    "buckets": [
+      {
+        "tokenType": "WTUS",
+        "modelId": "chat_20706",
+        "remainingFraction": 1
+      },
+      {
+        "tokenType": "WTUS",
+        "modelId": "chat_23310",
+        "remainingFraction": 1
+      },
+      {
+        "tokenType": "WTUS",
+        "modelId": "claude-opus-4-6-thinking",
+        "remainingFraction": 0,
+        "resetTime": "2026-05-29T23:44:13Z"
+      },
+      {
+        "tokenType": "WTUS",
+        "modelId": "claude-sonnet-4-6",
+        "remainingFraction": 0,
+        "resetTime": "2026-05-29T23:44:13Z"
+      },
+      {
+        "tokenType": "WTUS",
+        "modelId": "gemini-2.5-flash",
+        "remainingFraction": 0.4,
+        "resetTime": "2026-05-29T23:24:10Z"
+      },
+      {
+        "tokenType": "WTUS",
+        "modelId": "gemini-2.5-flash-lite",
+        "remainingFraction": 0.4,
+        "resetTime": "2026-05-29T23:24:10Z"
+      },
+      {
+        "tokenType": "WTUS",
+        "modelId": "gemini-2.5-flash-thinking",
+        "remainingFraction": 0.4,
+        "resetTime": "2026-05-29T23:24:10Z"
+      },
+      {
+        "tokenType": "WTUS",
+        "modelId": "gemini-2.5-pro",
+        "remainingFraction": 0.4,
+        "resetTime": "2026-05-29T23:24:10Z"
+      },
+      {
+        "tokenType": "WTUS",
+        "modelId": "gemini-3-flash",
+        "remainingFraction": 0.4,
+        "resetTime": "2026-05-29T23:24:10Z"
+      },
+      {
+        "tokenType": "WTUS",
+        "modelId": "gemini-3-flash-agent",
+        "remainingFraction": 0.4,
+        "resetTime": "2026-05-29T23:24:10Z"
+      },
+      {
+        "tokenType": "WTUS",
+        "modelId": "gemini-3.1-flash-image",
+        "remainingFraction": 0.4,
+        "resetTime": "2026-05-29T23:24:10Z"
+      },
+      {
+        "tokenType": "WTUS",
+        "modelId": "gemini-3.1-flash-lite",
+        "remainingFraction": 0.4,
+        "resetTime": "2026-05-29T23:24:10Z"
+      },
+      {
+        "tokenType": "WTUS",
+        "modelId": "gemini-3.1-pro-high",
+        "remainingFraction": 0.4,
+        "resetTime": "2026-05-29T23:24:10Z"
+      },
+      {
+        "tokenType": "WTUS",
+        "modelId": "gemini-3.1-pro-low",
+        "remainingFraction": 0.4,
+        "resetTime": "2026-05-29T23:24:10Z"
+      },
+      {
+        "tokenType": "WTUS",
+        "modelId": "gemini-3.5-flash-low",
+        "remainingFraction": 0.4,
+        "resetTime": "2026-05-29T23:24:10Z"
+      },
+      {
+        "tokenType": "WTUS",
+        "modelId": "gemini-pro-agent",
+        "remainingFraction": 0.4,
+        "resetTime": "2026-05-29T23:24:10Z"
+      },
+      {
+        "tokenType": "WTUS",
+        "modelId": "gpt-oss-120b-medium",
+        "remainingFraction": 0,
+        "resetTime": "2026-05-29T23:44:13Z"
+      },
+      {
+        "tokenType": "WTUS",
+        "modelId": "tab_flash_lite_preview",
+        "remainingFraction": 1
+      },
+      {
+        "tokenType": "WTUS",
+        "modelId": "tab_jump_flash_lite_preview",
+        "remainingFraction": 1
+      }
+    ]
+  }
+}

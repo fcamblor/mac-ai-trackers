@@ -3,7 +3,7 @@ import AIUsagesTrackersLib
 enum SegmentEditingHelpers {
     static func metricName(_ metric: UsageMetric) -> String? {
         switch metric {
-        case .timeWindow(let name, _, _, _):   return name
+        case .timeWindow(let name, _, _, _, _):   return name
         case .payAsYouGo(let name, _, _):      return name
         case .unknown:                         return nil
         }
