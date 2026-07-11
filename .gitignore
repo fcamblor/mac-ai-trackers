@@ -6,5 +6,6 @@ Package.resolved
 *.xcodeproj
 .vscode/
 DerivedData/
-*.local.json
+*.local.*
+*.local
 dist/
