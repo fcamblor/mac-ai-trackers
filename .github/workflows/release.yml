@@ -96,12 +96,28 @@ jobs:
         with:
           name: ${{ github.ref_name }}
           draft: false
+          body_path: NEXT-RELEASE.md
           generate_release_notes: true
           files: |
             dist/AI-Usages-Tracker.zip
             dist/AI-Usages-Tracker.zip.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Clear NEXT-RELEASE.md for next cycle
+        run: |
+          # Fetch the current SHA of NEXT-RELEASE.md on main so the API can update it.
+          FILE_SHA=$(gh api repos/${{ github.repository }}/contents/NEXT-RELEASE.md \
+            --jq '.sha')
+          EMPTY_CONTENT=$(printf '' | base64)
+          gh api repos/${{ github.repository }}/contents/NEXT-RELEASE.md \
+            --method PUT \
+            --field message="chore: clear NEXT-RELEASE.md after ${{ github.ref_name }} [skip ci]" \
+            --field content="${EMPTY_CONTENT}" \
+            --field sha="${FILE_SHA}" \
+            --field branch=main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Compute SHA256 for Homebrew
         id: sha
