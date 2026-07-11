@@ -100,7 +100,7 @@ struct AccountCardView: View {
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.primary)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(errorDetail(for: error.type))
+                    Text(errorDetail(for: error.type, vendor: entry.vendor))
                         .font(.system(size: 9))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -174,7 +174,7 @@ struct AccountCardView: View {
         }
     }
 
-    private func errorDetail(for type: String) -> String {
+    private func errorDetail(for type: String, vendor: Vendor) -> String {
         switch type {
         case "api_key_usage_unsupported":
             "Claude standard API keys cannot expose usage here. Claude Code OAuth credentials are required."
@@ -183,7 +183,7 @@ struct AccountCardView: View {
         case "credential_error":
             "Credentials could not be read from the expected local source. Last known metrics may be stale."
         case "token_expired":
-            "Re-authenticate with the vendor CLI — the next refresh will pick up the new token."
+            tokenExpiredDetail(for: vendor)
         case "api_error":
             "Network or API request failed. Last known metrics may be stale."
         case "parse_error":
@@ -198,6 +198,19 @@ struct AccountCardView: View {
             } else {
                 "Connector reported \(type)."
             }
+        }
+    }
+
+    private func tokenExpiredDetail(for vendor: Vendor) -> String {
+        switch vendor {
+        case .claude:
+            "Your Claude Code session has expired. Run \"/login\" in the Claude Code CLI to re-authenticate — the next refresh will pick up the new token."
+        case .copilot:
+            "Your GitHub Copilot session has expired. Run \"gh auth login\" in a terminal to re-authenticate — the next refresh will pick up the new token."
+        case .codex:
+            "Your Codex session has expired. Run \"codex login\" in a terminal to re-authenticate — the next refresh will pick up the new token."
+        default:
+            "Your session has expired. Re-authenticate with the vendor CLI — the next refresh will pick up the new token."
         }
     }
 }
