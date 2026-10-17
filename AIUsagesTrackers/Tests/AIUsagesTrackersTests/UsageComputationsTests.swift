@@ -183,6 +183,51 @@ struct FormatResetDateTests {
     }
 }
 
+// MARK: - groupedForDisplay
+
+@Suite("groupedForDisplay")
+struct GroupedForDisplayTests {
+    private func entry(vendor: String, account: String, isActive: Bool = false) -> VendorUsageEntry {
+        VendorUsageEntry(vendor: Vendor(rawValue: vendor), account: AccountEmail(rawValue: account), isActive: isActive)
+    }
+
+    @Test("same email across vendors is merged into one group")
+    func mergesSameEmail() {
+        let entries = [
+            entry(vendor: "claude", account: "me@x.com"),
+            entry(vendor: "claude-desktop", account: "me@x.com"),
+            entry(vendor: "codex", account: "other@x.com"),
+        ]
+        let groups = entries.groupedForDisplay()
+        #expect(groups.count == 2)
+        let merged = groups.first { $0.account.rawValue == "me@x.com" }
+        #expect(merged?.members.count == 2)
+        #expect(Set(merged?.members.map(\.vendor.rawValue) ?? []) == ["claude", "claude-desktop"])
+    }
+
+    @Test("group is active when any member is active")
+    func groupActiveIfAnyMemberActive() {
+        let entries = [
+            entry(vendor: "claude", account: "me@x.com", isActive: false),
+            entry(vendor: "claude-desktop", account: "me@x.com", isActive: true),
+        ]
+        let groups = entries.groupedForDisplay()
+        #expect(groups.count == 1)
+        #expect(groups[0].isActive == true)
+    }
+
+    @Test("distinct emails stay in separate single-member groups")
+    func distinctEmailsStaySeparate() {
+        let entries = [
+            entry(vendor: "claude-desktop", account: "Perso"),
+            entry(vendor: "claude-desktop", account: "Dentalsoft"),
+        ]
+        let groups = entries.groupedForDisplay()
+        #expect(groups.count == 2)
+        #expect(groups.allSatisfy { $0.members.count == 1 })
+    }
+}
+
 // MARK: - sortedForDisplay
 
 @Suite("sortedForDisplay")

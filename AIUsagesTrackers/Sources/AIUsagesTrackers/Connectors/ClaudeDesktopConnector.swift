@@ -19,6 +19,7 @@ public actor ClaudeDesktopConnector: UsageConnector {
     private let session: URLSession
     private let credentialLocator: any CredentialLocator<[ClaudeDesktopCredential]>
     private let profileResolver: any ClaudeProfileResolving
+    private let processInspector: any ClaudeDesktopProcessInspecting
     private let isEnabled: @Sendable () -> Bool
     private let clock: @Sendable () -> Date
     private let parser = ClaudeUsageResponseParser()
@@ -39,6 +40,7 @@ public actor ClaudeDesktopConnector: UsageConnector {
         session: URLSession = .shared,
         credentialLocator: any CredentialLocator<[ClaudeDesktopCredential]> = ClaudeDesktopCredentialLocator(),
         profileResolver: (any ClaudeProfileResolving)? = nil,
+        processInspector: (any ClaudeDesktopProcessInspecting)? = nil,
         isEnabled: @escaping @Sendable () -> Bool,
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
@@ -46,6 +48,7 @@ public actor ClaudeDesktopConnector: UsageConnector {
         self.session = session
         self.credentialLocator = credentialLocator
         self.profileResolver = profileResolver ?? HTTPClaudeProfileResolver(session: session, logger: logger)
+        self.processInspector = processInspector ?? PSClaudeDesktopProcessInspector(logger: logger)
         self.isEnabled = isEnabled
         self.clock = clock
     }
@@ -81,16 +84,19 @@ public actor ClaudeDesktopConnector: UsageConnector {
             return []
         }
 
+        let activePaths = await processInspector.activeProfilePaths()
+
         var entries: [VendorUsageEntry] = []
         for credential in credentials {
-            entries.append(await fetchOne(credential: credential))
+            entries.append(await fetchOne(credential: credential, activeProfilePaths: activePaths))
         }
         return entries
     }
 
     // MARK: - Per-account fetch
 
-    private func fetchOne(credential: ClaudeDesktopCredential) async -> VendorUsageEntry {
+    private func fetchOne(credential: ClaudeDesktopCredential, activeProfilePaths: Set<String>) async -> VendorUsageEntry {
+        let isActive = activeProfilePaths.contains((credential.profileDirectoryPath as NSString).standardizingPath)
         let tokenLikelyExpired = credential.expiresAt.map {
             clock().addingTimeInterval(Self.expirySkewSeconds) >= $0
         } ?? false
@@ -99,11 +105,11 @@ public actor ClaudeDesktopConnector: UsageConnector {
 
         if tokenLikelyExpired {
             logger.log(.warning, "Token for '\(account.rawValue)' expired — skipping fetch. Re-open Claude Desktop to refresh.")
-            return errorEntry(account: account, type: "token_expired", isActive: false, preservedMetrics: preserved)
+            return errorEntry(account: account, type: "token_expired", isActive: isActive, preservedMetrics: preserved)
         }
 
         guard let url = URL(string: "https://api.anthropic.com/api/oauth/usage") else {
-            return errorEntry(account: account, type: "api_error")
+            return errorEntry(account: account, type: "api_error", isActive: isActive, preservedMetrics: preserved)
         }
         var request = URLRequest(url: url)
         request.setValue("Bearer \(credential.accessToken)", forHTTPHeaderField: "Authorization")
@@ -116,7 +122,7 @@ public actor ClaudeDesktopConnector: UsageConnector {
             (data, response) = try await session.data(for: request)
         } catch {
             logger.log(.error, "API request failed for '\(credential.accountLabel)': \(error)")
-            return errorEntry(account: account, type: "api_error")
+            return errorEntry(account: account, type: "api_error", isActive: isActive, preservedMetrics: preserved)
         }
 
         let httpCode = (response as? HTTPURLResponse)?.statusCode ?? -1
@@ -124,13 +130,13 @@ public actor ClaudeDesktopConnector: UsageConnector {
 
         if httpCode == 401 {
             logger.log(.error, "HTTP 401 for '\(account.rawValue)' — token expired. Re-open Claude Desktop to refresh.")
-            return errorEntry(account: account, type: "token_expired", isActive: false, preservedMetrics: preserved)
+            return errorEntry(account: account, type: "token_expired", isActive: isActive, preservedMetrics: preserved)
         }
         if httpCode == 429 {
-            return errorEntry(account: account, type: "http_429", isActive: false, preservedMetrics: preserved)
+            return errorEntry(account: account, type: "http_429", isActive: isActive, preservedMetrics: preserved)
         }
         guard httpCode == 200 else {
-            return errorEntry(account: account, type: "http_\(httpCode)")
+            return errorEntry(account: account, type: "http_\(httpCode)", isActive: isActive, preservedMetrics: preserved)
         }
 
         do {
@@ -139,14 +145,14 @@ public actor ClaudeDesktopConnector: UsageConnector {
             return VendorUsageEntry(
                 vendor: vendor,
                 account: account,
-                isActive: false,
+                isActive: isActive,
                 lastAcquiredOn: ISODate(date: clock()),
                 lastError: nil,
                 metrics: metrics
             )
         } catch {
             logger.log(.error, "Response parse failed for '\(credential.accountLabel)': \(error)")
-            return errorEntry(account: account, type: "parse_error")
+            return errorEntry(account: account, type: "parse_error", isActive: isActive, preservedMetrics: preserved)
         }
     }
 

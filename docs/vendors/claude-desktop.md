@@ -87,6 +87,19 @@ enables the source in the Coding Assistants tab (an explicit user action).
 After the user approves the macOS ACL once ("Always Allow"), subsequent
 background polls are silent.
 
+### Active accounts
+
+Unlike the `claude` CLI (a single active account), several Claude Desktop apps
+can run at once — one per `--user-data-dir` — and a profile may be inactive
+(no running instance). The connector marks an entry active when a Claude
+Desktop main process (`…/Claude.app/Contents/MacOS/Claude`) is running against
+that profile's directory: with `--user-data-dir=<dir>` for a custom profile, or
+with no such flag for the default profile. Helper processes and the bundled
+`…/MacOS/claude` CLI are excluded. Detection uses `/bin/ps` (no Keychain, no
+network). Because this is per-profile and additive, the single-active-per-vendor
+`updateIsActive` path is not used for this vendor; the connector stamps
+`isActive` per entry directly.
+
 ### Account identity
 
 Claude Desktop profiles do not store an account email in cleartext —
@@ -241,3 +254,6 @@ under a second vendor.
   use it as the account identity (cached per accountUuid) so Claude Desktop
   and Claude Code entries for the same account share an identity. Fall back to
   the profile label when resolution is not possible.
+- 2026-10-18 — per-profile active detection via `/bin/ps` (several profiles may
+  be active at once; some inactive). The popover now merges same-email entries
+  across vendors into one card. Same orange mark/tint as the `claude` vendor.

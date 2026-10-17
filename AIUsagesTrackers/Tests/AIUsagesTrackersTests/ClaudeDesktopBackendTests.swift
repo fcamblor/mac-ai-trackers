@@ -138,7 +138,7 @@ struct ClaudeDesktopCredentialLocatorTests {
           "acct:u|s:33333333-3333-3333-3333-333333333333:https://api.anthropic.com:user:profile": {"token":"tok-profile-only"}
         }
         """
-        let creds = try ClaudeDesktopCredentialLocator.parseCredentials(plaintext: Data(json.utf8), profileName: "Perso")
+        let creds = try ClaudeDesktopCredentialLocator.parseCredentials(plaintext: Data(json.utf8), profileName: "Perso", profileDirectoryPath: "/tmp/Perso")
         #expect(creds.count == 2)
         #expect(creds.allSatisfy { $0.accountLabel.hasPrefix("Perso · ") })
         #expect(Set(creds.map(\.accessToken)) == ["tok-a", "tok-b"])
@@ -147,7 +147,7 @@ struct ClaudeDesktopCredentialLocatorTests {
     @Test("parseCredentials uses the bare profile name for a single org")
     func parseCredentialsSingleOrg() throws {
         let json = #"{"acct:u|s:11111111-1111-1111-1111-111111111111:https://api.anthropic.com:user:inference":{"token":"tok"}}"#
-        let creds = try ClaudeDesktopCredentialLocator.parseCredentials(plaintext: Data(json.utf8), profileName: "Dentalsoft")
+        let creds = try ClaudeDesktopCredentialLocator.parseCredentials(plaintext: Data(json.utf8), profileName: "Dentalsoft", profileDirectoryPath: "/tmp/Dentalsoft")
         #expect(creds.count == 1)
         #expect(creds.first?.accountLabel == "Dentalsoft")
     }
@@ -172,6 +172,46 @@ struct ClaudeDesktopCredentialLocatorTests {
         #expect(ClaudeDesktopCredentialLocator.parseExpiresAt("1700000000000") != nil)
         #expect(ClaudeDesktopCredentialLocator.parseExpiresAt(nil) == nil)
         #expect(ClaudeDesktopCredentialLocator.parseExpiresAt("not-a-number") == nil)
+    }
+}
+
+@Suite("PSClaudeDesktopProcessInspector — parsing")
+struct PSClaudeDesktopProcessInspectorTests {
+    private let ps = """
+    /Users/me/Applications/Claude.app/Contents/MacOS/Claude
+    /Users/me/Applications/Claude.app/Contents/MacOS/Claude --user-data-dir=/Users/me/Claude/Profiles/Perso
+    /Users/me/Applications/Claude.app/Contents/MacOS/Claude Helper (GPU).app/Contents/MacOS/Claude Helper (GPU)
+    /Users/me/Applications/Claude.app/Contents/MacOS/claude --version
+    /usr/bin/something else
+    """
+
+    @Test("default profile active when a main process has no --user-data-dir")
+    func defaultActive() {
+        let active = PSClaudeDesktopProcessInspector.parseActivePaths(
+            psOutput: ps, defaultProfilePath: "/Users/me/Library/Application Support/Claude")
+        #expect(active.contains("/Users/me/Library/Application Support/Claude"))
+    }
+
+    @Test("custom profile active via --user-data-dir")
+    func customActive() {
+        let active = PSClaudeDesktopProcessInspector.parseActivePaths(
+            psOutput: ps, defaultProfilePath: "/Users/me/Library/Application Support/Claude")
+        #expect(active.contains("/Users/me/Claude/Profiles/Perso"))
+    }
+
+    @Test("helper processes and the claude CLI are excluded")
+    func excludesHelpersAndCli() {
+        let active = PSClaudeDesktopProcessInspector.parseActivePaths(
+            psOutput: ps, defaultProfilePath: "/Users/me/Library/Application Support/Claude")
+        // Only the default + Perso; no entry derived from the Helper or lower-case `claude` CLI.
+        #expect(active == ["/Users/me/Library/Application Support/Claude", "/Users/me/Claude/Profiles/Perso"])
+    }
+
+    @Test("userDataDir supports both = and space forms")
+    func userDataDirForms() {
+        #expect(PSClaudeDesktopProcessInspector.userDataDir(fromArgs: "x --user-data-dir=/a/b c") == "/a/b")
+        #expect(PSClaudeDesktopProcessInspector.userDataDir(fromArgs: "x --user-data-dir /a/b c") == "/a/b")
+        #expect(PSClaudeDesktopProcessInspector.userDataDir(fromArgs: "x --other") == nil)
     }
 }
 

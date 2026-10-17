@@ -1,6 +1,9 @@
 import SwiftUI
 import AIUsagesTrackersLib
 
+/// Single-account card. Used for a group that has exactly one vendor member;
+/// multi-vendor groups (same account signed into several vendors) render with
+/// `AccountGroupCardView`.
 struct AccountCardView: View {
     let entry: VendorUsageEntry
     let isRefreshing: Bool
@@ -22,46 +25,143 @@ struct AccountCardView: View {
                     .truncationMode(.middle)
 
                 if isRefreshing {
-                    ProgressView()
-                        .controlSize(.small)
-                        .scaleEffect(0.6)
-                        .frame(width: 12, height: 12)
+                    AccountCardSpinner()
                 }
 
                 Spacer()
 
                 if entry.isActive {
-                    Text("active")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.green, in: Capsule())
+                    ActiveCapsule()
                 }
             }
 
-            ForEach(Array(entry.metrics.enumerated()), id: \.offset) { _, metric in
-                metricRow(for: metric)
-            }
-
-            if let lastError = entry.lastError {
-                errorRow(for: lastError)
-            }
+            EntryBodyView(entry: entry, onOpenAssistantsSettings: onOpenAssistantsSettings)
         }
         .padding(10)
-        .background(
-            entry.isActive
-                ? Color.green.opacity(0.20)
-                : Color(NSColor.controlBackgroundColor),
-            in: RoundedRectangle(cornerRadius: 8)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(Color.primary.opacity(0.20), lineWidth: 1)
-        )
+        .cardBackground(isActive: entry.isActive)
         .contextMenu {
             if let onIgnore {
                 Button("Ignore this account") { onIgnore() }
+            }
+        }
+    }
+}
+
+/// Merged card for an account present under several vendors (e.g. Claude Code
+/// and Claude Desktop). The shared account email is shown once; each vendor is a
+/// labelled sub-section with its own active state, metrics, and errors.
+struct AccountGroupCardView: View {
+    let group: AccountDisplayGroup
+    var isRefreshing: (VendorUsageEntry) -> Bool
+    var onIgnoreMember: (VendorUsageEntry) -> Void
+    var onOpenAssistantsSettings: (() -> Void)? = nil
+
+    private var anyRefreshing: Bool { group.members.contains(where: isRefreshing) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Text(group.account.rawValue)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                if anyRefreshing {
+                    AccountCardSpinner()
+                }
+
+                Spacer()
+
+                if group.isActive {
+                    ActiveCapsule()
+                }
+            }
+
+            ForEach(Array(group.members.enumerated()), id: \.offset) { _, member in
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        VendorIconView(vendor: member.vendor, size: 13)
+                        Text(vendorDisplayName(member.vendor))
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        if member.isActive {
+                            ActiveCapsule()
+                        }
+                    }
+                    EntryBodyView(entry: member, onOpenAssistantsSettings: onOpenAssistantsSettings)
+                }
+                .padding(8)
+                .background(
+                    member.isActive ? Color.green.opacity(0.12) : Color.primary.opacity(0.04),
+                    in: RoundedRectangle(cornerRadius: 6)
+                )
+                .contextMenu {
+                    Button("Ignore this account") { onIgnoreMember(member) }
+                }
+            }
+        }
+        .padding(10)
+        .cardBackground(isActive: group.isActive)
+    }
+
+    private func vendorDisplayName(_ vendor: Vendor) -> String {
+        VendorRegistry.bundle(for: vendor)?.branding.displayName ?? vendor.rawValue
+    }
+}
+
+// MARK: - Shared pieces
+
+private struct AccountCardSpinner: View {
+    var body: some View {
+        ProgressView()
+            .controlSize(.small)
+            .scaleEffect(0.6)
+            .frame(width: 12, height: 12)
+    }
+}
+
+private struct ActiveCapsule: View {
+    var body: some View {
+        Text("active")
+            .font(.system(size: 9, weight: .medium))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.green, in: Capsule())
+    }
+}
+
+private extension View {
+    func cardBackground(isActive: Bool) -> some View {
+        self
+            .background(
+                isActive
+                    ? Color.green.opacity(0.20)
+                    : Color(NSColor.controlBackgroundColor),
+                in: RoundedRectangle(cornerRadius: 8)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(Color.primary.opacity(0.20), lineWidth: 1)
+            )
+    }
+}
+
+/// The metrics list + error block for one entry, shared by the single-account
+/// card and each sub-section of the merged group card.
+struct EntryBodyView: View {
+    let entry: VendorUsageEntry
+    var onOpenAssistantsSettings: (() -> Void)? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(entry.metrics.enumerated()), id: \.offset) { _, metric in
+                metricRow(for: metric)
+            }
+            if let lastError = entry.lastError {
+                errorRow(for: lastError)
             }
         }
     }
@@ -205,6 +305,8 @@ struct AccountCardView: View {
         switch vendor {
         case .claude:
             "Your Claude Code session has expired. Run \"/login\" in the Claude Code CLI to re-authenticate — the next refresh will pick up the new token."
+        case .claudeDesktop:
+            "This Claude Desktop profile's session has expired. Open Claude Desktop for that profile to refresh — the next refresh will pick up the new token."
         case .copilot:
             "Your GitHub Copilot session has expired. Run \"gh auth login\" in a terminal to re-authenticate — the next refresh will pick up the new token."
         case .codex:

@@ -177,6 +177,28 @@ public struct TimeWindowVisualState: Sendable, Equatable {
     }
 }
 
+// MARK: - Account grouping
+
+/// A set of `VendorUsageEntry` that share one account identity across vendors,
+/// rendered as a single merged card in the popover.
+public struct AccountDisplayGroup: Identifiable, Equatable, Sendable {
+    public let account: AccountEmail
+    public let members: [VendorUsageEntry]
+
+    public init(account: AccountEmail, members: [VendorUsageEntry]) {
+        self.account = account
+        self.members = members
+    }
+
+    /// Stable across refreshes — the shared account identity.
+    public var id: String { account.rawValue }
+
+    /// The group is active when any of its vendor members is active. Per-vendor
+    /// active semantics differ (Claude Code: single active; Claude Desktop:
+    /// several profiles can run at once), so the group-level flag is an OR.
+    public var isActive: Bool { members.contains { $0.isActive } }
+}
+
 // MARK: - Entry sorting
 
 extension Array where Element == VendorUsageEntry {
@@ -206,6 +228,30 @@ extension Array where Element == VendorUsageEntry {
                 return lhs.isActive
             }
             return lhs.account.rawValue < rhs.account.rawValue
+        }
+    }
+
+    /// Groups entries that share the same account identity (`AccountEmail`)
+    /// across vendors into one display group, preserving the `sortedForDisplay`
+    /// order of each group's first member. A person signed into both Claude Code
+    /// and Claude Desktop with the same account thus appears as a single merged
+    /// group rather than two independent rows. Non-destructive: every entry is
+    /// still present, just projected under its account key.
+    public func groupedForDisplay(order: [String] = []) -> [AccountDisplayGroup] {
+        let sorted = sortedForDisplay(order: order)
+        var keyOrder: [String] = []
+        var membersByKey: [String: [VendorUsageEntry]] = [:]
+        for entry in sorted {
+            let key = entry.account.rawValue
+            if membersByKey[key] == nil {
+                keyOrder.append(key)
+                membersByKey[key] = []
+            }
+            membersByKey[key]?.append(entry)
+        }
+        return keyOrder.compactMap { key in
+            guard let members = membersByKey[key], let first = members.first else { return nil }
+            return AccountDisplayGroup(account: first.account, members: members)
         }
     }
 

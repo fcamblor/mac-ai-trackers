@@ -13,6 +13,11 @@ private struct StubProfileResolver: ClaudeProfileResolving {
     func resolveEmail(accessToken: String) async -> AccountEmail? { email }
 }
 
+private struct StubProcessInspector: ClaudeDesktopProcessInspecting {
+    let active: Set<String>
+    func activeProfilePaths() async -> Set<String> { active }
+}
+
 // Dedicated URLProtocol so this suite's mock state never races the shared
 // MockURLProtocol that other connector suites mutate in parallel.
 // swiftlint:disable:next w4_unchecked_sendable — URLProtocol subclass; mutable static state accessed only from the serialized ClaudeDesktopConnector suite
@@ -44,8 +49,8 @@ private func desktopMockSession() -> URLSession {
 
 @Suite("ClaudeDesktopConnector", .serialized)
 struct ClaudeDesktopConnectorTests {
-    private func credential(label: String = "Perso", uuid: String? = "uuid-1", expiresAt: Date? = nil) -> ClaudeDesktopCredential {
-        ClaudeDesktopCredential(accountLabel: label, accountUuid: uuid, accessToken: "tok", expiresAt: expiresAt, subscriptionType: "pro")
+    private func credential(label: String = "Perso", uuid: String? = "uuid-1", dir: String = "/tmp/Perso", expiresAt: Date? = nil) -> ClaudeDesktopCredential {
+        ClaudeDesktopCredential(accountLabel: label, accountUuid: uuid, profileDirectoryPath: dir, accessToken: "tok", expiresAt: expiresAt, subscriptionType: "pro")
     }
 
     @Test("disabled source returns no entries and never calls the locator")
@@ -55,6 +60,7 @@ struct ClaudeDesktopConnectorTests {
             session: desktopMockSession(),
             credentialLocator: StubDesktopLocator(credentials: [credential()]),
             profileResolver: StubProfileResolver(email: nil),
+            processInspector: StubProcessInspector(active: []),
             isEnabled: { false }
         )
         let entries = try await connector.fetchUsages()
@@ -71,6 +77,7 @@ struct ClaudeDesktopConnectorTests {
             session: desktopMockSession(),
             credentialLocator: StubDesktopLocator(credentials: [credential(label: "Perso")]),
             profileResolver: StubProfileResolver(email: nil),
+            processInspector: StubProcessInspector(active: []),
             isEnabled: { true }
         )
         let entries = try await connector.fetchUsages()
@@ -95,11 +102,35 @@ struct ClaudeDesktopConnectorTests {
             session: desktopMockSession(),
             credentialLocator: StubDesktopLocator(credentials: [credential(label: "Default")]),
             profileResolver: StubProfileResolver(email: AccountEmail(rawValue: "frederic.camblor@4sh.fr")),
+            processInspector: StubProcessInspector(active: []),
             isEnabled: { true }
         )
         let entries = try await connector.fetchUsages()
         #expect(entries.count == 1)
         #expect(entries[0].account == AccountEmail(rawValue: "frederic.camblor@4sh.fr"))
+    }
+
+    @Test("entry is active when its profile directory has a running app")
+    func activeWhenProfileRunning() async throws {
+        let fixture = FixtureLoader.load("claude-desktop-full-payload")
+        DesktopMockURLProtocol.handler = { request in
+            (fixture, HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        }
+        let connector = ClaudeDesktopConnector(
+            session: desktopMockSession(),
+            credentialLocator: StubDesktopLocator(credentials: [
+                credential(label: "Perso", dir: "/tmp/Perso"),
+                credential(label: "Idle", uuid: "uuid-2", dir: "/tmp/Idle"),
+            ]),
+            profileResolver: StubProfileResolver(email: nil),
+            processInspector: StubProcessInspector(active: ["/tmp/Perso"]),
+            isEnabled: { true }
+        )
+        let entries = try await connector.fetchUsages()
+        let perso = entries.first { $0.account == AccountEmail(rawValue: "Perso") }
+        let idle = entries.first { $0.account == AccountEmail(rawValue: "Idle") }
+        #expect(perso?.isActive == true)
+        #expect(idle?.isActive == false)
     }
 
     @Test("expired token short-circuits with token_expired and no HTTP call")
@@ -113,6 +144,7 @@ struct ClaudeDesktopConnectorTests {
             session: desktopMockSession(),
             credentialLocator: StubDesktopLocator(credentials: [credential(label: "Perso", expiresAt: past)]),
             profileResolver: StubProfileResolver(email: nil),
+            processInspector: StubProcessInspector(active: []),
             isEnabled: { true }
         )
         let entries = try await connector.fetchUsages()

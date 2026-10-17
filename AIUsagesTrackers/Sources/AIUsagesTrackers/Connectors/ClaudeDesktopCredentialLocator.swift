@@ -12,13 +12,18 @@ public struct ClaudeDesktopCredential: Sendable, Equatable {
     /// is the robust key for detecting that a Claude Desktop profile and a CLI
     /// login are the same account.
     public let accountUuid: String?
+    /// The profile directory this credential came from. Used to decide whether
+    /// the account is currently "active" — i.e. whether a Claude Desktop app
+    /// instance is running against that `--user-data-dir`.
+    public let profileDirectoryPath: String
     public let accessToken: String
     public let expiresAt: Date?
     public let subscriptionType: String?
 
-    public init(accountLabel: String, accountUuid: String?, accessToken: String, expiresAt: Date?, subscriptionType: String?) {
+    public init(accountLabel: String, accountUuid: String?, profileDirectoryPath: String, accessToken: String, expiresAt: Date?, subscriptionType: String?) {
         self.accountLabel = accountLabel
         self.accountUuid = accountUuid
+        self.profileDirectoryPath = profileDirectoryPath
         self.accessToken = accessToken
         self.expiresAt = expiresAt
         self.subscriptionType = subscriptionType
@@ -98,7 +103,11 @@ public actor ClaudeDesktopCredentialLocator: CredentialLocator {
             }
             do {
                 let plaintext = try decryptor.decrypt(base64Value: encrypted, keyPassword: keyPassword)
-                credentials.append(contentsOf: try Self.parseCredentials(plaintext: plaintext, profileName: profile.name))
+                credentials.append(contentsOf: try Self.parseCredentials(
+                    plaintext: plaintext,
+                    profileName: profile.name,
+                    profileDirectoryPath: profile.directoryPath
+                ))
             } catch {
                 // One broken profile must not sink the others.
                 logger.log(.error, "Failed to decrypt/parse token cache for profile '\(profile.name)': \(error)")
@@ -116,7 +125,7 @@ public actor ClaudeDesktopCredentialLocator: CredentialLocator {
     /// We keep only entries carrying the inference scope. When a single profile
     /// holds several orgs we disambiguate the account label with a short org id
     /// so the merge keeps them as distinct accounts.
-    static func parseCredentials(plaintext: Data, profileName: String) throws -> [ClaudeDesktopCredential] {
+    static func parseCredentials(plaintext: Data, profileName: String, profileDirectoryPath: String) throws -> [ClaudeDesktopCredential] {
         guard let json = try JSONSerialization.jsonObject(with: plaintext) as? [String: Any] else {
             return []
         }
@@ -143,6 +152,7 @@ public actor ClaudeDesktopCredentialLocator: CredentialLocator {
             result.append(ClaudeDesktopCredential(
                 accountLabel: label,
                 accountUuid: accountUuid(fromCacheKey: key),
+                profileDirectoryPath: profileDirectoryPath,
                 accessToken: token,
                 expiresAt: parseExpiresAt(entry["expiresAt"]),
                 subscriptionType: entry["subscriptionType"] as? String
