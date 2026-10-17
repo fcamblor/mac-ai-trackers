@@ -9,7 +9,9 @@ struct MetricSelectionOptions: Equatable {
     init(entries: [VendorUsageEntry]) {
         let shouldLogPerformance = Loggers.app.effectiveMinLevel <= .debug
         let startedAt = shouldLogPerformance ? DispatchTime.now().uptimeNanoseconds : 0
-        entriesByVendor = Dictionary(grouping: entries, by: \.vendor)
+        // Key by account family so Claude CLI + Claude Desktop collapse into one
+        // "Claude" vendor option; every other vendor stays on its own key.
+        entriesByVendor = Dictionary(grouping: entries, by: \.vendor.familyCanonicalVendor)
         var hasher = Hasher()
         var metricCount = 0
         for entry in entries.sorted(by: { $0.id < $1.id }) {
@@ -40,13 +42,19 @@ struct MetricSelectionOptions: Equatable {
     }
 
     var availableVendors: [Vendor] {
+        // Keys are already family-canonical vendors (claude-desktop folded into
+        // claude), so each family appears once.
         entriesByVendor.keys.sorted { $0.rawValue < $1.rawValue }
     }
 
     func availableAccounts(for vendor: Vendor) -> [AccountEmail] {
-        entriesByVendor[vendor, default: []]
+        // Union of the family's accounts, de-duplicated: the same email can come
+        // from both Claude CLI and Claude Desktop but is one account.
+        var seen = Set<String>()
+        return entriesByVendor[vendor.familyCanonicalVendor, default: []]
             .filter { !$0.metrics.isEmpty }
             .map(\.account)
+            .filter { seen.insert($0.rawValue).inserted }
     }
 
     func availableMetrics(vendor: Vendor, account: AccountSelection) -> [MetricOption] {
@@ -80,12 +88,15 @@ struct MetricSelectionOptions: Equatable {
     }
 
     func resolveEntry(vendor: Vendor, account: AccountSelection) -> VendorUsageEntry? {
-        let vendorEntries = entriesByVendor[vendor, default: []]
+        let vendorEntries = entriesByVendor[vendor.familyCanonicalVendor, default: []]
         switch account {
         case .currentlyActive:
-            return vendorEntries.first(where: { $0.isActive })
+            // Across the family, pick the representative active member.
+            return vendorEntries.filter(\.isActive).representativeEntry()
         case .specific(let email):
-            return vendorEntries.first(where: { $0.account == email })
+            // The same email may exist under several family vendors; show the
+            // representative one so usage reflects live data over stale/errored.
+            return vendorEntries.filter { $0.account == email }.representativeEntry()
         }
     }
 }

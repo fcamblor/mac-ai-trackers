@@ -141,6 +141,18 @@ public struct Vendor: RawRepresentable, Codable, Equatable, Hashable, Sendable {
         default: rawValue
         }
     }
+
+    /// The single vendor that represents this vendor's account family in pickers
+    /// and persisted selections (menubar chips, chart series). Both `claude` and
+    /// `claude-desktop` canonicalise to `claude`, so a selection stored against
+    /// either keeps resolving after the merge; every other vendor is its own
+    /// canonical.
+    public var familyCanonicalVendor: Vendor {
+        switch self {
+        case .claude, .claudeDesktop: .claude
+        default: self
+        }
+    }
     /// Claude Desktop reads usage from the Electron app's per-profile OAuth
     /// token cache rather than the `claude` CLI keychain entry, so it is a
     /// distinct vendor with its own credential mechanism and multi-account

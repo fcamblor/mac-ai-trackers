@@ -87,6 +87,47 @@ struct ChartSeriesResolverTests {
         #expect(resolved[0].points.map(\.value) == [10.0])
     }
 
+    @Test("custom series merges the Claude family and de-duplicates by timestamp")
+    func customMergesClaudeFamilyDeduped() {
+        let points = [
+            // Same account + metric + timestamp from both Claude vendors → one point.
+            Self.point(vendor: .claude, account: "a@example.com", metricName: "session", value: 50),
+            Self.point(vendor: .claudeDesktop, account: "a@example.com", metricName: "session", value: 50),
+            // A later desktop-only point still contributes to the merged series.
+            Self.point(vendor: .claudeDesktop, account: "a@example.com", metricName: "session", value: 60),
+        ]
+        let config = ChartConfiguration(
+            title: "Custom",
+            selection: .custom([
+                ChartSeriesConfig(vendor: .claude, account: .specific("a@example.com"), metricName: "session"),
+            ])
+        )
+        let resolved = ChartSeriesResolver.resolve(configuration: config, points: points, currentEntries: [])
+        #expect(resolved.count == 1)
+        #expect(resolved[0].points.map(\.value) == [50.0, 60.0])
+    }
+
+    @Test("currentlyActive resolves across the Claude family")
+    func currentlyActiveResolvesAcrossFamily() {
+        let points = [
+            Self.point(vendor: .claudeDesktop, account: "me@example.com", metricName: "session", value: 25),
+        ]
+        let config = ChartConfiguration(
+            title: "Active",
+            selection: .custom([
+                ChartSeriesConfig(vendor: .claude, account: .currentlyActive, metricName: "session"),
+            ])
+        )
+        // Only a claude-desktop entry is active, but the series is scoped to the
+        // canonical `.claude` vendor — family resolution must still find it.
+        let resolved = ChartSeriesResolver.resolve(
+            configuration: config,
+            points: points,
+            currentEntries: [VendorUsageEntry(vendor: .claudeDesktop, account: "me@example.com", isActive: true)]
+        )
+        #expect(resolved[0].points.map(\.value) == [25.0])
+    }
+
     @Test("custom label overrides generated series label")
     func customLabelOverridesGeneratedLabel() {
         let points = [

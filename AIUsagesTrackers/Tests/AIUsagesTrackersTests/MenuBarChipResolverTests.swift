@@ -74,6 +74,31 @@ private func firstResolved(
     ).segments.first!
 }
 
+@Suite("MenuBarChipResolver — Claude family merge")
+struct ResolverClaudeFamilyTests {
+    @Test("a Claude chip resolves a specific account from a claude-desktop entry")
+    func specificResolvesAcrossFamily() {
+        let result = firstResolved(
+            chip: singleSegmentChip(vendor: .claude, account: .specific("me@example.com")),
+            entries: [timeWindowEntry(vendor: .claudeDesktop, account: "me@example.com", isActive: true)]
+        )
+        #expect(result.rendered != nil)
+        #expect(result.issue == nil)
+    }
+
+    @Test("currentlyActive prefers the active family member")
+    func currentlyActivePrefersActiveMember() {
+        let result = firstResolved(
+            chip: singleSegmentChip(vendor: .claude, account: .currentlyActive),
+            entries: [
+                timeWindowEntry(vendor: .claude, account: "me@example.com", isActive: false, usagePercent: 10),
+                timeWindowEntry(vendor: .claudeDesktop, account: "me@example.com", isActive: true, usagePercent: 77),
+            ]
+        )
+        #expect(result.rendered?.text.contains("77%") == true)
+    }
+}
+
 @Suite("MenuBarChipResolver — .currentlyActive")
 struct ResolverCurrentlyActiveTests {
     @Test("renders when an active account exists")

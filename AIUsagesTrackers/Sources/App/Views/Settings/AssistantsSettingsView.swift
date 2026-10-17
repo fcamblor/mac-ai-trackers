@@ -37,14 +37,21 @@ private struct IgnoredAccountsSection: View {
             Text("No ignored accounts.")
                 .foregroundStyle(.secondary)
         } else {
-            ForEach(prefs.ignoredAccounts, id: \.self) { ignored in
+            // Group ignored sources by account family + email so a merged Claude
+            // account shows once; the trash button un-ignores all of its sources.
+            ForEach(ignoredGroups, id: \.key) { ignoredGroup in
                 HStack(spacing: 8) {
-                    VendorIconView(vendor: ignored.vendor, size: 13)
-                    Text(ignored.account.rawValue)
+                    HStack(spacing: 2) {
+                        ForEach(ignoredGroup.members, id: \.self) { member in
+                            VendorIconView(vendor: member.vendor, size: 13)
+                        }
+                    }
+                    Text(ignoredGroup.account.rawValue)
                         .font(.system(size: 12))
                     Spacer()
                     Button(role: .destructive) {
-                        prefs.ignoredAccounts.removeAll { $0 == ignored }
+                        let members = Set(ignoredGroup.members)
+                        prefs.ignoredAccounts.removeAll { members.contains($0) }
                     } label: {
                         Image(systemName: "trash")
                     }
@@ -54,6 +61,26 @@ private struct IgnoredAccountsSection: View {
             Button("Remove all", role: .destructive) {
                 prefs.ignoredAccounts = []
             }
+        }
+    }
+
+    private struct IgnoredGroup {
+        let key: String
+        let account: AccountEmail
+        let members: [IgnoredAccount]
+    }
+
+    private var ignoredGroups: [IgnoredGroup] {
+        var order: [String] = []
+        var byKey: [String: [IgnoredAccount]] = [:]
+        for ignored in prefs.ignoredAccounts {
+            let key = "\(ignored.vendor.accountFamily)\u{0000}\(ignored.account.rawValue)"
+            if byKey[key] == nil { order.append(key) }
+            byKey[key, default: []].append(ignored)
+        }
+        return order.compactMap { key in
+            guard let members = byKey[key], let first = members.first else { return nil }
+            return IgnoredGroup(key: key, account: first.account, members: members)
         }
     }
 }
@@ -166,15 +193,17 @@ private struct AccountsOrderingContent: View {
     @State private var dropIndex: Int?
     @StateObject private var cursorTracker = AccountListDragCursorTracker()
 
-    private var visibleEntries: [VendorUsageEntry] {
+    /// Accounts are listed and reordered as merged groups (Claude CLI + Claude
+    /// Desktop collapse into one row), keyed by the group id (`family:email`).
+    private var visibleGroups: [AccountDisplayGroup] {
         store.entries
             .excluding(ignoredAccounts: prefs.ignoredAccounts)
-            .sortedForDisplay(order: prefs.accountsOrder)
+            .groupedForDisplay(order: prefs.accountsOrder)
     }
 
     var body: some View {
-        let entries = visibleEntries
-        if entries.isEmpty {
+        let groups = visibleGroups
+        if groups.isEmpty {
             Text("No accounts detected yet.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -185,14 +214,14 @@ private struct AccountsOrderingContent: View {
                     .foregroundStyle(.secondary)
                 ZStack(alignment: .topLeading) {
                     LazyVStack(spacing: 2) {
-                        ForEach(entries, id: \.id) { entry in
-                            row(for: entry)
+                        ForEach(groups, id: \.id) { group in
+                            row(for: group)
                         }
                     }
                     .animation(.spring(response: 0.34, dampingFraction: 0.85), value: draggingID)
                     .animation(.spring(response: 0.34, dampingFraction: 0.85), value: dropIndex)
-                    dropIndicator(entries: entries)
-                    floatingPreview(entries: entries)
+                    dropIndicator(groups: groups)
+                    floatingPreview(groups: groups)
                 }
                 .coordinateSpace(name: Self.coordinateSpaceName)
                 .onPreferenceChange(AccountRowFramePreferenceKey.self) { rowFrames = $0 }
@@ -200,21 +229,21 @@ private struct AccountsOrderingContent: View {
         }
     }
 
-    private func row(for entry: VendorUsageEntry) -> some View {
-        let isDragging = draggingID == entry.id
+    private func row(for group: AccountDisplayGroup) -> some View {
+        let isDragging = draggingID == group.id
         return AccountOrderingRow(
-            entry: entry,
+            group: group,
             isBeingDragged: isDragging,
             dragCoordinateSpace: Self.coordinateSpaceName,
-            onIgnore: { ignore(entry: entry) },
-            onDragChanged: { value in handleDragChanged(value: value, entryID: entry.id) },
-            onDragEnded: { value in handleDragEnded(value: value, entryID: entry.id) }
+            onIgnore: { ignore(group: group) },
+            onDragChanged: { value in handleDragChanged(value: value, groupID: group.id) },
+            onDragEnded: { value in handleDragEnded(value: value, groupID: group.id) }
         )
         .background(
             GeometryReader { geo in
                 Color.clear.preference(
                     key: AccountRowFramePreferenceKey.self,
-                    value: [entry.id: geo.frame(in: .named(Self.coordinateSpaceName))]
+                    value: [group.id: geo.frame(in: .named(Self.coordinateSpaceName))]
                 )
             }
         )
@@ -224,8 +253,8 @@ private struct AccountsOrderingContent: View {
     }
 
     @ViewBuilder
-    private func dropIndicator(entries: [VendorUsageEntry]) -> some View {
-        if let dropIndex, let y = dropIndicatorY(entries: entries, atIndex: dropIndex) {
+    private func dropIndicator(groups: [AccountDisplayGroup]) -> some View {
+        if let dropIndex, let y = dropIndicatorY(groups: groups, atIndex: dropIndex) {
             Capsule()
                 .fill(Color.accentColor)
                 .frame(height: 2)
@@ -235,8 +264,8 @@ private struct AccountsOrderingContent: View {
         }
     }
 
-    private func dropIndicatorY(entries: [VendorUsageEntry], atIndex index: Int) -> CGFloat? {
-        let visible = entries.filter { $0.id != draggingID }
+    private func dropIndicatorY(groups: [AccountDisplayGroup], atIndex index: Int) -> CGFloat? {
+        let visible = groups.filter { $0.id != draggingID }
         guard !visible.isEmpty else { return 0 }
         let clamped = max(0, min(index, visible.count))
         if clamped == 0 {
@@ -251,52 +280,51 @@ private struct AccountsOrderingContent: View {
     }
 
     @ViewBuilder
-    private func floatingPreview(entries: [VendorUsageEntry]) -> some View {
+    private func floatingPreview(groups: [AccountDisplayGroup]) -> some View {
         if let id = draggingID,
-           let entry = entries.first(where: { $0.id == id }),
+           let group = groups.first(where: { $0.id == id }),
            let frame = rowFrames[id] {
             AccountListFloatingDragPreview(
                 tracker: cursorTracker,
-                entry: entry,
+                group: group,
                 frame: frame
             )
         }
     }
 
-    private func handleDragChanged(value: DragGesture.Value, entryID: String) {
+    private func handleDragChanged(value: DragGesture.Value, groupID: String) {
         if draggingID == nil {
-            draggingID = entryID
+            draggingID = groupID
         }
         cursorTracker.y = value.location.y
-        let entries = visibleEntries
-        let newDropIndex = computeDropIndex(at: value.location.y, entries: entries)
+        let newDropIndex = computeDropIndex(at: value.location.y, groups: visibleGroups)
         if newDropIndex != dropIndex {
             dropIndex = newDropIndex
         }
     }
 
-    private func handleDragEnded(value: DragGesture.Value, entryID: String) {
-        let entries = visibleEntries
-        let finalIndex = computeDropIndex(at: value.location.y, entries: entries)
-        performDrop(draggedID: entryID, toVisibleIndex: finalIndex, entries: entries)
+    private func handleDragEnded(value: DragGesture.Value, groupID: String) {
+        let groups = visibleGroups
+        let finalIndex = computeDropIndex(at: value.location.y, groups: groups)
+        performDrop(draggedID: groupID, toVisibleIndex: finalIndex, groups: groups)
         withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
             draggingID = nil
             dropIndex = nil
         }
     }
 
-    private func computeDropIndex(at y: CGFloat, entries: [VendorUsageEntry]) -> Int {
-        let visible = entries.filter { $0.id != draggingID }
-        for (idx, entry) in visible.enumerated() {
-            guard let frame = rowFrames[entry.id] else { continue }
+    private func computeDropIndex(at y: CGFloat, groups: [AccountDisplayGroup]) -> Int {
+        let visible = groups.filter { $0.id != draggingID }
+        for (idx, group) in visible.enumerated() {
+            guard let frame = rowFrames[group.id] else { continue }
             if y < frame.midY { return idx }
         }
         return visible.count
     }
 
-    private func performDrop(draggedID: String, toVisibleIndex visibleIndex: Int, entries: [VendorUsageEntry]) {
-        var ids = entries.map(\.id)
-        guard let sourceIdx = ids.firstIndex(of: draggedID) else { return }
+    private func performDrop(draggedID: String, toVisibleIndex visibleIndex: Int, groups: [AccountDisplayGroup]) {
+        var ordered = groups
+        guard let sourceIdx = ordered.firstIndex(where: { $0.id == draggedID }) else { return }
         let destOffset: Int
         if visibleIndex >= sourceIdx {
             destOffset = visibleIndex + 1
@@ -304,20 +332,26 @@ private struct AccountsOrderingContent: View {
             destOffset = visibleIndex
         }
         if destOffset == sourceIdx || destOffset == sourceIdx + 1 { return }
-        ids.move(fromOffsets: IndexSet(integer: sourceIdx), toOffset: destOffset)
-        prefs.accountsOrder = ids
+        ordered.move(fromOffsets: IndexSet(integer: sourceIdx), toOffset: destOffset)
+        // Persist as the flat list of member entry ids in the new group order —
+        // `sortedForDisplay`/`groupedForDisplay` key on entry ids, so writing a
+        // group's members consecutively keeps that group in place.
+        prefs.accountsOrder = ordered.flatMap { $0.members.map(\.id) }
     }
 
-    private func ignore(entry: VendorUsageEntry) {
-        let ignored = IgnoredAccount(vendor: entry.vendor, account: entry.account)
-        if !prefs.ignoredAccounts.contains(ignored) {
-            prefs.ignoredAccounts.append(ignored)
+    private func ignore(group: AccountDisplayGroup) {
+        // From Settings, ignoring a merged account hides all of its auth sources.
+        for member in group.members {
+            let ignored = IgnoredAccount(vendor: member.vendor, account: member.account)
+            if !prefs.ignoredAccounts.contains(ignored) {
+                prefs.ignoredAccounts.append(ignored)
+            }
         }
     }
 }
 
 private struct AccountOrderingRow: View {
-    let entry: VendorUsageEntry
+    let group: AccountDisplayGroup
     let isBeingDragged: Bool
     let dragCoordinateSpace: String
     let onIgnore: () -> Void
@@ -329,8 +363,8 @@ private struct AccountOrderingRow: View {
     var body: some View {
         HStack(spacing: 8) {
             dragHandle
-            VendorIconView(vendor: entry.vendor, size: 13)
-            Text(entry.account.rawValue)
+            AccountGroupVendorIcons(members: group.members)
+            Text(group.account.rawValue)
                 .font(.system(size: 12))
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -378,7 +412,7 @@ private struct AccountOrderingRow: View {
 /// Mirrors the in-list row so the user keeps a consistent mental anchor
 /// while dragging, but strips interactive bits (hover, cursor, button).
 private struct AccountDragPreviewCard: View {
-    let entry: VendorUsageEntry
+    let group: AccountDisplayGroup
 
     var body: some View {
         HStack(spacing: 8) {
@@ -386,8 +420,8 @@ private struct AccountDragPreviewCard: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .frame(width: 18, height: 22)
-            VendorIconView(vendor: entry.vendor, size: 13)
-            Text(entry.account.rawValue)
+            AccountGroupVendorIcons(members: group.members)
+            Text(group.account.rawValue)
                 .font(.system(size: 12))
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -414,14 +448,33 @@ private struct AccountDragPreviewCard: View {
 
 private struct AccountListFloatingDragPreview: View {
     @ObservedObject var tracker: AccountListDragCursorTracker
-    let entry: VendorUsageEntry
+    let group: AccountDisplayGroup
     let frame: CGRect
 
     var body: some View {
-        AccountDragPreviewCard(entry: entry)
+        AccountDragPreviewCard(group: group)
             .frame(width: max(frame.width, 240))
             .offset(x: frame.minX, y: tracker.y - frame.height / 2)
             .allowsHitTesting(false)
+    }
+}
+
+/// Shows one vendor icon per auth source of a merged account (deduplicated by
+/// vendor), so the ordering/ignored rows read like the popover's merged card.
+private struct AccountGroupVendorIcons: View {
+    let members: [VendorUsageEntry]
+
+    private var vendors: [Vendor] {
+        var seen = Set<String>()
+        return members.map(\.vendor).filter { seen.insert($0.rawValue).inserted }
+    }
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(vendors, id: \.rawValue) { vendor in
+                VendorIconView(vendor: vendor, size: 13)
+            }
+        }
     }
 }
 

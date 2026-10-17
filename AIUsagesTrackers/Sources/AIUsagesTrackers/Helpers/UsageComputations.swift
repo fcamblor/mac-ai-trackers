@@ -206,11 +206,7 @@ public struct AccountDisplayGroup: Identifiable, Equatable, Sendable {
     /// we prefer an active member, then the most recently refreshed, then one
     /// without an error, so the card shows live data over stale/errored data.
     public var representativeMember: VendorUsageEntry? {
-        members.max { lhs, rhs in
-            if lhs.isActive != rhs.isActive { return !lhs.isActive }
-            if (lhs.lastError == nil) != (rhs.lastError == nil) { return lhs.lastError != nil }
-            return (lhs.lastAcquiredOn?.rawValue ?? "") < (rhs.lastAcquiredOn?.rawValue ?? "")
-        }
+        members.representativeEntry()
     }
 }
 
@@ -277,6 +273,19 @@ extension Array where Element == VendorUsageEntry {
     public func excluding(ignoredAccounts: [IgnoredAccount]) -> [VendorUsageEntry] {
         let ignoredSet = Set(ignoredAccounts)
         return filter { !ignoredSet.contains(IgnoredAccount(vendor: $0.vendor, account: $0.account)) }
+    }
+
+    /// The entry that best represents this set of same-account members: an
+    /// active one, else one without an error, else the most recently refreshed.
+    /// Members of one account family report identical usage, so any works; this
+    /// just prefers live data over stale/errored data. Shared by the display
+    /// group and the menubar/chart resolvers so they all agree on the winner.
+    public func representativeEntry() -> VendorUsageEntry? {
+        self.max { lhs, rhs in
+            if lhs.isActive != rhs.isActive { return !lhs.isActive }
+            if (lhs.lastError == nil) != (rhs.lastError == nil) { return lhs.lastError != nil }
+            return (lhs.lastAcquiredOn?.rawValue ?? "") < (rhs.lastAcquiredOn?.rawValue ?? "")
+        }
     }
 
     /// Set of vendors that appear more than once in the array.
