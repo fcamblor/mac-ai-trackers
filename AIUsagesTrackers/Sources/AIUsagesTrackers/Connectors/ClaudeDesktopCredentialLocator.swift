@@ -7,12 +7,18 @@ import Foundation
 /// connector's local expiry pre-check.
 public struct ClaudeDesktopCredential: Sendable, Equatable {
     public let accountLabel: String
+    /// Anthropic account UUID parsed from the token-cache key. Stable across
+    /// runs and shared with the `claude` CLI's `oauthAccount.accountUuid`, so it
+    /// is the robust key for detecting that a Claude Desktop profile and a CLI
+    /// login are the same account.
+    public let accountUuid: String?
     public let accessToken: String
     public let expiresAt: Date?
     public let subscriptionType: String?
 
-    public init(accountLabel: String, accessToken: String, expiresAt: Date?, subscriptionType: String?) {
+    public init(accountLabel: String, accountUuid: String?, accessToken: String, expiresAt: Date?, subscriptionType: String?) {
         self.accountLabel = accountLabel
+        self.accountUuid = accountUuid
         self.accessToken = accessToken
         self.expiresAt = expiresAt
         self.subscriptionType = subscriptionType
@@ -136,6 +142,7 @@ public actor ClaudeDesktopCredentialLocator: CredentialLocator {
             guard usedLabels.insert(label).inserted else { continue }
             result.append(ClaudeDesktopCredential(
                 accountLabel: label,
+                accountUuid: accountUuid(fromCacheKey: key),
                 accessToken: token,
                 expiresAt: parseExpiresAt(entry["expiresAt"]),
                 subscriptionType: entry["subscriptionType"] as? String
@@ -158,6 +165,17 @@ public actor ClaudeDesktopCredentialLocator: CredentialLocator {
             return nil
         }
         return String(key[orgRange])
+    }
+
+    /// Extracts the account UUID between the `acct:` prefix and the first `|` in
+    /// a cache key. Returns nil when the key does not match the expected shape.
+    static func accountUuid(fromCacheKey key: String) -> String? {
+        guard key.hasPrefix("acct:"), let pipe = key.firstIndex(of: "|") else {
+            return nil
+        }
+        let start = key.index(key.startIndex, offsetBy: "acct:".count)
+        let uuid = String(key[start..<pipe])
+        return uuid.isEmpty ? nil : uuid
     }
 
     /// Accepts `Double`, `Int`, or numeric `String` millisecond epoch — the same

@@ -21,10 +21,16 @@ _verified: 2026-10-17_
 | Method | URL | Headers | Timeout | Response Content-Type |
 |--------|-----|---------|---------|-----------------------|
 | GET    | `https://api.anthropic.com/api/oauth/usage` | `Authorization: Bearer <oauth>`, `anthropic-beta: oauth-2025-04-20` | 5s | `application/json` |
+| GET    | `https://api.anthropic.com/api/oauth/profile` | `Authorization: Bearer <oauth>`, `anthropic-beta: oauth-2025-04-20` | 5s | `application/json` |
 
-Identical to the `claude` vendor. The response additionally carries a
-`seven_day_breakdown` block (per-product shares) that both connectors now
-consume — see Metric semantics.
+The usage endpoint is identical to the `claude` vendor; its response
+additionally carries a `seven_day_breakdown` block (per-product shares)
+that both connectors now consume — see Metric semantics.
+
+The profile endpoint resolves the account behind a bearer. Its response is
+`{ account: { uuid, email_address }, organization: { uuid, name } }`. The
+connector calls it to turn each Desktop profile bearer into the account's
+real email (see Account identity).
 
 ## Credential sources
 
@@ -83,13 +89,26 @@ background polls are silent.
 
 ### Account identity
 
-Claude Desktop profiles do not expose an account email in cleartext, so the
-account identity is the **profile directory name** (`Claude`, `Claude-3p`,
-`Dentalsoft`, …). When a single profile holds inference entries for more
-than one organisation, the label is disambiguated as
-`<profile> · <first 8 chars of orgUuid>` so the merge keeps them as distinct
-accounts. The label is stable across runs, satisfying the usage-retention
-merge key requirement.
+Claude Desktop profiles do not store an account email in cleartext —
+`config.json` only carries `lastKnownAccountUuid`, and the decrypted
+token-cache keys embed the same `acct:<accountUuid>|…`. To make a Desktop
+profile and a Claude Code login recognisable as the same account, the
+connector resolves the **real account email** from `GET /api/oauth/profile`
+and uses it as the account identity. This aligns with the `claude` vendor,
+which already identifies accounts by `oauthAccount.emailAddress`: the same
+person's Claude Code and Claude Desktop entries then share an `AccountEmail`
+(distinct rows, since they are distinct vendors) and the UI can group them.
+
+The accountUuid parsed from the token-cache key is the robust join key
+(stable, shared with the CLI's `oauthAccount.accountUuid`) and is used to
+**cache** the resolved email per account so the profile endpoint is hit at
+most once per account per process.
+
+Resolution falls back to the **profile directory name** (`Claude`,
+`Claude-3p`, `Dentalsoft`, …) when the email cannot be fetched (no UUID,
+expired token, or profile-endpoint failure). When a single profile holds
+inference entries for more than one organisation, the fallback label is
+disambiguated as `<profile> · <first 8 chars of orgUuid>`.
 
 ## Sanitized fields
 
@@ -218,3 +237,7 @@ under a second vendor.
   `oauth:tokenCacheV2`, multi-profile / multi-account support, opt-in gating
   for the `Claude Safe Storage` Keychain read, and shared `seven_day_breakdown`
   per-product parsing (also consumed by the `claude` connector).
+- 2026-10-18 — resolve the real account email from `/api/oauth/profile` and
+  use it as the account identity (cached per accountUuid) so Claude Desktop
+  and Claude Code entries for the same account share an identity. Fall back to
+  the profile label when resolution is not possible.

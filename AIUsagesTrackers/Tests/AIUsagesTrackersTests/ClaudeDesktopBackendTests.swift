@@ -158,6 +158,13 @@ struct ClaudeDesktopCredentialLocatorTests {
         #expect(ClaudeDesktopCredentialLocator.orgUuid(fromCacheKey: key) == "abcdef01-2345-6789-abcd-ef0123456789")
     }
 
+    @Test("accountUuid extracts the id between acct: and the first pipe")
+    func accountUuidExtraction() {
+        let key = "acct:839b59f1-5fcc-4731-8933-2086e5b040e5|session:org:https://api.anthropic.com:user:inference"
+        #expect(ClaudeDesktopCredentialLocator.accountUuid(fromCacheKey: key) == "839b59f1-5fcc-4731-8933-2086e5b040e5")
+        #expect(ClaudeDesktopCredentialLocator.accountUuid(fromCacheKey: "no-prefix") == nil)
+    }
+
     @Test("parseExpiresAt accepts ms epoch in several shapes")
     func parseExpiresAtShapes() {
         #expect(ClaudeDesktopCredentialLocator.parseExpiresAt(1_700_000_000_000 as Double) != nil)
@@ -165,6 +172,21 @@ struct ClaudeDesktopCredentialLocatorTests {
         #expect(ClaudeDesktopCredentialLocator.parseExpiresAt("1700000000000") != nil)
         #expect(ClaudeDesktopCredentialLocator.parseExpiresAt(nil) == nil)
         #expect(ClaudeDesktopCredentialLocator.parseExpiresAt("not-a-number") == nil)
+    }
+}
+
+@Suite("HTTPClaudeProfileResolver — parsing")
+struct HTTPClaudeProfileResolverTests {
+    @Test("parses account.email_address from a profile payload")
+    func parsesEmail() {
+        let json = #"{"account":{"uuid":"u","email_address":"frederic.camblor@4sh.fr"},"organization":{"uuid":"o","name":"4SH"}}"#
+        #expect(HTTPClaudeProfileResolver.parseEmail(Data(json.utf8)) == AccountEmail(rawValue: "frederic.camblor@4sh.fr"))
+    }
+
+    @Test("returns nil when the email is missing")
+    func missingEmail() {
+        let json = #"{"account":{"uuid":"u"}}"#
+        #expect(HTTPClaudeProfileResolver.parseEmail(Data(json.utf8)) == nil)
     }
 }
 

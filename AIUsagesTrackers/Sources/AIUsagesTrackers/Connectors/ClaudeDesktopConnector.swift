@@ -18,14 +18,18 @@ public actor ClaudeDesktopConnector: UsageConnector {
     private let logger: FileLogger
     private let session: URLSession
     private let credentialLocator: any CredentialLocator<[ClaudeDesktopCredential]>
+    private let profileResolver: any ClaudeProfileResolving
     private let isEnabled: @Sendable () -> Bool
     private let clock: @Sendable () -> Date
     private let parser = ClaudeUsageResponseParser()
 
-    /// Preserves per-account metrics across auth failures (keyed by account
-    /// label) so an expired token does not wipe still-valid numbers — mirrors
-    /// `ClaudeCodeConnector.lastKnownMetrics`, per account.
+    /// Preserves per-account metrics across auth failures (keyed by resolved
+    /// account identity) so an expired token does not wipe still-valid numbers —
+    /// mirrors `ClaudeCodeConnector.lastKnownMetrics`, per account.
     private var lastKnownMetricsByAccount: [String: [UsageMetric]] = [:]
+    /// Caches the resolved account email per account UUID so the profile
+    /// endpoint is hit at most once per account per process, not every poll.
+    private var emailCacheByUuid: [String: AccountEmail] = [:]
 
     /// See `ClaudeCredentialLocator.expirySkewSeconds`.
     private static let expirySkewSeconds: TimeInterval = 60
@@ -34,12 +38,14 @@ public actor ClaudeDesktopConnector: UsageConnector {
         logger: FileLogger = Loggers.claudeDesktop,
         session: URLSession = .shared,
         credentialLocator: any CredentialLocator<[ClaudeDesktopCredential]> = ClaudeDesktopCredentialLocator(),
+        profileResolver: (any ClaudeProfileResolving)? = nil,
         isEnabled: @escaping @Sendable () -> Bool,
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.logger = logger
         self.session = session
         self.credentialLocator = credentialLocator
+        self.profileResolver = profileResolver ?? HTTPClaudeProfileResolver(session: session, logger: logger)
         self.isEnabled = isEnabled
         self.clock = clock
     }
@@ -85,12 +91,14 @@ public actor ClaudeDesktopConnector: UsageConnector {
     // MARK: - Per-account fetch
 
     private func fetchOne(credential: ClaudeDesktopCredential) async -> VendorUsageEntry {
-        let account = AccountEmail(rawValue: credential.accountLabel)
-        let preserved = lastKnownMetricsByAccount[credential.accountLabel] ?? []
+        let tokenLikelyExpired = credential.expiresAt.map {
+            clock().addingTimeInterval(Self.expirySkewSeconds) >= $0
+        } ?? false
+        let account = await resolveAccount(credential: credential, tokenLikelyExpired: tokenLikelyExpired)
+        let preserved = lastKnownMetricsByAccount[account.rawValue] ?? []
 
-        if let expiresAt = credential.expiresAt,
-           clock().addingTimeInterval(Self.expirySkewSeconds) >= expiresAt {
-            logger.log(.warning, "Token for '\(credential.accountLabel)' expired at \(expiresAt) — skipping fetch. Re-open Claude Desktop to refresh.")
+        if tokenLikelyExpired {
+            logger.log(.warning, "Token for '\(account.rawValue)' expired — skipping fetch. Re-open Claude Desktop to refresh.")
             return errorEntry(account: account, type: "token_expired", isActive: false, preservedMetrics: preserved)
         }
 
@@ -112,10 +120,10 @@ public actor ClaudeDesktopConnector: UsageConnector {
         }
 
         let httpCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-        logger.log(.info, "API response for '\(credential.accountLabel)': HTTP \(httpCode)")
+        logger.log(.info, "API response for '\(account.rawValue)': HTTP \(httpCode)")
 
         if httpCode == 401 {
-            logger.log(.error, "HTTP 401 for '\(credential.accountLabel)' — token expired. Re-open Claude Desktop to refresh.")
+            logger.log(.error, "HTTP 401 for '\(account.rawValue)' — token expired. Re-open Claude Desktop to refresh.")
             return errorEntry(account: account, type: "token_expired", isActive: false, preservedMetrics: preserved)
         }
         if httpCode == 429 {
@@ -127,7 +135,7 @@ public actor ClaudeDesktopConnector: UsageConnector {
 
         do {
             let metrics = try parser.parseMetrics(data)
-            lastKnownMetricsByAccount[credential.accountLabel] = metrics
+            lastKnownMetricsByAccount[account.rawValue] = metrics
             return VendorUsageEntry(
                 vendor: vendor,
                 account: account,
@@ -140,6 +148,25 @@ public actor ClaudeDesktopConnector: UsageConnector {
             logger.log(.error, "Response parse failed for '\(credential.accountLabel)': \(error)")
             return errorEntry(account: account, type: "parse_error")
         }
+    }
+
+    /// Resolves the account identity for a credential, preferring the real
+    /// account email (so Claude Desktop and Claude Code entries for the same
+    /// person share an identity). Resolution is cached per account UUID. Falls
+    /// back to the profile-derived label when the email cannot be fetched (no
+    /// UUID, expired token, or profile endpoint failure).
+    private func resolveAccount(credential: ClaudeDesktopCredential, tokenLikelyExpired: Bool) async -> AccountEmail {
+        let fallback = AccountEmail(rawValue: credential.accountLabel)
+        guard let uuid = credential.accountUuid else { return fallback }
+        if let cached = emailCacheByUuid[uuid] { return cached }
+        // A dead token cannot resolve a profile; keep the label until a live
+        // token lets us resolve the real email on a later tick.
+        guard !tokenLikelyExpired else { return fallback }
+        guard let email = await profileResolver.resolveEmail(accessToken: credential.accessToken) else {
+            return fallback
+        }
+        emailCacheByUuid[uuid] = email
+        return email
     }
 
     private func errorEntry(account: AccountEmail, type: String, isActive: Bool = false, preservedMetrics: [UsageMetric] = []) -> VendorUsageEntry {

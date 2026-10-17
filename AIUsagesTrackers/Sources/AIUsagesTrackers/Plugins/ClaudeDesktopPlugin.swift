@@ -15,7 +15,9 @@ public enum ClaudeDesktopPlugin {
     public static let branding = VendorBranding(
         vendor: .claudeDesktop,
         displayName: "Claude Desktop",
-        tintHex: "8A6DF0",
+        // Same orange mark and tint as the `claude` vendor — they are the same
+        // product family; the display name is what distinguishes the rows.
+        tintHex: "DA7756",
         assetName: "claude-mark"
     )
     public static let documentation = VendorDocumentation(vendor: .claudeDesktop, slug: "claude-desktop")
