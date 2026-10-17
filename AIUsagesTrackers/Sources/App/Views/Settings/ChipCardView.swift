@@ -241,7 +241,10 @@ struct ChipCardView: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 56, alignment: .leading)
                 Picker("", selection: Binding(
-                    get: { chip.vendor },
+                    // Normalise to the family-canonical vendor so a chip saved
+                    // against claude-desktop still matches the single "Claude"
+                    // option.
+                    get: { chip.vendor.familyCanonicalVendor },
                     set: { newVendor in
                         var c = binding.wrappedValue
                         c.vendor = newVendor
@@ -259,7 +262,7 @@ struct ChipCardView: View {
                     }
                 )) {
                     ForEach(availableVendors, id: \.rawValue) { v in
-                        Text(VendorBrandingResolver.displayName(for: v)).tag(v)
+                        Text(VendorBrandingResolver.familyDisplayName(for: v)).tag(v)
                     }
                 }
                 .labelsHidden()
@@ -369,7 +372,8 @@ struct ChipCardView: View {
     }
 
     private var availableVendors: [Vendor] {
-        Array(Set(store.entries.map(\.vendor))).sorted { $0.rawValue < $1.rawValue }
+        // Collapse claude + claude-desktop into the single "Claude" family entry.
+        Array(Set(store.entries.map(\.vendor.familyCanonicalVendor))).sorted { $0.rawValue < $1.rawValue }
     }
 
     private func chromeSectionTitle(_ text: String) -> some View {

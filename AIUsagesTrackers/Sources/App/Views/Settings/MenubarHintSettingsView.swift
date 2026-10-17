@@ -428,7 +428,8 @@ private struct MenubarHintContent: View {
     // MARK: Helpers
 
     private var availableVendors: [Vendor] {
-        Array(Set(store.entries.map(\.vendor))).sorted { $0.rawValue < $1.rawValue }
+        // Collapse claude + claude-desktop into the single "Claude" family entry.
+        Array(Set(store.entries.map(\.vendor.familyCanonicalVendor))).sorted { $0.rawValue < $1.rawValue }
     }
 
     private func firstAvailableMetricName(

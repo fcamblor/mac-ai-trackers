@@ -90,9 +90,9 @@ struct AccountGroupCardView: View {
             // active state — a source can be discovered but inactive right now.
             HStack(spacing: 6) {
                 ForEach(Array(group.members.enumerated()), id: \.offset) { _, member in
-                    AuthSourceChip(label: authLabel(member.vendor), isActive: member.isActive)
+                    AuthSourceChip(label: authSourceLabel(for: member.vendor), isActive: member.isActive)
                         .contextMenu {
-                            Button("Ignore \(authLabel(member.vendor)) auth for this account") {
+                            Button("Ignore \(authSourceLabel(for: member.vendor)) auth for this account") {
                                 onIgnoreMember(member)
                             }
                         }
@@ -107,20 +107,21 @@ struct AccountGroupCardView: View {
         .cardBackground(isActive: group.isActive)
     }
 
-    /// Short auth-source label for the chip. Claude family: CLI → "tui",
-    /// Electron app → "desktop"; any other vendor falls back to its raw name.
-    private func authLabel(_ vendor: Vendor) -> String {
-        switch vendor {
-        case .claude: "tui"
-        case .claudeDesktop: "desktop"
-        default: vendor.rawValue
-        }
+}
+
+/// Short auth-source label for a chip. Claude family: CLI → "tui", Electron app
+/// → "desktop"; any other vendor falls back to its raw name.
+func authSourceLabel(for vendor: Vendor) -> String {
+    switch vendor {
+    case .claude: "tui"
+    case .claudeDesktop: "desktop"
+    default: vendor.rawValue
     }
 }
 
 /// A small capsule naming one auth source, green when that source is currently
 /// active and muted when it is known but inactive.
-private struct AuthSourceChip: View {
+struct AuthSourceChip: View {
     let label: String
     let isActive: Bool
 

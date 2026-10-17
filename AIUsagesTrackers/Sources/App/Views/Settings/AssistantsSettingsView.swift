@@ -459,20 +459,28 @@ private struct AccountListFloatingDragPreview: View {
     }
 }
 
-/// Shows one vendor icon per auth source of a merged account (deduplicated by
-/// vendor), so the ordering/ignored rows read like the popover's merged card.
+/// A single family icon followed by one chip per auth source (tui / desktop),
+/// so the ordering/ignored rows read like the popover's merged card without
+/// repeating the vendor icon.
 private struct AccountGroupVendorIcons: View {
     let members: [VendorUsageEntry]
 
-    private var vendors: [Vendor] {
+    private var familyVendor: Vendor {
+        members.first?.vendor.familyCanonicalVendor ?? .claude
+    }
+
+    private var sources: [(vendor: Vendor, isActive: Bool)] {
         var seen = Set<String>()
-        return members.map(\.vendor).filter { seen.insert($0.rawValue).inserted }
+        return members
+            .filter { seen.insert($0.vendor.rawValue).inserted }
+            .map { ($0.vendor, $0.isActive) }
     }
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(vendors, id: \.rawValue) { vendor in
-                VendorIconView(vendor: vendor, size: 13)
+        HStack(spacing: 4) {
+            VendorIconView(vendor: familyVendor, size: 13)
+            ForEach(sources, id: \.vendor.rawValue) { source in
+                AuthSourceChip(label: authSourceLabel(for: source.vendor), isActive: source.isActive)
             }
         }
     }

@@ -22,6 +22,14 @@ enum VendorBrandingResolver {
         brand(for: vendor)?.displayName ?? vendor.rawValue
     }
 
+    /// Display name for an account *family* — used in pickers and selectors that
+    /// treat Claude CLI + Claude Desktop as one account. The Claude family reads
+    /// "Claude" rather than either vendor's product name.
+    static func familyDisplayName(for vendor: Vendor) -> String {
+        if vendor.accountFamily == "claude" { return "Claude" }
+        return displayName(for: vendor)
+    }
+
     static func tint(for vendor: Vendor) -> Color? {
         guard let tintHex = brand(for: vendor)?.tintHex else { return nil }
         return Color(hex: tintHex)
