@@ -150,7 +150,11 @@ struct UsageDetailsView: View {
                         }
                     }
                     ForEach(groups) { group in
-                        if group.members.count == 1, let entry = group.members.first {
+                        // Claude-family accounts (CLI + Desktop) always use the
+                        // chip card so the auth source(s) are labelled, even with
+                        // a single source. Other vendors keep the plain card.
+                        let usesChips = group.members.contains { $0.vendor.accountFamily == "claude" }
+                        if !usesChips, let entry = group.members.first {
                             AccountCardView(
                                 entry: entry,
                                 isRefreshing: refreshState.isRefreshing(

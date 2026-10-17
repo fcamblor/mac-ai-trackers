@@ -190,13 +190,28 @@ public struct AccountDisplayGroup: Identifiable, Equatable, Sendable {
         self.members = members
     }
 
-    /// Stable across refreshes — the shared account identity.
-    public var id: String { account.rawValue }
+    /// Stable across refreshes — account family + identity (so a Codex login
+    /// sharing an email with Claude gets its own group).
+    public var id: String {
+        "\(members.first?.vendor.accountFamily ?? ""):\(account.rawValue)"
+    }
 
     /// The group is active when any of its vendor members is active. Per-vendor
     /// active semantics differ (Claude Code: single active; Claude Desktop:
     /// several profiles can run at once), so the group-level flag is an OR.
     public var isActive: Bool { members.contains { $0.isActive } }
+
+    /// The member whose usage numbers represent the group. Members of one group
+    /// authenticate the same account and report identical usage, so any works;
+    /// we prefer an active member, then the most recently refreshed, then one
+    /// without an error, so the card shows live data over stale/errored data.
+    public var representativeMember: VendorUsageEntry? {
+        members.max { lhs, rhs in
+            if lhs.isActive != rhs.isActive { return !lhs.isActive }
+            if (lhs.lastError == nil) != (rhs.lastError == nil) { return lhs.lastError != nil }
+            return (lhs.lastAcquiredOn?.rawValue ?? "") < (rhs.lastAcquiredOn?.rawValue ?? "")
+        }
+    }
 }
 
 // MARK: - Entry sorting
@@ -242,7 +257,10 @@ extension Array where Element == VendorUsageEntry {
         var keyOrder: [String] = []
         var membersByKey: [String: [VendorUsageEntry]] = [:]
         for entry in sorted {
-            let key = entry.account.rawValue
+            // Key on account family + email so only same-account vendors (Claude
+            // CLI + Claude Desktop) merge; a Codex/Copilot login sharing an email
+            // stays on its own card.
+            let key = "\(entry.vendor.accountFamily)\u{0000}\(entry.account.rawValue)"
             if membersByKey[key] == nil {
                 keyOrder.append(key)
                 membersByKey[key] = []

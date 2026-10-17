@@ -205,6 +205,30 @@ struct GroupedForDisplayTests {
         #expect(Set(merged?.members.map(\.vendor.rawValue) ?? []) == ["claude", "claude-desktop"])
     }
 
+    @Test("a non-Claude vendor sharing an email is NOT merged with Claude")
+    func foreignVendorSameEmailNotMerged() {
+        let entries = [
+            entry(vendor: "claude", account: "me@x.com"),
+            entry(vendor: "claude-desktop", account: "me@x.com"),
+            entry(vendor: "codex", account: "me@x.com"),
+        ]
+        let groups = entries.groupedForDisplay()
+        #expect(groups.count == 2)
+        let claudeGroup = groups.first { $0.members.contains { $0.vendor == .claude } }
+        #expect(claudeGroup?.members.count == 2)
+        let codexGroup = groups.first { $0.members.contains { $0.vendor == .codex } }
+        #expect(codexGroup?.members.count == 1)
+    }
+
+    @Test("representative member prefers the active one")
+    func representativePrefersActive() {
+        let group = AccountDisplayGroup(account: AccountEmail(rawValue: "me@x.com"), members: [
+            entry(vendor: "claude", account: "me@x.com", isActive: false),
+            entry(vendor: "claude-desktop", account: "me@x.com", isActive: true),
+        ])
+        #expect(group.representativeMember?.vendor == .claudeDesktop)
+    }
+
     @Test("group is active when any member is active")
     func groupActiveIfAnyMemberActive() {
         let entries = [

@@ -47,9 +47,10 @@ struct AccountCardView: View {
     }
 }
 
-/// Merged card for an account present under several vendors (e.g. Claude Code
-/// and Claude Desktop). The shared account email is shown once; each vendor is a
-/// labelled sub-section with its own active state, metrics, and errors.
+/// Merged card for one account authenticated through several same-family
+/// vendors (Claude CLI + Claude Desktop). These report identical usage, so the
+/// metrics are shown once (from the representative member); a chip per member
+/// shows which auth sources are associated and whether each is currently active.
 struct AccountGroupCardView: View {
     let group: AccountDisplayGroup
     var isRefreshing: (VendorUsageEntry) -> Bool
@@ -59,11 +60,15 @@ struct AccountGroupCardView: View {
     private var anyRefreshing: Bool { group.members.contains(where: isRefreshing) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
+                if let vendor = group.members.first?.vendor {
+                    VendorIconView(vendor: vendor, size: 13)
+                }
+
                 Text(group.account.rawValue)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.primary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
 
@@ -72,42 +77,62 @@ struct AccountGroupCardView: View {
                 }
 
                 Spacer()
+            }
 
-                if group.isActive {
-                    ActiveCapsule()
+            // One chip per auth source (tui / desktop …), coloured by its own
+            // active state — a source can be discovered but inactive right now.
+            HStack(spacing: 6) {
+                ForEach(Array(group.members.enumerated()), id: \.offset) { _, member in
+                    AuthSourceChip(label: authLabel(member.vendor), isActive: member.isActive)
+                        .contextMenu {
+                            Button("Ignore \(authLabel(member.vendor)) auth for this account") {
+                                onIgnoreMember(member)
+                            }
+                        }
                 }
             }
 
-            ForEach(Array(group.members.enumerated()), id: \.offset) { _, member in
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 6) {
-                        VendorIconView(vendor: member.vendor, size: 13)
-                        Text(vendorDisplayName(member.vendor))
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        if member.isActive {
-                            ActiveCapsule()
-                        }
-                    }
-                    EntryBodyView(entry: member, onOpenAssistantsSettings: onOpenAssistantsSettings)
-                }
-                .padding(8)
-                .background(
-                    member.isActive ? Color.green.opacity(0.12) : Color.primary.opacity(0.04),
-                    in: RoundedRectangle(cornerRadius: 6)
-                )
-                .contextMenu {
-                    Button("Ignore this account") { onIgnoreMember(member) }
-                }
+            if let representative = group.representativeMember {
+                EntryBodyView(entry: representative, onOpenAssistantsSettings: onOpenAssistantsSettings)
             }
         }
         .padding(10)
         .cardBackground(isActive: group.isActive)
     }
 
-    private func vendorDisplayName(_ vendor: Vendor) -> String {
-        VendorRegistry.bundle(for: vendor)?.branding.displayName ?? vendor.rawValue
+    /// Short auth-source label for the chip. Claude family: CLI → "tui",
+    /// Electron app → "desktop"; any other vendor falls back to its raw name.
+    private func authLabel(_ vendor: Vendor) -> String {
+        switch vendor {
+        case .claude: "tui"
+        case .claudeDesktop: "desktop"
+        default: vendor.rawValue
+        }
+    }
+}
+
+/// A small capsule naming one auth source, green when that source is currently
+/// active and muted when it is known but inactive.
+private struct AuthSourceChip: View {
+    let label: String
+    let isActive: Bool
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Circle()
+                .fill(isActive ? Color.green : Color.secondary.opacity(0.5))
+                .frame(width: 5, height: 5)
+            Text(label)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(isActive ? Color.primary : Color.secondary)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(
+            (isActive ? Color.green.opacity(0.18) : Color.secondary.opacity(0.12)),
+            in: Capsule()
+        )
+        .help(isActive ? "\(label): active" : "\(label): detected, not active")
     }
 }
 

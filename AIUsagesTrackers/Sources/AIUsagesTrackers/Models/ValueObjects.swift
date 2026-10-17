@@ -128,6 +128,19 @@ public struct Vendor: RawRepresentable, Codable, Equatable, Hashable, Sendable {
     public init(rawValue: String) { self.rawValue = rawValue }
 
     public static let claude = Vendor(rawValue: "claude")
+
+    /// Vendors that authenticate the *same* upstream account report identical
+    /// usage and must be merged into one account card. `claude` (CLI/TUI) and
+    /// `claude-desktop` (the Electron app) are the same Anthropic account, so
+    /// they share a family; every other vendor is its own family. The display
+    /// layer groups by `(accountFamily, account)` so a Codex or Copilot login
+    /// that happens to use the same email is NOT merged with Claude.
+    public var accountFamily: String {
+        switch self {
+        case .claude, .claudeDesktop: "claude"
+        default: rawValue
+        }
+    }
     /// Claude Desktop reads usage from the Electron app's per-profile OAuth
     /// token cache rather than the `claude` CLI keychain entry, so it is a
     /// distinct vendor with its own credential mechanism and multi-account

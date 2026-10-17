@@ -255,5 +255,9 @@ under a second vendor.
   and Claude Code entries for the same account share an identity. Fall back to
   the profile label when resolution is not possible.
 - 2026-10-18 — per-profile active detection via `/bin/ps` (several profiles may
-  be active at once; some inactive). The popover now merges same-email entries
-  across vendors into one card. Same orange mark/tint as the `claude` vendor.
+  be active at once; some inactive). The popover merges the `claude` (CLI/TUI)
+  and `claude-desktop` entries for one account — same Anthropic account, same
+  usage — into a single card with a `tui` / `desktop` chip per auth source,
+  each chip coloured by that source's own active state. Grouping is keyed on
+  account *family* + email, so a Codex/Copilot login sharing an email is never
+  merged with Claude. Same orange mark/tint as the `claude` vendor.
