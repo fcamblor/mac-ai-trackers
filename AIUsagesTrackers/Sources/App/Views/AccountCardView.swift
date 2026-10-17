@@ -77,6 +77,13 @@ struct AccountGroupCardView: View {
                 }
 
                 Spacer()
+
+                // Same top-right "active" capsule as every other vendor card, so
+                // the account-level active state reads consistently; the chips
+                // below add the per-source nuance the capsule can't express.
+                if group.isActive {
+                    ActiveCapsule()
+                }
             }
 
             // One chip per auth source (tui / desktop …), coloured by its own
