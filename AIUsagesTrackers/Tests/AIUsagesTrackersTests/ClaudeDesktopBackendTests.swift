@@ -217,13 +217,19 @@ struct PSClaudeDesktopProcessInspectorTests {
 
 @Suite("HTTPClaudeProfileResolver — parsing")
 struct HTTPClaudeProfileResolverTests {
-    @Test("parses account.email_address from a profile payload")
+    @Test("parses account.email from a profile payload")
     func parsesEmail() {
-        let json = #"{"account":{"uuid":"u","email_address":"frederic.camblor@4sh.fr"},"organization":{"uuid":"o","name":"4SH"}}"#
+        let json = #"{"account":{"uuid":"u","email":"frederic.camblor@4sh.fr","full_name":"F"},"organization":{"uuid":"o","name":"4SH"}}"#
         #expect(HTTPClaudeProfileResolver.parseEmail(Data(json.utf8)) == AccountEmail(rawValue: "frederic.camblor@4sh.fr"))
     }
 
-    @Test("returns nil when the email is missing")
+    @Test("falls back to email_address when email is absent")
+    func parsesEmailAddressFallback() {
+        let json = #"{"account":{"uuid":"u","email_address":"x@y.com"}}"#
+        #expect(HTTPClaudeProfileResolver.parseEmail(Data(json.utf8)) == AccountEmail(rawValue: "x@y.com"))
+    }
+
+    @Test("returns nil when no email field is present")
     func missingEmail() {
         let json = #"{"account":{"uuid":"u"}}"#
         #expect(HTTPClaudeProfileResolver.parseEmail(Data(json.utf8)) == nil)

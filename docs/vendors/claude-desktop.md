@@ -28,9 +28,9 @@ additionally carries a `seven_day_breakdown` block (per-product shares)
 that both connectors now consume — see Metric semantics.
 
 The profile endpoint resolves the account behind a bearer. Its response is
-`{ account: { uuid, email_address }, organization: { uuid, name } }`. The
-connector calls it to turn each Desktop profile bearer into the account's
-real email (see Account identity).
+`{ account: { uuid, email, full_name, … }, organization: { uuid, name }, … }`
+(the email field is `email`). The connector calls it to turn each Desktop
+profile bearer into the account's real email (see Account identity).
 
 ## Credential sources
 

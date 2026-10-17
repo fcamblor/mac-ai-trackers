@@ -11,7 +11,7 @@ public protocol ClaudeProfileResolving: Sendable {
 }
 
 /// Default resolver backed by `GET /api/oauth/profile`. The endpoint returns
-/// `{ account: { uuid, email_address }, organization: { uuid, name } }`.
+/// `{ account: { uuid, email, full_name, … }, organization: { uuid, name }, … }`.
 public struct HTTPClaudeProfileResolver: ClaudeProfileResolving {
     public static let endpoint = "https://api.anthropic.com/api/oauth/profile"
 
@@ -48,11 +48,13 @@ public struct HTTPClaudeProfileResolver: ClaudeProfileResolving {
 
     static func parseEmail(_ data: Data) -> AccountEmail? {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let account = json["account"] as? [String: Any],
-              let email = account["email_address"] as? String,
-              !email.isEmpty else {
+              let account = json["account"] as? [String: Any] else {
             return nil
         }
+        // The profile endpoint names the field `email`; `email_address` is kept
+        // as a defensive fallback for the token-introspection response shape.
+        let email = (account["email"] as? String) ?? (account["email_address"] as? String)
+        guard let email, !email.isEmpty else { return nil }
         return AccountEmail(rawValue: email)
     }
 }
