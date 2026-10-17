@@ -160,7 +160,7 @@ struct ChartSeriesEditor: View {
             if let entry = options.resolveEntry(vendor: series.vendor, account: .currentlyActive) {
                 accountLabel = entry.account.rawValue
             } else {
-                accountLabel = "currently active"
+                accountLabel = series.vendor.accountFamily == "claude" ? "currently active TUI" : "currently active"
             }
         case .specific(let email):
             accountLabel = email.rawValue

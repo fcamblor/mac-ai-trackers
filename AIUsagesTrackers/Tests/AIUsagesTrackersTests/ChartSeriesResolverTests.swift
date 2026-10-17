@@ -107,8 +107,30 @@ struct ChartSeriesResolverTests {
         #expect(resolved[0].points.map(\.value) == [50.0, 60.0])
     }
 
-    @Test("currentlyActive resolves across the Claude family")
-    func currentlyActiveResolvesAcrossFamily() {
+    @Test("currentlyActive anchors to the TUI active account, then merges history")
+    func currentlyActiveAnchorsToTui() {
+        let points = [
+            Self.point(vendor: .claude, account: "me@example.com", metricName: "session", value: 25),
+            Self.point(vendor: .claudeDesktop, account: "me@example.com", metricName: "session", value: 25),
+        ]
+        let config = ChartConfiguration(
+            title: "Active",
+            selection: .custom([
+                ChartSeriesConfig(vendor: .claude, account: .currentlyActive, metricName: "session"),
+            ])
+        )
+        // The TUI (.claude) account is the active anchor; history then merges and
+        // de-duplicates the desktop point sharing the same timestamp.
+        let resolved = ChartSeriesResolver.resolve(
+            configuration: config,
+            points: points,
+            currentEntries: [VendorUsageEntry(vendor: .claude, account: "me@example.com", isActive: true)]
+        )
+        #expect(resolved[0].points.map(\.value) == [25.0])
+    }
+
+    @Test("currentlyActive ignores a desktop-only active account")
+    func currentlyActiveIgnoresDesktopOnly() {
         let points = [
             Self.point(vendor: .claudeDesktop, account: "me@example.com", metricName: "session", value: 25),
         ]
@@ -118,14 +140,13 @@ struct ChartSeriesResolverTests {
                 ChartSeriesConfig(vendor: .claude, account: .currentlyActive, metricName: "session"),
             ])
         )
-        // Only a claude-desktop entry is active, but the series is scoped to the
-        // canonical `.claude` vendor — family resolution must still find it.
+        // No TUI account is active, so "currently active TUI" resolves to nothing.
         let resolved = ChartSeriesResolver.resolve(
             configuration: config,
             points: points,
             currentEntries: [VendorUsageEntry(vendor: .claudeDesktop, account: "me@example.com", isActive: true)]
         )
-        #expect(resolved[0].points.map(\.value) == [25.0])
+        #expect(resolved[0].points.isEmpty)
     }
 
     @Test("custom label overrides generated series label")

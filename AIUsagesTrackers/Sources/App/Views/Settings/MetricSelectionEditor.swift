@@ -91,8 +91,11 @@ struct MetricSelectionOptions: Equatable {
         let vendorEntries = entriesByVendor[vendor.familyCanonicalVendor, default: []]
         switch account {
         case .currentlyActive:
-            // Across the family, pick the representative active member.
-            return vendorEntries.filter(\.isActive).representativeEntry()
+            // "Currently active" anchors to the primary (TUI) source: several
+            // accounts of a merged family can be active at once, so the generic
+            // "any active member" is ambiguous. Resolve the canonical vendor's
+            // active account (the Claude CLI for the Claude family).
+            return vendorEntries.first { $0.vendor == vendor.familyCanonicalVendor && $0.isActive }
         case .specific(let email):
             // The same email may exist under several family vendors; show the
             // representative one so usage reflects live data over stale/errored.
@@ -209,6 +212,12 @@ struct MetricSelectionEditor: View {
         .pickerStyle(.menu)
     }
 
+    /// For a merged family the active account is source-specific, so the label
+    /// names the TUI source; other vendors keep the generic wording.
+    private var currentlyActiveLabel: String {
+        vendor.accountFamily == "claude" ? "Currently active TUI account" : "Currently active account"
+    }
+
     private var accountPickerControl: some View {
         Picker("", selection: Binding(
             get: { account },
@@ -222,7 +231,7 @@ struct MetricSelectionEditor: View {
                 }
             }
         )) {
-            Text("Currently active account").tag(AccountSelection.currentlyActive)
+            Text(currentlyActiveLabel).tag(AccountSelection.currentlyActive)
             Divider()
             ForEach(availableAccounts(for: vendor), id: \.rawValue) { email in
                 Text(email.rawValue).tag(AccountSelection.specific(email))
@@ -294,7 +303,7 @@ struct MetricSelectionEditor: View {
                     }
                 }
             )) {
-                Text("Currently active account").tag(AccountSelection.currentlyActive)
+                Text(currentlyActiveLabel).tag(AccountSelection.currentlyActive)
                 Divider()
                 ForEach(availableAccounts(for: vendor), id: \.rawValue) { email in
                     Text(email.rawValue).tag(AccountSelection.specific(email))

@@ -108,9 +108,10 @@ public enum ChartSeriesResolver {
     ) -> AccountEmail? {
         switch account {
         case .currentlyActive:
+            // Anchor to the primary (TUI) source's active account; a merged
+            // family can have several active accounts at once.
             return currentEntries
-                .filter { $0.vendor.accountFamily == vendor.accountFamily && $0.isActive }
-                .representativeEntry()?.account
+                .first { $0.vendor == vendor.familyCanonicalVendor && $0.isActive }?.account
         case .specific(let email):
             return email
         }
@@ -137,7 +138,8 @@ public enum ChartSeriesResolver {
     private static func fallbackLabel(for config: ChartSeriesConfig) -> String {
         switch config.account {
         case .currentlyActive:
-            return "\(config.vendor.rawValue) / currently active / \(config.metricName)"
+            let activeLabel = config.vendor.accountFamily == "claude" ? "currently active TUI" : "currently active"
+            return "\(config.vendor.rawValue) / \(activeLabel) / \(config.metricName)"
         case .specific(let email):
             return "\(config.vendor.rawValue) / \(email.rawValue) / \(config.metricName)"
         }

@@ -106,7 +106,10 @@ public enum MenuBarChipResolver {
         let resolveIssue: MenuBarSegmentIssue?
         switch segmentConfig.account {
         case .currentlyActive:
-            if let active = vendorEntries.filter(\.isActive).representativeEntry() {
+            // Anchor to the primary (TUI) source: a merged family can have
+            // several active accounts, so resolve the canonical vendor's active
+            // one (the Claude CLI for Claude).
+            if let active = vendorEntries.first(where: { $0.vendor == vendor.familyCanonicalVendor && $0.isActive }) {
                 entry = active
                 resolveIssue = nil
             } else if vendorEntries.count == 1 {

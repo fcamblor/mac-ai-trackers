@@ -86,8 +86,20 @@ struct ResolverClaudeFamilyTests {
         #expect(result.issue == nil)
     }
 
-    @Test("currentlyActive prefers the active family member")
-    func currentlyActivePrefersActiveMember() {
+    @Test("currentlyActive anchors to the active TUI account, not desktop")
+    func currentlyActiveAnchorsToTui() {
+        let result = firstResolved(
+            chip: singleSegmentChip(vendor: .claude, account: .currentlyActive),
+            entries: [
+                timeWindowEntry(vendor: .claude, account: "me@example.com", isActive: true, usagePercent: 77),
+                timeWindowEntry(vendor: .claudeDesktop, account: "me@example.com", isActive: true, usagePercent: 10),
+            ]
+        )
+        #expect(result.rendered?.text.contains("77%") == true)
+    }
+
+    @Test("currentlyActive reports noActiveAccount when only desktop is active")
+    func currentlyActiveDesktopOnlyIsNotActive() {
         let result = firstResolved(
             chip: singleSegmentChip(vendor: .claude, account: .currentlyActive),
             entries: [
@@ -95,7 +107,8 @@ struct ResolverClaudeFamilyTests {
                 timeWindowEntry(vendor: .claudeDesktop, account: "me@example.com", isActive: true, usagePercent: 77),
             ]
         )
-        #expect(result.rendered?.text.contains("77%") == true)
+        #expect(result.rendered == nil)
+        #expect(result.issue == .noActiveAccount(vendor: .claude))
     }
 }
 
