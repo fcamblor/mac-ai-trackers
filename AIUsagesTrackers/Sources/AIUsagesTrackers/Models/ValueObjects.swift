@@ -128,6 +128,11 @@ public struct Vendor: RawRepresentable, Codable, Equatable, Hashable, Sendable {
     public init(rawValue: String) { self.rawValue = rawValue }
 
     public static let claude = Vendor(rawValue: "claude")
+    /// Claude Desktop reads usage from the Electron app's per-profile OAuth
+    /// token cache rather than the `claude` CLI keychain entry, so it is a
+    /// distinct vendor with its own credential mechanism and multi-account
+    /// support. The usage endpoint and response shape are shared with `.claude`.
+    public static let claudeDesktop = Vendor(rawValue: "claude-desktop")
     public static let codex = Vendor(rawValue: "codex")
     public static let copilot = Vendor(rawValue: "copilot")
 

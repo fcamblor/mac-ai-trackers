@@ -16,6 +16,9 @@ struct AssistantsSettingsView: View {
             Section("Claude Code credentials") {
                 KeychainDiagnosticView()
             }
+            Section("Claude Desktop") {
+                ClaudeDesktopSection()
+            }
         }
         .formStyle(.grouped)
     }
@@ -51,6 +54,68 @@ private struct IgnoredAccountsSection: View {
             Button("Remove all", role: .destructive) {
                 prefs.ignoredAccounts = []
             }
+        }
+    }
+}
+
+// MARK: - Claude Desktop section
+
+/// Enables the Claude Desktop usage source and manages the extra profile
+/// directories opened via `--user-data-dir`. Enabling the source is the explicit
+/// user action that authorises the one-time `Claude Safe Storage` Keychain
+/// prompt the connector needs (see `docs/vendors/claude-desktop.md`).
+private struct ClaudeDesktopSection: View {
+    private var prefs: UserDefaultsAppPreferences { AppDelegate.sharedPreferences }
+
+    var body: some View {
+        Toggle(isOn: Binding(
+            get: { prefs.claudeDesktopEnabled },
+            set: { prefs.claudeDesktopEnabled = $0 }
+        )) {
+            Text("Show usage from Claude Desktop profiles")
+        }
+        Text("Reads per-profile usage from the local Claude Desktop app. The first refresh asks macOS to allow reading the “Claude Safe Storage” keychain item — approve it once. The two standard profiles are detected automatically; add custom folders below if you launch Claude Desktop with a custom --user-data-dir.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+        if prefs.claudeDesktopProfilePaths.isEmpty {
+            Text("No custom profile folders.")
+                .foregroundStyle(.secondary)
+        } else {
+            ForEach(prefs.claudeDesktopProfilePaths, id: \.self) { path in
+                HStack(spacing: 8) {
+                    Image(systemName: "folder")
+                    Text((path as NSString).abbreviatingWithTildeInPath)
+                        .font(.system(size: 12))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Button(role: .destructive) {
+                        prefs.claudeDesktopProfilePaths.removeAll { $0 == path }
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+        }
+
+        Button("Add profile folder…") {
+            addProfileFolder()
+        }
+    }
+
+    private func addProfileFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Add"
+        panel.message = "Choose a Claude Desktop --user-data-dir profile folder"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let path = url.path
+        if !prefs.claudeDesktopProfilePaths.contains(path) {
+            prefs.claudeDesktopProfilePaths.append(path)
         }
     }
 }

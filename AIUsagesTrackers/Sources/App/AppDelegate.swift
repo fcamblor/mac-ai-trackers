@@ -138,6 +138,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         let claudeConnector = ClaudeCodeConnector(credentialLocator: claudeLocator)
         let claudeStatus = ClaudeStatusConnector()
+        // Claude Desktop source — reads the Electron profiles' OAuth token cache.
+        // Gated behind an explicit preference so no `Claude Safe Storage` Keychain
+        // read (and therefore no authorisation prompt) happens until the user
+        // opts in from the Coding Assistants tab. The gate and the custom profile
+        // paths are read from raw UserDefaults so the background actor avoids an
+        // @MainActor Observation hop on every poll.
+        let claudeDesktopEnabledKey = AppPreferenceKeys.claudeDesktopEnabled.rawValue
+        let claudeDesktopPathsKey = AppPreferenceKeys.claudeDesktopProfilePaths.rawValue
+        let claudeDesktopConnector = ClaudeDesktopConnector(
+            credentialLocator: ClaudeDesktopCredentialLocator(
+                profileStore: ClaudeDesktopProfileStore(
+                    customProfilePaths: {
+                        UserDefaults.standard.stringArray(forKey: claudeDesktopPathsKey) ?? []
+                    }
+                )
+            ),
+            isEnabled: { UserDefaults.standard.bool(forKey: claudeDesktopEnabledKey) }
+        )
         let codexConnector = CodexConnector()
         let codexStatusRegistry = StatusComponentRegistry(
             platform: .incidentIO,
@@ -154,7 +172,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         let copilotConnector = CopilotConnector()
         let poller = UsagePoller(
-            connectors: [claudeConnector, codexConnector, copilotConnector],
+            connectors: [claudeConnector, claudeDesktopConnector, codexConnector, copilotConnector],
             statusConnectors: [claudeStatus, codexStatus],
             fileManager: fileManager,
             refreshState: refreshState,
@@ -181,6 +199,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         VendorRegistry.resetForTesting()
         ClaudeCodePlugin.register(connector: claudeConnector, status: claudeStatus, monitor: claudeMonitor)
+        ClaudeDesktopPlugin.register(connector: claudeDesktopConnector)
         CodexPlugin.register(connector: codexConnector, status: codexStatus, monitor: codexMonitor)
         CopilotCLIPlugin.register(connector: copilotConnector, monitor: copilotMonitor)
         let snapshotRecorder = SnapshotRecorder()

@@ -34,6 +34,9 @@ struct VendorRegistryConformanceTests {
             status: ClaudeStatusConnector(),
             monitor: ClaudeActiveAccountMonitor(fileManager: .shared)
         )
+        ClaudeDesktopPlugin.register(
+            connector: ClaudeDesktopConnector(isEnabled: { false })
+        )
         CodexPlugin.register(
             connector: codexConnector,
             status: CodexStatusConnector(),
@@ -49,7 +52,7 @@ struct VendorRegistryConformanceTests {
     func registryHasAllVendors() {
         populateRegistry()
         let vendors = VendorRegistry.bundles.map(\.vendor.rawValue).sorted()
-        #expect(vendors == ["claude", "codex", "copilot"])
+        #expect(vendors == ["claude", "claude-desktop", "codex", "copilot"])
     }
 
     @Test("each branding asset resolves to a PDF file under App/Resources/VendorBranding/")

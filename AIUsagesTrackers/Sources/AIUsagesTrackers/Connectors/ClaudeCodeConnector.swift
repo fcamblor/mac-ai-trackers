@@ -19,17 +19,7 @@ public actor ClaudeCodeConnector: UsageConnector {
     /// Stale-token failure mode). Cleared on any HTTP 200.
     private var lastAuthFailureSeen: Bool = false
 
-    // Claude Pro/Max rate-limit policy — durations are fixed by Anthropic and not returned by the API
-    private static let sessionWindowMinutes = DurationMinutes(rawValue: 300)
-    private static let weeklyWindowMinutes  = DurationMinutes(rawValue: 10080)
-
-    // Actor-isolated: safe without nonisolated(unsafe) since all access is on the actor
-    private let isoFormatter = ISO8601DateFormatter()
-    private let isoFormatterFractional: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
+    private let parser = ClaudeUsageResponseParser()
 
 
     public init(
@@ -183,50 +173,12 @@ public actor ClaudeCodeConnector: UsageConnector {
         logger.log(.debug, "API payload: \(Self.maskedPayload(data))")
 
         do {
-            let usage = try parseAPIResponse(data)
-            logger.log(.info, "Fetched successfully: session=\(usage.sessionPercent.map { "\($0)%" } ?? "nil") weekly=\(usage.weeklyPercent.map { "\($0)%" } ?? "nil") sonnet=\(usage.sonnetWeekly.map { "\($0.percent)%" } ?? "nil") opus=\(usage.opusWeekly.map { "\($0.percent)%" } ?? "nil") extraUsage=\(usage.extraUsage.map { "\($0.amount) \($0.currency)" } ?? "nil")")
+            let usage = try parser.parse(data)
+            logger.log(.info, "Fetched successfully: session=\(usage.sessionPercent.map { "\($0)%" } ?? "nil") weekly=\(usage.weeklyPercent.map { "\($0)%" } ?? "nil") sonnet=\(usage.sonnetWeekly.map { "\($0.percent)%" } ?? "nil") opus=\(usage.opusWeekly.map { "\($0.percent)%" } ?? "nil") breakdown=\(usage.breakdownRows.count) extraUsage=\(usage.extraUsage.map { "\($0.amount) \($0.currency)" } ?? "nil")")
             // A window is emitted whenever utilization is known, even if resets_at is null
             // (fresh account, between cycles). A null reset date surfaces in the UI as "???"
             // rather than silently omitting the metric.
-            var metrics: [UsageMetric] = []
-            if let percent = usage.sessionPercent {
-                metrics.append(.timeWindow(
-                    name: "5h sessions (all models)",
-                    resetAt: usage.sessionResetAt,
-                    windowDuration: Self.sessionWindowMinutes,
-                    usagePercent: UsagePercent(rawValue: percent)
-                ))
-            }
-            if let percent = usage.weeklyPercent {
-                metrics.append(.timeWindow(
-                    name: "Weekly (all models)",
-                    resetAt: usage.weeklyResetAt,
-                    windowDuration: Self.weeklyWindowMinutes,
-                    usagePercent: UsagePercent(rawValue: percent)
-                ))
-            }
-            // Per-model weekly metrics are purely additive — absent keys are silently skipped
-            let perModelDefs: [(metric: ModelWeeklyMetric?, name: String)] = [
-                (usage.sonnetWeekly, "Weekly Sonnet"),
-                (usage.opusWeekly, "Weekly Opus"),
-            ]
-            for def in perModelDefs {
-                if let m = def.metric {
-                    metrics.append(.timeWindow(
-                        name: def.name,
-                        resetAt: m.resetAt,
-                        windowDuration: Self.weeklyWindowMinutes,
-                        usagePercent: UsagePercent(rawValue: m.percent)
-                    ))
-                }
-            }
-            if let extraUsage = usage.extraUsage {
-                metrics.append(.payAsYouGo(
-                    name: "Extra usage spent",
-                    currentAmount: extraUsage.amount,
-                    currency: extraUsage.currency
-                ))
-            }
+            let metrics = parser.metrics(from: usage)
             lastKnownMetrics = metrics
             // A successful round-trip means the bearer is healthy — clear any
             // sticky auth-failure flag so future 429s are treated as genuine
@@ -278,108 +230,6 @@ public actor ClaudeCodeConnector: UsageConnector {
             }
         }
         return result
-    }
-
-    private struct ModelWeeklyMetric {
-        let percent: Int
-        let resetAt: ISODate?
-    }
-
-    private struct ExtraUsageMetric {
-        let amount: Double
-        let currency: String
-    }
-
-    private struct ParsedUsage {
-        // Every window is optional: a freshly provisioned account (or an account
-        // between reset cycles) returns `utilization: 0, resets_at: null` and must
-        // not be treated as a parse failure.
-        let sessionPercent: Int?
-        let sessionResetAt: ISODate?
-        let weeklyPercent: Int?
-        let weeklyResetAt: ISODate?
-        let sonnetWeekly: ModelWeeklyMetric?
-        let opusWeekly: ModelWeeklyMetric?
-        let extraUsage: ExtraUsageMetric?
-    }
-
-    private func parseAPIResponse(_ data: Data) throws -> ParsedUsage {
-        let jsonObject = try JSONSerialization.jsonObject(with: data)
-        guard let json = jsonObject as? [String: Any] else {
-            throw ConnectorError.unexpectedAPIFormat(receivedKeys: [])
-        }
-        // Unknown top-level keys are ignored by design — the API evolves with experimental
-        // fields (e.g. `omelette_promotional`, `iguana_necktie`) and we only consume the
-        // windows we know about. Only a truly malformed payload (no known window at all)
-        // escalates to an error.
-        let session = extractOptionalModelMetric(from: json, key: "five_hour")
-        let weekly = extractOptionalModelMetric(from: json, key: "seven_day")
-        let sonnet = extractOptionalModelMetric(from: json, key: "seven_day_sonnet")
-        let opus = extractOptionalModelMetric(from: json, key: "seven_day_opus")
-        let extraUsage = extractExtraUsage(from: json)
-
-        let hasFiveHourBlock = json["five_hour"] is [String: Any]
-        let hasSevenDayBlock = json["seven_day"] is [String: Any]
-        if !hasFiveHourBlock, !hasSevenDayBlock, extraUsage == nil {
-            logger.log(.warning, "No known usage window in payload — top-level keys: \(Array(json.keys))")
-            throw ConnectorError.unexpectedAPIFormat(receivedKeys: Array(json.keys))
-        }
-
-        return ParsedUsage(
-            sessionPercent: session.map { Int($0.percent) },
-            sessionResetAt: session.flatMap { $0.resetAt.map { normalizeISO8601($0) } },
-            weeklyPercent: weekly.map { Int($0.percent) },
-            weeklyResetAt: weekly.flatMap { $0.resetAt.map { normalizeISO8601($0) } },
-            sonnetWeekly: sonnet.map { ModelWeeklyMetric(percent: $0.percent, resetAt: $0.resetAt.map { normalizeISO8601($0) }) },
-            opusWeekly: opus.map { ModelWeeklyMetric(percent: $0.percent, resetAt: $0.resetAt.map { normalizeISO8601($0) }) },
-            extraUsage: extraUsage
-        )
-    }
-
-    /// Every usage window block is optional — a missing key or an unexpected shape is silently
-    /// skipped. A null `resets_at` (fresh account, between cycles) is kept with `resetAt: nil`
-    /// so the metric still surfaces in the UI as "???".
-    private func extractOptionalModelMetric(from json: [String: Any], key: String) -> (percent: Int, resetAt: String?)? {
-        guard let block = json[key] as? [String: Any] else {
-            return nil
-        }
-        guard let util = block["utilization"] as? Double else {
-            logger.log(.debug, "Block '\(key)' present but utilization missing — skipped")
-            return nil
-        }
-        let resetAt = block["resets_at"] as? String
-        if resetAt == nil {
-            logger.log(.debug, "Block '\(key)' has null resets_at — metric emitted without reset date")
-        }
-        return (percent: Int(util.rounded()), resetAt: resetAt)
-    }
-
-    private func extractExtraUsage(from json: [String: Any]) -> ExtraUsageMetric? {
-        guard let block = json["extra_usage"] as? [String: Any],
-              block["is_enabled"] as? Bool == true,
-              let usedCredits = block["used_credits"] as? Double,
-              usedCredits >= 0 else {
-            return nil
-        }
-        let rawCurrency = (block["currency"] as? String)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let currency: String
-        if let rawCurrency, !rawCurrency.isEmpty {
-            currency = rawCurrency.uppercased()
-        } else {
-            currency = "USD"
-        }
-        return ExtraUsageMetric(amount: usedCredits / 100, currency: currency)
-    }
-
-    /// Strips sub-second precision from API-provided ISO8601 strings so downstream
-    /// consumers can rely on the standard formatter (no fractional-seconds option needed).
-    /// Returns the original string unchanged if it cannot be parsed.
-    private func normalizeISO8601(_ raw: String) -> ISODate {
-        if let date = isoFormatterFractional.date(from: raw) ?? isoFormatter.date(from: raw) {
-            return ISODate(rawValue: isoFormatter.string(from: date))
-        }
-        return ISODate(rawValue: raw)
     }
 
     // MARK: - Helpers
