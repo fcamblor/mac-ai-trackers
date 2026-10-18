@@ -669,3 +669,33 @@ struct TimeWindowVisualStateTests {
         #expect(state.actualFraction == 0)
     }
 }
+
+@Suite("AccountDisplayGroup — accountStatus")
+struct AccountDisplayGroupAccountStatusTests {
+    @Test("plan comes from the TUI source even when Desktop is the representative")
+    func canonicalPlanWins() {
+        let resets = ResetCredits(available: 1, applicable: 1)
+        let tui = VendorUsageEntry(
+            vendor: .claudeTUI, account: "me@x.com", lastAcquiredOn: "2026-10-18T10:00:00Z",
+            accountStatus: AccountStatus(plan: "team_premium")
+        )
+        let desktop = VendorUsageEntry(
+            vendor: .claudeDesktop, account: "me@x.com", isActive: true, lastAcquiredOn: "2026-10-18T12:00:00Z",
+            accountStatus: AccountStatus(plan: "team", resetCredits: resets)
+        )
+        let group = AccountDisplayGroup(account: "me@x.com", members: [tui, desktop])
+        #expect(group.accountStatus?.plan == "team_premium")
+        if group.representativeMember?.vendor == .claudeDesktop {
+            #expect(group.accountStatus?.resetCredits == resets)
+        }
+    }
+
+    @Test("without a TUI plan, the representative status is used as-is")
+    func representativeFallback() {
+        let desktop = VendorUsageEntry(
+            vendor: .claudeDesktop, account: "me@x.com", accountStatus: AccountStatus(plan: "pro")
+        )
+        let group = AccountDisplayGroup(account: "me@x.com", members: [desktop])
+        #expect(group.accountStatus?.plan == "pro")
+    }
+}

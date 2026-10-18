@@ -80,7 +80,7 @@ struct AccountGroupCardView: View {
 
                 Spacer()
 
-                AccountStatusHeaderAccessories(status: group.representativeMember?.accountStatus)
+                AccountStatusHeaderAccessories(status: group.accountStatus)
 
                 // Same top-right "active" capsule as every other vendor card, so
                 // the account-level active state reads consistently; the chips

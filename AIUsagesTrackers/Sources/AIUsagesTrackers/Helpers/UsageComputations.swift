@@ -232,6 +232,21 @@ public struct AccountDisplayGroup: Identifiable, Equatable, Sendable {
     public var representativeMember: VendorUsageEntry? {
         members.representativeEntry()
     }
+
+    /// The representative member's status, with the plan taken from the
+    /// canonical (TUI) source when it has one: Claude Desktop's token cache
+    /// lacks the rate-limit tier, so it can only say "team" where the TUI
+    /// knows "team_premium".
+    public var accountStatus: AccountStatus? {
+        let representative = representativeMember?.accountStatus
+        guard let canonical = members.first?.vendor.familyCanonicalVendor,
+              let canonicalPlan = members.first(where: { $0.vendor == canonical })?.accountStatus?.plan else {
+            return representative
+        }
+        var status = representative ?? AccountStatus()
+        status.plan = canonicalPlan
+        return status
+    }
 }
 
 // MARK: - Entry sorting
