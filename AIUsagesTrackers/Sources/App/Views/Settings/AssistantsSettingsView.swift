@@ -13,6 +13,9 @@ struct AssistantsSettingsView: View {
             Section("Ignored accounts") {
                 IgnoredAccountsSection()
             }
+            Section("Popover metrics") {
+                PopoverMetricsSection()
+            }
             Section("Claude TUI credentials") {
                 KeychainDiagnosticView()
             }

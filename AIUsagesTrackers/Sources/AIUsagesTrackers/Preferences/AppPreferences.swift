@@ -33,6 +33,9 @@ public protocol AppPreferences: AnyObject, Observable, Sendable {
     /// list of `VendorUsageEntry.id` (`"vendor:account"`). Entries not present
     /// fall back to the legacy alphabetical sort behind the ordered ones.
     var accountsOrder: [String] { get set }
+    /// Popover rows hidden per assistant family. Popover-only: menu bar chips
+    /// and charts are unaffected.
+    var popoverMetricVisibility: PopoverMetricVisibility { get set }
     /// When true, the scheduler periodically polls GitHub for new releases.
     /// Defaults to true (opt-out).
     var updatesAutoCheckEnabled: Bool { get set }
@@ -235,6 +238,31 @@ public final class UserDefaultsAppPreferences: AppPreferences {
         }
     }
 
+    public var popoverMetricVisibility: PopoverMetricVisibility {
+        get {
+            access(keyPath: \.popoverMetricVisibility)
+            guard let data = defaults.data(forKey: AppPreferenceKeys.popoverMetricVisibility.rawValue) else {
+                return PopoverMetricVisibility()
+            }
+            do {
+                return try JSONDecoder().decode(PopoverMetricVisibility.self, from: data)
+            } catch {
+                Loggers.app.log(.error, "Failed to decode popoverMetricVisibility from UserDefaults: \(error)")
+                return PopoverMetricVisibility()
+            }
+        }
+        set {
+            withMutation(keyPath: \.popoverMetricVisibility) {
+                do {
+                    let data = try JSONEncoder().encode(newValue)
+                    defaults.set(data, forKey: AppPreferenceKeys.popoverMetricVisibility.rawValue)
+                } catch {
+                    Loggers.app.log(.error, "Failed to encode popoverMetricVisibility to UserDefaults: \(error)")
+                }
+            }
+        }
+    }
+
     public var updatesAutoCheckEnabled: Bool {
         get {
             access(keyPath: \.updatesAutoCheckEnabled)
@@ -355,6 +383,7 @@ public final class InMemoryAppPreferences: AppPreferences {
     public var chartConfigurationsInitialized: Bool
     public var ignoredAccounts: [IgnoredAccount]
     public var accountsOrder: [String]
+    public var popoverMetricVisibility: PopoverMetricVisibility
     public var updatesAutoCheckEnabled: Bool
     public var updatesDismissedVersions: [String]
     public var statusComponentSubscriptions: [String: Bool]
@@ -374,6 +403,7 @@ public final class InMemoryAppPreferences: AppPreferences {
         chartConfigurationsInitialized: Bool = false,
         ignoredAccounts: [IgnoredAccount] = [],
         accountsOrder: [String] = [],
+        popoverMetricVisibility: PopoverMetricVisibility = PopoverMetricVisibility(),
         updatesAutoCheckEnabled: Bool = true,
         updatesDismissedVersions: [String] = [],
         statusComponentSubscriptions: [String: Bool] = [:],
@@ -392,6 +422,7 @@ public final class InMemoryAppPreferences: AppPreferences {
         self.chartConfigurationsInitialized = chartConfigurationsInitialized
         self.ignoredAccounts = ignoredAccounts
         self.accountsOrder = accountsOrder
+        self.popoverMetricVisibility = popoverMetricVisibility
         self.updatesAutoCheckEnabled = updatesAutoCheckEnabled
         self.updatesDismissedVersions = updatesDismissedVersions
         self.statusComponentSubscriptions = statusComponentSubscriptions

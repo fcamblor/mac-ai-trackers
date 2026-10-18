@@ -143,7 +143,7 @@ struct UnavailableModelsRow: View {
 
         var body: some View {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Unavailable models")
+                Text(PopoverStatusRow.unavailableModels)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
                 ForEach(models, id: \.model) { model in
@@ -208,7 +208,7 @@ struct CreditsSummaryRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(credits.unlimited || credits.overageLimitReached ? "Credits" : "Messages left")
+            Text(credits.unlimited || credits.overageLimitReached ? "Credits" : PopoverStatusRow.messagesLeft)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
             Spacer()
