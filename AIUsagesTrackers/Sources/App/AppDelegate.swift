@@ -501,7 +501,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         window.title = "What's new"
         window.isReleasedWhenClosed = false
-        window.contentViewController = NSHostingController(rootView: UpgradeChangelogView(
+        let hosting = NSHostingController(rootView: UpgradeChangelogView(
             version: version,
             onOpenAssistantsSettings: { [weak self] in
                 self?.upgradeChangelogWindow?.close()
@@ -511,6 +511,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.upgradeChangelogWindow?.close()
             }
         ))
+        // A window built from a zero content rect is never resized to the
+        // SwiftUI content unless the hosting controller publishes its size —
+        // without this the window opens as a bare, empty title bar.
+        hosting.sizingOptions = [.preferredContentSize]
+        window.contentViewController = hosting
+        window.setContentSize(hosting.view.fittingSize)
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleUpgradeChangelogWillClose(_:)),

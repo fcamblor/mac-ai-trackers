@@ -9,7 +9,7 @@ struct UpgradeChangelogView: View {
     let onDismiss: () -> Void
 
     private static let width: CGFloat = 520
-    private static let maxBodyHeight: CGFloat = 420
+    private static let bodyHeight: CGFloat = 420
 
     static let markdown = """
     ## Claude Desktop support
@@ -46,7 +46,9 @@ struct UpgradeChangelogView: View {
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxHeight: Self.maxBodyHeight)
+            // A fixed height: a ScrollView has no intrinsic height, so with only a
+            // max it collapses to zero when the window sizes itself to fit.
+            .frame(height: Self.bodyHeight)
             .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
             Divider()
             HStack {
