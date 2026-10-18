@@ -7,18 +7,58 @@ actor CopilotOrgBillingClient {
         URL(string: "https://api.github.com/user/orgs?per_page=100")! // known-valid literal
     }()
     private static let timeoutSeconds: TimeInterval = 15
+    private static let checkInterval: TimeInterval = 15 * 60
     private static let userAgent = "mac-ai-trackers"
 
     private let session: URLSession
     private let logger: FileLogger
+    private let clock: @Sendable () -> Date
+    private let lookupTimeout: Duration
     private var cachedOrgByAccount: [AccountEmail: String] = [:]
+    private var nextCheckByAccount: [AccountEmail: Date] = [:]
+    private var cachedMetricsByAccount: [AccountEmail: [UsageMetric]] = [:]
 
-    init(session: URLSession, logger: FileLogger) {
+    init(
+        session: URLSession, logger: FileLogger,
+        clock: @escaping @Sendable () -> Date = { Date() },
+        lookupTimeout: Duration = .seconds(5)
+    ) {
         self.session = session
         self.logger = logger
+        self.clock = clock
+        self.lookupTimeout = lookupTimeout
     }
 
     func metrics(for account: AccountEmail, token: String) async -> [UsageMetric] {
+        let now = clock()
+        if let nextCheck = nextCheckByAccount[account], now < nextCheck {
+            return cachedMetricsByAccount[account] ?? []
+        }
+        // Reserve before suspending: concurrent polls must not duplicate an
+        // expensive discovery, including when the token cannot read billing.
+        nextCheckByAccount[account] = now.addingTimeInterval(Self.checkInterval)
+        let metrics = await withTaskGroup(of: [UsageMetric].self) { group in
+            group.addTask { await self.fetchMetrics(for: account, token: token) }
+            group.addTask { [lookupTimeout] in
+                do {
+                    try await Task.sleep(for: lookupTimeout)
+                } catch {
+                    return []
+                }
+                return []
+            }
+            let first = await group.next() ?? []
+            // Cancels the URLSession request when the total budget expires,
+            // so optional billing cannot delay every assistant's file update.
+            group.cancelAll()
+            return first
+        }
+        cachedMetricsByAccount[account] = metrics
+        return metrics
+    }
+
+    private func fetchMetrics(for account: AccountEmail, token: String) async -> [UsageMetric] {
+        guard !Task.isCancelled else { return [] }
         if let cachedOrg = cachedOrgByAccount[account] {
             do {
                 if let metrics = try await usageMetrics(org: cachedOrg, token: token) {
@@ -49,14 +89,17 @@ actor CopilotOrgBillingClient {
         }
 
         for organization in organizations {
+            guard !Task.isCancelled else { return [] }
             do {
                 if let metrics = try await usageMetrics(org: organization, token: token) {
                     cachedOrgByAccount[account] = organization
                     return metrics
                 }
             } catch {
-                // A transient error for one org should not hide billing from another org.
                 logger.log(.warning, "Copilot organization billing request failed for login=\(account): \(error)")
+                // A timeout or rate limit should not trigger a sweep of every
+                // remaining organization with the same failing bearer.
+                return []
             }
         }
         return []
@@ -122,6 +165,7 @@ actor CopilotOrgBillingClient {
         let spend = creditItems.reduce(0.0) { total, item in
             total + max(0, number(item["netAmount"]) ?? 0)
         }
+        guard credits.isFinite, spend.isFinite else { return nil }
         return [
             .payAsYouGo(name: "Org Credits", currentAmount: credits, currency: "credits"),
             .payAsYouGo(name: "Org Spend", currentAmount: spend, currency: "USD")
@@ -129,11 +173,15 @@ actor CopilotOrgBillingClient {
     }
 
     private static func number(_ value: Any?) -> Double? {
-        if let value = value as? Double { return value }
-        if let value = value as? Int { return Double(value) }
-        if let value = value as? NSNumber { return value.doubleValue }
-        if let value = value as? String { return Double(value) }
-        return nil
+        let number: Double?
+        if let value = value as? Double {
+            number = value
+        } else if let value = value as? String {
+            number = Double(value)
+        } else {
+            number = nil
+        }
+        return number.flatMap { $0.isFinite ? $0 : nil }
     }
 }
 

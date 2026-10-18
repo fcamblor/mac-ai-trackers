@@ -262,7 +262,8 @@ public actor CopilotConnector: UsageConnector {
         if let snapshots = json["quota_snapshots"] as? [String: Any] {
             let resetAt = isoDate(from: json["quota_reset_date"])
             let premium = snapshots["premium_interactions"]
-            if let line = makeSnapshotMetric(name: "Credits", snapshot: premium, resetAt: resetAt) {
+            // Metric names are persisted in menu bar and chart configurations.
+            if let line = makeSnapshotMetric(name: "Premium", snapshot: premium, resetAt: resetAt, allowsSoftLimit: true) {
                 metrics.append(line)
                 if let extraUsage = makeExtraUsageMetric(snapshot: premium) {
                     metrics.append(extraUsage)
@@ -318,11 +319,15 @@ public actor CopilotConnector: UsageConnector {
         )
     }
 
-    private func makeSnapshotMetric(name: String, snapshot: Any?, resetAt: ISODate?) -> UsageMetric? {
+    private func makeSnapshotMetric(
+        name: String, snapshot: Any?, resetAt: ISODate?, allowsSoftLimit: Bool = false
+    ) -> UsageMetric? {
         guard let dict = snapshot as? [String: Any] else { return nil }
         let entitlement = numericValue(dict["entitlement"])
         let remaining = numericValue(dict["remaining"])
-        guard dict["unlimited"] as? Bool != true,
+        // Premium's `unlimited` can mean paid overage beyond a real included
+        // allowance. Explicit zero/-1 entitlement still means no usable meter.
+        guard (allowsSoftLimit || dict["unlimited"] as? Bool != true),
               entitlement != -1,
               remaining != -1,
               entitlement != 0 else { return nil }

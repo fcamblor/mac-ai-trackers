@@ -137,7 +137,10 @@ fields, plus a single `quota_reset_date`. Expected shape:
 }
 ```
 
-The premium pool maps to **Credits**. Chat and completions with `unlimited`,
+The premium pool retains the stable **Premium** metric name used by existing
+menu bar chips and charts. Its `unlimited: true` can describe paid overage
+beyond an included allowance, so a real percentage or entitlement remains
+visible. Chat and completions with `unlimited`,
 the `-1` sentinel, or no real entitlement are omitted. The connector uses
 `percent_remaining` when present and otherwise computes a percent from
 `remaining` and `entitlement`.
@@ -157,8 +160,8 @@ _updated: 2026-10-18 from connector rules and OpenUsage fixtures; locally captur
 
 | Swift metric | Source field | Reset cadence | Unit | Edge cases |
 |--------------|--------------|---------------|------|------------|
-| `.timeWindow("Credits")` | `quota_snapshots.premium_interactions.percent_remaining` or `remaining / entitlement` / `quota_reset_date` | monthly | percent | suppressed for `unlimited`, `-1`, or zero entitlement; `percent_remaining` is used if present |
-| `.payAsYouGo("Extra Usage")` | `premium_interactions.overage_count` when `overage_permitted == true` and a Credits meter exists | n/a | premium interactions | explicit zero retained; no included Credits meter means no overage row |
+| `.timeWindow("Premium")` | `quota_snapshots.premium_interactions.percent_remaining` or `remaining / entitlement` / `quota_reset_date` | monthly | percent | suppressed for `-1` or zero entitlement; `unlimited` alone does not suppress a soft allowance |
+| `.payAsYouGo("Extra Usage")` | `premium_interactions.overage_count` when `overage_permitted == true` and a Premium meter exists | n/a | premium interactions | explicit zero retained; no included Premium meter means no overage row |
 | `.payAsYouGo("Credits", currency: "credits")` | `premium_interactions.credits_used` | n/a | personal credits | org-managed no-meter seat only; explicit zero retained |
 | `.timeWindow("Chat")`    | `quota_snapshots.chat.percent_remaining` or `remaining / entitlement` / `quota_reset_date` | monthly | percent | unlimited / `-1` / zero-entitlement snapshots omitted |
 | `.timeWindow("Completions")` | `quota_snapshots.completions.percent_remaining` or `remaining / entitlement` / `quota_reset_date` | monthly | percent | unlimited / `-1` / zero-entitlement snapshots omitted |
@@ -181,6 +184,11 @@ not a per-seat allocation. A non-admin's expected 403 leaves the normal
 Copilot card usable without those optional rows. A discovered organization
 slug is cached in memory per GitHub login; stale or non-Copilot summaries
 are rediscovered, while transient failures keep the cached slug.
+The entire optional lookup has a five-second budget, including discovery,
+and cancels pending requests on expiry. Results (including failures) are
+cached for fifteen minutes per account, so inaccessible billing does not
+repeat a discovery sweep on every usage poll. Rate limits and transient
+request failures stop discovery immediately.
 
 ## Time semantics
 

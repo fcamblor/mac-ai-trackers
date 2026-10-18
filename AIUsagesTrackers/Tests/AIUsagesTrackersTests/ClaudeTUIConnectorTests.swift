@@ -9,6 +9,7 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var handler: ((URLRequest) -> (Data, HTTPURLResponse))?
     // Captured by startLoading before handler runs; safe because the suite is .serialized
     nonisolated(unsafe) static var capturedRequest: URLRequest?
+    nonisolated(unsafe) static var capturedRequests: [URLRequest] = []
     // When set, startLoading fails with this error instead of invoking handler
     nonisolated(unsafe) static var errorToThrow: Error?
 
@@ -17,6 +18,7 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
 
     override func startLoading() {
         Self.capturedRequest = request
+        Self.capturedRequests.append(request)
         if let error = Self.errorToThrow {
             client?.urlProtocol(self, didFailWithError: error)
             return
@@ -486,19 +488,20 @@ struct ClaudeTUIConnectorFetchTests {
         #expect(MockURLProtocol.capturedRequest?.value(forHTTPHeaderField: "anthropic-beta") == "oauth-2025-04-20")
     }
 
-    @Test("usage request asks for the limit-resets block")
+    @Test("ordinary usage request leaves grants to the separate hourly lookup")
     func requestsResetsBlock() async throws {
         let dir = makeTempDir()
         MockURLProtocol.capturedRequest = nil
+        MockURLProtocol.capturedRequests = []
         MockURLProtocol.errorToThrow = nil
         mockHTTP200(json: #"{"five_hour":{"utilization":1,"resets_at":"2026-04-17T15:00:00+00:00"}}"#)
         let connector = makeConnector(dir: dir) { "fake-token" }
         _ = try await connector.fetchUsages()
 
-        let url = try #require(MockURLProtocol.capturedRequest?.url)
+        let url = try #require(MockURLProtocol.capturedRequests.first?.url)
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         #expect(url.path == "/api/oauth/usage")
-        #expect(items.contains(URLQueryItem(name: "cedar_ember", value: "1")))
+        #expect(items.isEmpty)
     }
 
     @Test("limit resets and response tier land in accountStatus")
@@ -1012,5 +1015,34 @@ struct ClaudeTUIConnectorFetchTests {
         mockHTTP(status: 429, body: #"{"error":"rate limited"}"#)
         let afterRecovery429 = try await connector.fetchUsages()
         #expect(afterRecovery429[0].lastError?.type == "http_429", "200 must disarm the auth-failure flag")
+    }
+}
+
+extension ClaudeTUIConnectorFetchTests {
+    @Test("separate grant requests use both flags and cache successful inventory")
+    func hourlyGrantLookup() async throws {
+        MockURLProtocol.capturedRequests = []
+        MockURLProtocol.errorToThrow = nil
+        let json = try #require(String(data: FixtureLoader.load("claude-usage-with-resets"), encoding: .utf8))
+        mockHTTP200(json: json)
+        let client = ClaudeResetGrantsClient(session: mockSession(), logger: Loggers.claudeTUI)
+        let account = AccountEmail(rawValue: UUID().uuidString + "@example.invalid")
+        let now = Date()
+        let snapshot = await client.snapshotIfDue(account: account, token: "fake", now: now)
+        #expect(snapshot?.resetCredits?.available == 1)
+        let cached = await client.snapshotIfDue(account: account, token: "fake", now: now)
+        #expect(cached == snapshot)
+        #expect(MockURLProtocol.capturedRequests.count == 1)
+        let url = try #require(MockURLProtocol.capturedRequests.first?.url)
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        #expect(items.contains(URLQueryItem(name: "cedar_ember", value: "1")))
+        #expect(items.contains(URLQueryItem(name: "skip_spend", value: "1")))
+
+        mockHTTP200(json: #"{"cedar_ember":{"eligible":false,"grants":[]}}"#)
+        let nextHour: TimeInterval = 61 * 60
+        let refreshed = await client.snapshotIfDue(account: account, token: "fake", now: now.addingTimeInterval(nextHour))
+        #expect(refreshed != nil)
+        #expect(refreshed?.resetCredits == nil)
+        #expect(MockURLProtocol.capturedRequests.count == 2)
     }
 }
