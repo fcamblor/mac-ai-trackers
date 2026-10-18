@@ -9,7 +9,9 @@ struct MetricSelectionOptions: Equatable {
     init(entries: [VendorUsageEntry]) {
         let shouldLogPerformance = Loggers.app.effectiveMinLevel <= .debug
         let startedAt = shouldLogPerformance ? DispatchTime.now().uptimeNanoseconds : 0
-        entriesByVendor = Dictionary(grouping: entries, by: \.vendor)
+        // Key by account family so Claude CLI + Claude Desktop collapse into one
+        // "Claude" vendor option; every other vendor stays on its own key.
+        entriesByVendor = Dictionary(grouping: entries, by: \.vendor.familyCanonicalVendor)
         var hasher = Hasher()
         var metricCount = 0
         for entry in entries.sorted(by: { $0.id < $1.id }) {
@@ -40,13 +42,19 @@ struct MetricSelectionOptions: Equatable {
     }
 
     var availableVendors: [Vendor] {
+        // Keys are already family-canonical vendors (claude-desktop folded into
+        // claude), so each family appears once.
         entriesByVendor.keys.sorted { $0.rawValue < $1.rawValue }
     }
 
     func availableAccounts(for vendor: Vendor) -> [AccountEmail] {
-        entriesByVendor[vendor, default: []]
+        // Union of the family's accounts, de-duplicated: the same email can come
+        // from both Claude CLI and Claude Desktop but is one account.
+        var seen = Set<String>()
+        return entriesByVendor[vendor.familyCanonicalVendor, default: []]
             .filter { !$0.metrics.isEmpty }
             .map(\.account)
+            .filter { seen.insert($0.rawValue).inserted }
     }
 
     func availableMetrics(vendor: Vendor, account: AccountSelection) -> [MetricOption] {
@@ -80,12 +88,18 @@ struct MetricSelectionOptions: Equatable {
     }
 
     func resolveEntry(vendor: Vendor, account: AccountSelection) -> VendorUsageEntry? {
-        let vendorEntries = entriesByVendor[vendor, default: []]
+        let vendorEntries = entriesByVendor[vendor.familyCanonicalVendor, default: []]
         switch account {
         case .currentlyActive:
-            return vendorEntries.first(where: { $0.isActive })
+            // "Currently active" anchors to the primary (TUI) source: several
+            // accounts of a merged family can be active at once, so the generic
+            // "any active member" is ambiguous. Resolve the canonical vendor's
+            // active account (the Claude CLI for the Claude family).
+            return vendorEntries.first { $0.vendor == vendor.familyCanonicalVendor && $0.isActive }
         case .specific(let email):
-            return vendorEntries.first(where: { $0.account == email })
+            // The same email may exist under several family vendors; show the
+            // representative one so usage reflects live data over stale/errored.
+            return vendorEntries.filter { $0.account == email }.representativeEntry()
         }
     }
 }
@@ -191,11 +205,17 @@ struct MetricSelectionEditor: View {
             }
         )) {
             ForEach(availableVendors, id: \.rawValue) { v in
-                Text(VendorBrandingResolver.displayName(for: v)).tag(v)
+                Text(VendorBrandingResolver.familyDisplayName(for: v)).tag(v)
             }
         }
         .labelsHidden()
         .pickerStyle(.menu)
+    }
+
+    /// For a merged family the active account is source-specific, so the label
+    /// names the TUI source; other vendors keep the generic wording.
+    private var currentlyActiveLabel: String {
+        vendor.accountFamily == "claude" ? "Currently active TUI account" : "Currently active account"
     }
 
     private var accountPickerControl: some View {
@@ -211,7 +231,7 @@ struct MetricSelectionEditor: View {
                 }
             }
         )) {
-            Text("Currently active account").tag(AccountSelection.currentlyActive)
+            Text(currentlyActiveLabel).tag(AccountSelection.currentlyActive)
             Divider()
             ForEach(availableAccounts(for: vendor), id: \.rawValue) { email in
                 Text(email.rawValue).tag(AccountSelection.specific(email))
@@ -283,7 +303,7 @@ struct MetricSelectionEditor: View {
                     }
                 }
             )) {
-                Text("Currently active account").tag(AccountSelection.currentlyActive)
+                Text(currentlyActiveLabel).tag(AccountSelection.currentlyActive)
                 Divider()
                 ForEach(availableAccounts(for: vendor), id: \.rawValue) { email in
                     Text(email.rawValue).tag(AccountSelection.specific(email))

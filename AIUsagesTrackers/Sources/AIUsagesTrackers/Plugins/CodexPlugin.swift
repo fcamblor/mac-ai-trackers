@@ -1,6 +1,6 @@
 import Foundation
 
-/// Codex (ChatGPT) plugin namespace — see `ClaudeCodePlugin` for the
+/// Codex (ChatGPT) plugin namespace — see `ClaudeTUIPlugin` for the
 /// rationale on factory-style assembly with pre-built sub-components.
 public enum CodexPlugin {
     public static let branding = VendorBranding(

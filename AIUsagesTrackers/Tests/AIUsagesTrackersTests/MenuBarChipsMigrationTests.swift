@@ -23,7 +23,7 @@ struct MenuBarChipsMigrationTests {
     /// Writes a legacy `MenuBarSegmentConfig`-shaped JSON entry. Mirrors the
     /// historical schema the production decoder no longer accepts directly.
     private func legacySegmentDict(
-        vendor: String = "claude",
+        vendor: String = "claude-tui",
         metricName: String = "5h sessions (all models)",
         display: [String: Any]? = nil,
         showOutageWarning: Bool = false,
@@ -85,7 +85,7 @@ struct MenuBarChipsMigrationTests {
 
         #expect(prefs.menuBarChips.count == 1)
         let chip = prefs.menuBarChips[0]
-        #expect(chip.vendor == .claude)
+        #expect(chip.vendor == .claudeTUI)
         #expect(chip.segments.count == 1)
         #expect(chip.segments[0].metricName == "5h sessions (all models)")
         #expect(prefs.menuBarChipsInitialized == true)
@@ -289,7 +289,7 @@ struct MenuBarChipsMigrationTests {
         // build's UserDefaults would look like in the wild.
         let segment: [String: Any] = [
             "id": UUID().uuidString,
-            "vendor": "claude",
+            "vendor": "claude-tui",
             "account": ["kind": "currently-active"],
             "metricName": "5h sessions (all models)",
             "display": [
@@ -328,7 +328,7 @@ struct MenuBarChipsMigrationTests {
 
         let segment: [String: Any] = [
             "id": UUID().uuidString,
-            "vendor": "claude",
+            "vendor": "claude-tui",
             "account": ["kind": "currently-active"],
             "metricName": "5h sessions (all models)",
             "display": [

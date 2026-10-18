@@ -157,7 +157,7 @@ struct MenuBarChipConfigTests {
     @Test("round-trips through Codable")
     func roundTrip() throws {
         let original = MenuBarChipConfig(
-            vendor: .claude,
+            vendor: .claudeTUI,
             showVendorIcon: true,
             segments: [
                 MenuBarChipSegmentConfig(
@@ -175,7 +175,7 @@ struct MenuBarChipConfigTests {
     @Test("id survives Codable round-trip")
     func idSurvivesRoundTrip() throws {
         let original = MenuBarChipConfig(
-            vendor: .claude,
+            vendor: .claudeTUI,
             segments: [
                 MenuBarChipSegmentConfig(
                     account: .specific("a@b.com"),
@@ -196,7 +196,7 @@ struct MenuBarChipConfigTests {
         let json = """
         {
             "id": "\(UUID().uuidString)",
-            "vendor": "claude",
+            "vendor": "claude-tui",
             "showVendorIcon": false,
             "showOutageWarning": false,
             "outageWarningText": "⚠️",
@@ -213,7 +213,7 @@ struct MenuBarChipConfigTests {
     func arrayRoundTrip() throws {
         let chips: [MenuBarChipConfig] = [
             MenuBarChipConfig(
-                vendor: .claude,
+                vendor: .claudeTUI,
                 segments: [
                     MenuBarChipSegmentConfig(
                         account: .currentlyActive,
@@ -223,7 +223,7 @@ struct MenuBarChipConfigTests {
                 ]
             ),
             MenuBarChipConfig(
-                vendor: .claude,
+                vendor: .claudeTUI,
                 segments: [
                     MenuBarChipSegmentConfig(
                         account: .specific("user@example.com"),

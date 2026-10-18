@@ -6,7 +6,7 @@ import Testing
 @Suite("MenuBarRefreshController — dedup")
 struct MenuBarRefreshControllerTests {
     private func makeChip(
-        vendor: Vendor = .claude,
+        vendor: Vendor = .claudeTUI,
         segmentText: String = "Claude",
         tier: ConsumptionTier? = nil
     ) -> RenderedChip {

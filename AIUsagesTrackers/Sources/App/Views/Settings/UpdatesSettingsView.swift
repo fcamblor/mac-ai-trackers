@@ -5,6 +5,10 @@ struct UpdatesSettingsView: View {
     let preferences: any AppPreferences
     let updateState: UpdateState
 
+    @State private var isAdvancedExpanded = false
+    @State private var isConfirmingRestore = false
+    @State private var restoreError: String?
+
     private static let lastCheckedFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateStyle = .medium
@@ -51,6 +55,18 @@ struct UpdatesSettingsView: View {
                     Spacer()
                     Text(installationKindLabel ?? "—")
                         .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("What's new") {
+                HStack {
+                    Text("Highlights of what changed in recent releases.")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Show What's New…") {
+                        AppDelegate.sharedShowWhatsNew?()
+                    }
+                    .disabled(AppDelegate.sharedShowWhatsNew == nil)
                 }
             }
 
@@ -134,6 +150,38 @@ struct UpdatesSettingsView: View {
                             .buttonStyle(.borderless)
                         }
                     }
+                }
+            }
+
+            if PreMigrationBackup.migrationTo080().exists() {
+                Section {
+                    DisclosureGroup("Advanced", isExpanded: $isAdvancedExpanded) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Only needed to downgrade to 0.7.x: puts back the settings and usage data saved before the 0.8 migration, then quits. Anything changed since the upgrade is lost.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Button("Restore pre-0.8 data and quit…", role: .destructive) {
+                                isConfirmingRestore = true
+                            }
+                            if let restoreError {
+                                Text("Restore failed: \(restoreError)")
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                            }
+                        }
+                    }
+                }
+                .confirmationDialog(
+                    "Restore pre-0.8 data?",
+                    isPresented: $isConfirmingRestore
+                ) {
+                    Button("Restore and quit", role: .destructive) {
+                        Task {
+                            restoreError = await AppDelegate.sharedRestorePreMigrationBackup?()
+                        }
+                    }
+                } message: {
+                    Text("AI Usages Tracker will quit. Install 0.7.x before launching it again, otherwise this version migrates the data once more.")
                 }
             }
         }

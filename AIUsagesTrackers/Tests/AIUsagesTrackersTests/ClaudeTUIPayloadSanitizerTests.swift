@@ -2,11 +2,11 @@ import Foundation
 import Testing
 @testable import AIUsagesTrackersLib
 
-@Suite("ClaudePayloadSanitizer — leakage")
-struct ClaudePayloadSanitizerLeakageTests {
+@Suite("ClaudeTUIPayloadSanitizer — leakage")
+struct ClaudeTUIPayloadSanitizerLeakageTests {
     @Test("realistic full payload produces no surviving seeded secret")
     func noLeakage() {
-        let sanitizer = ClaudePayloadSanitizer()
+        let sanitizer = ClaudeTUIPayloadSanitizer()
         let fixture = FixtureLoader.load("claude-full-payload")
         let seededHeaders = [
             "Authorization": "Bearer seededFakeBearerSentinel",
@@ -28,7 +28,7 @@ struct ClaudePayloadSanitizerLeakageTests {
 
     @Test("Authorization header is replaced with placeholder")
     func authorizationRedacted() {
-        let sanitized = ClaudePayloadSanitizer().sanitize([
+        let sanitized = ClaudeTUIPayloadSanitizer().sanitize([
             "Authorization": "Bearer secret-token-value",
             "anthropic-beta": "oauth-2025-04-20",
         ])
@@ -38,7 +38,7 @@ struct ClaudePayloadSanitizerLeakageTests {
 
     @Test("known structural fields survive sanitization")
     func structurePreserved() {
-        let sanitizer = ClaudePayloadSanitizer()
+        let sanitizer = ClaudeTUIPayloadSanitizer()
         let raw = #"{"five_hour":{"utilization":50.0,"resets_at":"2026-05-07T00:29:59+00:00"},"oauth_token":"sk-ant-oat01-secret"}"#
         let sanitized = sanitizer.sanitize(raw.data(using: .utf8)!)
         let json = try? JSONSerialization.jsonObject(with: sanitized) as? [String: Any]
@@ -50,7 +50,7 @@ struct ClaudePayloadSanitizerLeakageTests {
 
     @Test("email pattern in free-form message is masked")
     func emailMasked() {
-        let sanitizer = ClaudePayloadSanitizer()
+        let sanitizer = ClaudeTUIPayloadSanitizer()
         let masked = sanitizer.sanitize("Contact victim-seeded@example.com for help")
         #expect(masked == "Contact vi***********@*********om for help")
     }

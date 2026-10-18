@@ -22,7 +22,7 @@ struct OutageWarningMigrationTests {
     private func writeLegacySegment(to defaults: UserDefaults) {
         let dict: [String: Any] = [
             "id": UUID().uuidString,
-            "vendor": "claude",
+            "vendor": "claude-tui",
             "account": ["kind": "currently-active"],
             "metricName": "5h sessions (all models)",
             "display": [
@@ -161,7 +161,7 @@ struct OutageWarningMigrationTests {
             var kind: String = "currently-active"
         }
         let id: UUID
-        var vendor: String = "claude"
+        var vendor: String = "claude-tui"
         var account: LegacyAccount = LegacyAccount()
         var metricName: String = "5h sessions (all models)"
         let display: LegacyDisplay

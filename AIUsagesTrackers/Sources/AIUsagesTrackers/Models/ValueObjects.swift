@@ -127,18 +127,62 @@ public struct Vendor: RawRepresentable, Codable, Equatable, Hashable, Sendable {
     public let rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }
 
-    public static let claude = Vendor(rawValue: "claude")
-    public static let codex = Vendor(rawValue: "codex")
-    public static let copilot = Vendor(rawValue: "copilot")
+    public static let claudeTUI = Vendor(rawValue: "claude-tui")
+
+    /// Raw values written by older releases, mapped to their current vendor.
+    /// Up to 0.7.x the Claude TUI was stored as `"claude"`; append-only data
+    /// (usage history) is never rewritten, so every decode must keep
+    /// accepting the legacy value.
+    static let legacyRawValueAliases: [String: String] = [
+        "claude": "claude-tui",
+    ]
+
+    /// Builds a vendor from a possibly legacy raw value (persisted data,
+    /// `vendor:account` ids, the verbose-mode environment variable).
+    public init(normalizing raw: String) {
+        self.rawValue = Self.legacyRawValueAliases[raw] ?? raw
+    }
 
     public init(from decoder: Decoder) throws {
-        rawValue = try decoder.singleValueContainer().decode(String.self)
+        self.init(normalizing: try decoder.singleValueContainer().decode(String.self))
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(rawValue)
     }
+
+    /// Vendors that authenticate the *same* upstream account report identical
+    /// usage and must be merged into one account card. `claude` (CLI/TUI) and
+    /// `claude-desktop` (the Electron app) are the same Anthropic account, so
+    /// they share a family; every other vendor is its own family. The display
+    /// layer groups by `(accountFamily, account)` so a Codex or Copilot login
+    /// that happens to use the same email is NOT merged with Claude.
+    public var accountFamily: String {
+        switch self {
+        case .claudeTUI, .claudeDesktop: "claude"
+        default: rawValue
+        }
+    }
+
+    /// The single vendor that represents this vendor's account family in pickers
+    /// and persisted selections (menubar chips, chart series). Both `claude` and
+    /// `claude-desktop` canonicalise to `claude`, so a selection stored against
+    /// either keeps resolving after the merge; every other vendor is its own
+    /// canonical.
+    public var familyCanonicalVendor: Vendor {
+        switch self {
+        case .claudeTUI, .claudeDesktop: .claudeTUI
+        default: self
+        }
+    }
+    /// Claude Desktop reads usage from the Electron app's per-profile OAuth
+    /// token cache rather than the `claude` CLI keychain entry, so it is a
+    /// distinct vendor with its own credential mechanism and multi-account
+    /// support. The usage endpoint and response shape are shared with `.claudeTUI`.
+    public static let claudeDesktop = Vendor(rawValue: "claude-desktop")
+    public static let codex = Vendor(rawValue: "codex")
+    public static let copilot = Vendor(rawValue: "copilot")
 }
 
 extension Vendor: ExpressibleByStringLiteral {

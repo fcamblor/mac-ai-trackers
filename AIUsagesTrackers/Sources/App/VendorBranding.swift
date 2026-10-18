@@ -11,7 +11,7 @@ enum VendorBrandingResolver {
             return bundle.branding
         }
         switch vendor {
-        case .claude:  return ClaudeCodePlugin.branding
+        case .claudeTUI:  return ClaudeTUIPlugin.branding
         case .codex:   return CodexPlugin.branding
         case .copilot: return CopilotCLIPlugin.branding
         default:       return nil
@@ -20,6 +20,14 @@ enum VendorBrandingResolver {
 
     static func displayName(for vendor: Vendor) -> String {
         brand(for: vendor)?.displayName ?? vendor.rawValue
+    }
+
+    /// Display name for an account *family* — used in pickers and selectors that
+    /// treat Claude CLI + Claude Desktop as one account. The Claude family reads
+    /// "Claude" rather than either vendor's product name.
+    static func familyDisplayName(for vendor: Vendor) -> String {
+        if vendor.accountFamily == "claude" { return "Claude" }
+        return displayName(for: vendor)
     }
 
     static func tint(for vendor: Vendor) -> Color? {

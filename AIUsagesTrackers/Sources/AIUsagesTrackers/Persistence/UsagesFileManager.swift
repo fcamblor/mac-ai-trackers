@@ -9,6 +9,7 @@ public actor UsagesFileManager {
     nonisolated public let filePath: String
     nonisolated public let lockPath: String
     private let logger: FileLogger
+    private var writesSuspended = false
     private let lockTimeoutSeconds: TimeInterval
 
     init(
@@ -31,6 +32,13 @@ public actor UsagesFileManager {
     }
 
     // MARK: - Public
+
+    /// Freezes every write path during downgrade restore, including work already
+    /// waiting for the file lock. Cancelling the poller alone cannot stop manual
+    /// refreshes or active-account monitors from rewriting restored legacy data.
+    public func setWritesSuspended(_ suspended: Bool) {
+        writesSuspended = suspended
+    }
 
     public func read() async -> UsagesFile {
         do {
@@ -228,6 +236,10 @@ public actor UsagesFileManager {
     }
 
     private func writeUnsafe(_ file: UsagesFile) {
+        guard !writesSuspended else {
+            logger.log(.debug, "Skipping usages write during downgrade restore")
+            return
+        }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? encoder.encode(file) else {

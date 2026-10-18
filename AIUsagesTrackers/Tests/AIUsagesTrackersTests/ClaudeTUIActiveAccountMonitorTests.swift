@@ -7,8 +7,8 @@ private actor AccountChangeRecorder {
     func record(_ account: AccountEmail) { accounts.append(account) }
 }
 
-@Suite("ClaudeActiveAccountMonitor")
-struct ClaudeActiveAccountMonitorTests {
+@Suite("ClaudeTUIActiveAccountMonitor")
+struct ClaudeTUIActiveAccountMonitorTests {
     private func makeTempDir() -> String {
         let dir = NSTemporaryDirectory() + "ai-tracker-monitor-\(UUID().uuidString)"
         try! FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
@@ -25,10 +25,10 @@ struct ClaudeActiveAccountMonitorTests {
         dir: String,
         configPath: String,
         onActiveAccountChanged: (@Sendable (AccountEmail) async -> Void)? = nil
-    ) -> (ClaudeActiveAccountMonitor, UsagesFileManager) {
+    ) -> (ClaudeTUIActiveAccountMonitor, UsagesFileManager) {
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let fileManager = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
-        let monitor = ClaudeActiveAccountMonitor(
+        let monitor = ClaudeTUIActiveAccountMonitor(
             claudeConfigPath: configPath,
             fileManager: fileManager,
             logger: logger,
@@ -47,8 +47,8 @@ struct ClaudeActiveAccountMonitorTests {
         )
         let (monitor, fileManager) = makeMonitor(dir: dir, configPath: configPath)
         await fileManager.update(with: [
-            VendorUsageEntry(vendor: "claude", account: "user@example.com", isActive: false),
-            VendorUsageEntry(vendor: "claude", account: "other@example.com", isActive: true),
+            VendorUsageEntry(vendor: "claude-tui", account: "user@example.com", isActive: false),
+            VendorUsageEntry(vendor: "claude-tui", account: "other@example.com", isActive: true),
         ])
 
         await monitor.checkOnce()
@@ -65,7 +65,7 @@ struct ClaudeActiveAccountMonitorTests {
         let configPath = writeConfig("{}", to: dir)
         let (monitor, fileManager) = makeMonitor(dir: dir, configPath: configPath)
         await fileManager.update(with: [
-            VendorUsageEntry(vendor: "claude", account: "user@example.com", isActive: true),
+            VendorUsageEntry(vendor: "claude-tui", account: "user@example.com", isActive: true),
         ])
 
         await monitor.checkOnce()
@@ -79,7 +79,7 @@ struct ClaudeActiveAccountMonitorTests {
         let dir = makeTempDir()
         let (monitor, fileManager) = makeMonitor(dir: dir, configPath: "\(dir)/missing.json")
         await fileManager.update(with: [
-            VendorUsageEntry(vendor: "claude", account: "user@example.com", isActive: true),
+            VendorUsageEntry(vendor: "claude-tui", account: "user@example.com", isActive: true),
         ])
 
         await monitor.checkOnce()

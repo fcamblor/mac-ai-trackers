@@ -1,36 +1,36 @@
 import Foundation
 
-/// Claude Code plugin namespace — assembles a `VendorBundle` from
+/// Claude TUI (`claude` CLI) plugin namespace — assembles a `VendorBundle` from
 /// pre-constructed sub-components and registers it with
 /// `VendorRegistry`. The factory does not build the connectors itself
 /// because the active-account monitor's callback typically references
 /// the poller, which has the connector list as a dependency — running
 /// those constructors here would create a cycle.
-public enum ClaudeCodePlugin {
+public enum ClaudeTUIPlugin {
     public static let branding = VendorBranding(
-        vendor: .claude,
-        displayName: "Claude Code",
+        vendor: .claudeTUI,
+        displayName: "Claude TUI",
         tintHex: "DA7756",
         assetName: "claude-mark"
     )
 
     public static let documentation = VendorDocumentation(
-        vendor: .claude,
-        slug: "claude"
+        vendor: .claudeTUI,
+        slug: "claude-tui"
     )
 
     @discardableResult
     public static func register(
-        connector: ClaudeCodeConnector,
+        connector: ClaudeTUIConnector,
         status: ClaudeStatusConnector? = nil,
-        monitor: ClaudeActiveAccountMonitor? = nil,
-        logger: FileLogger = Loggers.claude,
-        sanitizer: ClaudePayloadSanitizer = ClaudePayloadSanitizer()
+        monitor: ClaudeTUIActiveAccountMonitor? = nil,
+        logger: FileLogger = Loggers.claudeTUI,
+        sanitizer: ClaudeTUIPayloadSanitizer = ClaudeTUIPayloadSanitizer()
     ) -> VendorBundle {
-        let resolvedLogger = VerboseVendorMode.logger(for: .claude, default: logger)
+        let resolvedLogger = VerboseVendorMode.logger(for: .claudeTUI, default: logger)
         let proxy = LoggingProxy(logger: resolvedLogger, sanitizer: sanitizer)
         let bundle = VendorBundle(
-            vendor: .claude,
+            vendor: .claudeTUI,
             branding: branding,
             usage: connector,
             status: status,

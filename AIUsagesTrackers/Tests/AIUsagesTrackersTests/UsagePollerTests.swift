@@ -76,11 +76,11 @@ struct UsagePollerTests {
         let dir = makeTempDir()
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
-        let entry = VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true, metrics: [
+        let entry = VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", isActive: true, metrics: [
             .timeWindow(name: "session", resetAt: "2026-04-17T15:00:00+00:00",
                         windowDuration: 300, usagePercent: 42),
         ])
-        let connector = MockConnector(vendor: "claude", entries: [entry])
+        let connector = MockConnector(vendor: "claude-tui", entries: [entry])
         let poller = UsagePoller(connectors: [connector], fileManager: fm, logger: logger)
 
         await poller.pollOnce()
@@ -96,8 +96,8 @@ struct UsagePollerTests {
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
 
-        let good = MockConnector(vendor: "claude", entries: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true),
+        let good = MockConnector(vendor: "claude-tui", entries: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", isActive: true),
         ])
         let bad = MockConnector(vendor: "codex", entries: [], shouldThrow: true)
         let poller = UsagePoller(connectors: [good, bad], fileManager: fm, logger: logger)
@@ -106,7 +106,7 @@ struct UsagePollerTests {
 
         let result = await fm.read()
         #expect(result.usages.count == 1)
-        #expect(result.usages[0].vendor == "claude")
+        #expect(result.usages[0].vendor == "claude-tui")
     }
 
     @Test("pollOnce with no connectors skips file write")
@@ -128,7 +128,7 @@ struct UsagePollerTests {
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
 
-        let bad = MockConnector(vendor: "claude", entries: [], shouldThrow: true)
+        let bad = MockConnector(vendor: "claude-tui", entries: [], shouldThrow: true)
         let poller = UsagePoller(connectors: [bad], fileManager: fm, logger: logger)
 
         await poller.pollOnce()
@@ -143,8 +143,8 @@ struct UsagePollerTests {
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
 
-        let c1 = MockConnector(vendor: "claude", entries: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true),
+        let c1 = MockConnector(vendor: "claude-tui", entries: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", isActive: true),
         ])
         let c2 = MockConnector(vendor: "codex", entries: [
             VendorUsageEntry(vendor: "codex", account: "c@d.com", isActive: true),
@@ -162,8 +162,8 @@ struct UsagePollerTests {
         let dir = makeTempDir()
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
-        let connector = MockConnector(vendor: "claude", entries: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com"),
+        let connector = MockConnector(vendor: "claude-tui", entries: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com"),
         ])
         let poller = UsagePoller(
             connectors: [connector],
@@ -191,13 +191,13 @@ struct UsagePollerTests {
         let now = Date()
         let recentDate = now.addingTimeInterval(-60) // 60s ago, well within 180s interval
         let cachedEntry = VendorUsageEntry(
-            vendor: "claude", account: "a@b.com", isActive: true,
+            vendor: "claude-tui", account: "a@b.com", isActive: true,
             lastAcquiredOn: ISODate(date: recentDate),
             metrics: []
         )
         await fm.update(with: [cachedEntry])
 
-        let connector = MockConnector(vendor: "claude", entries: [cachedEntry])
+        let connector = MockConnector(vendor: "claude-tui", entries: [cachedEntry])
         let poller = UsagePoller(connectors: [connector], interval: .seconds(180), fileManager: fm, logger: logger)
 
         await poller.pollOnce(now: now)
@@ -215,13 +215,13 @@ struct UsagePollerTests {
         let now = Date()
         let recentDate = now.addingTimeInterval(-60)
         let cachedEntry = VendorUsageEntry(
-            vendor: "claude", account: "a@b.com", isActive: true,
+            vendor: "claude-tui", account: "a@b.com", isActive: true,
             lastAcquiredOn: ISODate(date: recentDate),
             metrics: []
         )
         await fm.update(with: [cachedEntry])
 
-        let connector = MockConnector(vendor: "claude", entries: [cachedEntry])
+        let connector = MockConnector(vendor: "claude-tui", entries: [cachedEntry])
         let poller = UsagePoller(connectors: [connector], interval: .seconds(180), fileManager: fm, logger: logger)
 
         await poller.pollOnce(now: now, force: true)
@@ -316,18 +316,18 @@ struct UsagePollerTests {
         let now = Date()
         let staleDate = now.addingTimeInterval(-200) // 200s ago, past 180s interval
         let staleEntry = VendorUsageEntry(
-            vendor: "claude", account: "a@b.com", isActive: true,
+            vendor: "claude-tui", account: "a@b.com", isActive: true,
             lastAcquiredOn: ISODate(date: staleDate),
             metrics: []
         )
         await fm.update(with: [staleEntry])
 
         let freshEntry = VendorUsageEntry(
-            vendor: "claude", account: "a@b.com", isActive: true,
+            vendor: "claude-tui", account: "a@b.com", isActive: true,
             lastAcquiredOn: ISODate(date: now),
             metrics: []
         )
-        let connector = MockConnector(vendor: "claude", entries: [freshEntry])
+        let connector = MockConnector(vendor: "claude-tui", entries: [freshEntry])
         let poller = UsagePoller(connectors: [connector], interval: .seconds(180), fileManager: fm, logger: logger)
 
         await poller.pollOnce(now: now)
@@ -342,8 +342,8 @@ struct UsagePollerTests {
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
 
-        let entry = VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true)
-        let connector = MockConnector(vendor: "claude", entries: [entry])
+        let entry = VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", isActive: true)
+        let connector = MockConnector(vendor: "claude-tui", entries: [entry])
         let poller = UsagePoller(connectors: [connector], interval: .seconds(180), fileManager: fm, logger: logger)
 
         await poller.pollOnce(now: Date())
@@ -357,8 +357,8 @@ struct UsagePollerTests {
         let dir = makeTempDir()
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
-        let connector = MockConnector(vendor: "claude", entries: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com"),
+        let connector = MockConnector(vendor: "claude-tui", entries: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com"),
         ])
         let poller = UsagePoller(
             connectors: [connector],
@@ -381,8 +381,8 @@ struct UsagePollerTests {
         let dir = makeTempDir()
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
-        let connector = MockConnector(vendor: "claude", entries: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com"),
+        let connector = MockConnector(vendor: "claude-tui", entries: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com"),
         ])
         let prefs = await InMemoryAppPreferences(
             refreshInterval: RefreshInterval(clamping: 30)
@@ -414,13 +414,13 @@ struct UsagePollerTests {
         // Entry is 40s old — stale for a 30s interval, fresh for a 60s interval
         let acquiredDate = now.addingTimeInterval(-40)
         let cachedEntry = VendorUsageEntry(
-            vendor: "claude", account: "a@b.com", isActive: true,
+            vendor: "claude-tui", account: "a@b.com", isActive: true,
             lastAcquiredOn: ISODate(date: acquiredDate),
             metrics: []
         )
         await fm.update(with: [cachedEntry])
 
-        let connector = MockConnector(vendor: "claude", entries: [cachedEntry])
+        let connector = MockConnector(vendor: "claude-tui", entries: [cachedEntry])
 
         // With 60s interval, the 40s-old entry should be considered fresh → skip
         let prefs = await InMemoryAppPreferences(
@@ -444,8 +444,8 @@ struct UsagePollerTests {
         let dir = makeTempDir()
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
-        let connector = MockConnector(vendor: "claude", entries: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com"),
+        let connector = MockConnector(vendor: "claude-tui", entries: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com"),
         ])
         let poller = UsagePoller(
             connectors: [connector],
@@ -471,12 +471,12 @@ struct UsagePollerTests {
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
 
-        let usage = MockConnector(vendor: "claude", entries: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true),
+        let usage = MockConnector(vendor: "claude-tui", entries: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", isActive: true),
         ])
-        let outage = Outage(vendor: .claude, errorMessage: "boom",
+        let outage = Outage(vendor: .claudeTUI, errorMessage: "boom",
                             severity: .major, since: "2026-04-22T10:00:00Z")
-        let status = MockStatusConnector(vendor: .claude, outages: [outage])
+        let status = MockStatusConnector(vendor: .claudeTUI, outages: [outage])
         let poller = UsagePoller(
             connectors: [usage], statusConnectors: [status],
             fileManager: fm, logger: logger
@@ -497,16 +497,16 @@ struct UsagePollerTests {
 
         // Seed file with a pre-existing Claude outage
         let seeded = UsagesFile(usages: [], outages: [
-            Outage(vendor: .claude, errorMessage: "pre-existing", severity: .critical,
+            Outage(vendor: .claudeTUI, errorMessage: "pre-existing", severity: .critical,
                    since: "2026-04-20T00:00:00Z"),
         ])
         let data = try JSONEncoder().encode(seeded)
         try data.write(to: URL(fileURLWithPath: fm.filePath), options: .atomic)
 
-        let usage = MockConnector(vendor: "claude", entries: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true),
+        let usage = MockConnector(vendor: "claude-tui", entries: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", isActive: true),
         ])
-        let status = MockStatusConnector(vendor: .claude, shouldThrow: true)
+        let status = MockStatusConnector(vendor: .claudeTUI, shouldThrow: true)
         let poller = UsagePoller(
             connectors: [usage], statusConnectors: [status],
             fileManager: fm, logger: logger
@@ -526,16 +526,16 @@ struct UsagePollerTests {
         let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
 
         let seeded = UsagesFile(usages: [], outages: [
-            Outage(vendor: .claude, errorMessage: "old", severity: .major,
+            Outage(vendor: .claudeTUI, errorMessage: "old", severity: .major,
                    since: "2026-04-20T00:00:00Z"),
         ])
         let data = try JSONEncoder().encode(seeded)
         try data.write(to: URL(fileURLWithPath: fm.filePath), options: .atomic)
 
-        let usage = MockConnector(vendor: "claude", entries: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true),
+        let usage = MockConnector(vendor: "claude-tui", entries: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", isActive: true),
         ])
-        let status = MockStatusConnector(vendor: .claude, outages: [])
+        let status = MockStatusConnector(vendor: .claudeTUI, outages: [])
         let poller = UsagePoller(
             connectors: [usage], statusConnectors: [status],
             fileManager: fm, logger: logger
@@ -553,10 +553,10 @@ struct UsagePollerTests {
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
 
-        let usage = MockConnector(vendor: "claude", entries: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com"),
+        let usage = MockConnector(vendor: "claude-tui", entries: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com"),
         ])
-        let status = MockStatusConnector(vendor: .claude, outages: [])
+        let status = MockStatusConnector(vendor: .claudeTUI, outages: [])
         let poller = UsagePoller(
             connectors: [usage], statusConnectors: [status],
             fileManager: fm, logger: logger
@@ -573,8 +573,8 @@ struct UsagePollerTests {
         let dir = makeTempDir()
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
-        let connector = MockConnector(vendor: "claude", entries: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com"),
+        let connector = MockConnector(vendor: "claude-tui", entries: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com"),
         ])
         let poller = UsagePoller(
             connectors: [connector],

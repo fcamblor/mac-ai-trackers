@@ -72,7 +72,11 @@ public enum MenuBarChipResolver {
         outagesByVendor: [Vendor: [Outage]],
         now: Date
     ) -> ResolvedMenuBarChip {
-        let hasOutage = (outagesByVendor[chip.vendor]?.isEmpty == false)
+        // Outages are filed per vendor; match by family so a Claude chip picks
+        // up Anthropic outages regardless of which Claude vendor stored them.
+        let hasOutage = outagesByVendor.contains { vendor, outages in
+            vendor.accountFamily == chip.vendor.accountFamily && !outages.isEmpty
+        }
         let resolvedSegments = chip.segments.map { segmentConfig in
             resolveSegment(
                 vendor: chip.vendor,
@@ -94,16 +98,21 @@ public enum MenuBarChipResolver {
         entries: [VendorUsageEntry],
         now: Date
     ) -> ResolvedChipSegment {
-        let vendorEntries = entries.filter { $0.vendor == vendor }
+        // Match by account family so a chip scoped to Claude resolves across
+        // both Claude CLI and Claude Desktop entries (they are one account).
+        let vendorEntries = entries.filter { $0.vendor.accountFamily == vendor.accountFamily }
 
         let entry: VendorUsageEntry?
         let resolveIssue: MenuBarSegmentIssue?
         switch segmentConfig.account {
         case .currentlyActive:
-            if let active = vendorEntries.first(where: { $0.isActive }) {
+            // Anchor to the primary (TUI) source: a merged family can have
+            // several active accounts, so resolve the canonical vendor's active
+            // one (the Claude CLI for Claude).
+            if let active = vendorEntries.first(where: { $0.vendor == vendor.familyCanonicalVendor && $0.isActive }) {
                 entry = active
                 resolveIssue = nil
-            } else if vendorEntries.count == 1 {
+            } else if vendorEntries.count == 1, vendorEntries[0].vendor == vendor.familyCanonicalVendor {
                 // No account is flagged active, but there is only one — treat it as implicitly active
                 // so the user sees their data without having to wait for the monitor to sync.
                 entry = vendorEntries[0]
@@ -113,7 +122,9 @@ public enum MenuBarChipResolver {
                 resolveIssue = .noActiveAccount(vendor: vendor)
             }
         case .specific(let email):
-            if let match = vendorEntries.first(where: { $0.account == email }) {
+            // Same email may exist under several family vendors; pick the
+            // representative (healthy → freshest → active).
+            if let match = vendorEntries.filter({ $0.account == email }).representativeEntry() {
                 entry = match
                 resolveIssue = nil
             } else {

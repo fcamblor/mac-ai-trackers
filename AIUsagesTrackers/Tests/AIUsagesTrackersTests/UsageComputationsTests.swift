@@ -183,6 +183,111 @@ struct FormatResetDateTests {
     }
 }
 
+// MARK: - groupedForDisplay
+
+@Suite("groupedForDisplay")
+struct GroupedForDisplayTests {
+    private func entry(vendor: String, account: String, isActive: Bool = false) -> VendorUsageEntry {
+        VendorUsageEntry(vendor: Vendor(rawValue: vendor), account: AccountEmail(rawValue: account), isActive: isActive)
+    }
+
+    @Test("same email across vendors is merged into one group")
+    func mergesSameEmail() {
+        let entries = [
+            entry(vendor: "claude-tui", account: "me@x.com"),
+            entry(vendor: "claude-desktop", account: "me@x.com"),
+            entry(vendor: "codex", account: "other@x.com"),
+        ]
+        let groups = entries.groupedForDisplay()
+        #expect(groups.count == 2)
+        let merged = groups.first { $0.account.rawValue == "me@x.com" }
+        #expect(merged?.members.count == 2)
+        #expect(Set(merged?.members.map(\.vendor.rawValue) ?? []) == ["claude-tui", "claude-desktop"])
+    }
+
+    @Test("a non-Claude vendor sharing an email is NOT merged with Claude")
+    func foreignVendorSameEmailNotMerged() {
+        let entries = [
+            entry(vendor: "claude-tui", account: "me@x.com"),
+            entry(vendor: "claude-desktop", account: "me@x.com"),
+            entry(vendor: "codex", account: "me@x.com"),
+        ]
+        let groups = entries.groupedForDisplay()
+        #expect(groups.count == 2)
+        let claudeGroup = groups.first { $0.members.contains { $0.vendor == .claudeTUI } }
+        #expect(claudeGroup?.members.count == 2)
+        let codexGroup = groups.first { $0.members.contains { $0.vendor == .codex } }
+        #expect(codexGroup?.members.count == 1)
+    }
+
+    @Test("representative member prefers the active one")
+    func representativePrefersActive() {
+        let group = AccountDisplayGroup(account: AccountEmail(rawValue: "me@x.com"), members: [
+            entry(vendor: "claude-tui", account: "me@x.com", isActive: false),
+            entry(vendor: "claude-desktop", account: "me@x.com", isActive: true),
+        ])
+        #expect(group.representativeMember?.vendor == .claudeDesktop)
+    }
+
+    @Test("a healthy source wins over an active source with expired credentials")
+    func healthySourceWinsOverActiveError() {
+        let failed = VendorUsageEntry(
+            vendor: .claudeTUI, account: "me@x.com", isActive: true,
+            lastAcquiredOn: "2026-04-17T10:00:00Z",
+            lastError: UsageError(timestamp: "2026-04-17T12:00:00Z", type: "token_expired")
+        )
+        let healthy = VendorUsageEntry(
+            vendor: .claudeDesktop, account: "me@x.com", isActive: false,
+            lastAcquiredOn: "2026-04-17T12:00:00Z"
+        )
+        for members in [[failed, healthy], [healthy, failed]] {
+            #expect(members.representativeEntry() == healthy)
+            #expect(AccountDisplayGroup(account: "me@x.com", members: members).isActive)
+        }
+    }
+
+    @Test("fresh data wins over an active but stale source")
+    func freshestSourceWins() {
+        let stale = VendorUsageEntry(
+            vendor: .claudeTUI, account: "me@x.com", isActive: true,
+            lastAcquiredOn: "2026-04-17T10:00:00Z"
+        )
+        let fresh = VendorUsageEntry(
+            vendor: .claudeDesktop, account: "me@x.com", isActive: false,
+            lastAcquiredOn: "2026-04-17T12:00:00Z"
+        )
+        #expect([stale, fresh].representativeEntry() == fresh)
+    }
+
+    @Test("group active is driven by the TUI source, not desktop")
+    func groupActiveDrivenByTui() {
+        // Only desktop active → the account is NOT active.
+        let desktopOnlyActive = [
+            entry(vendor: "claude-tui", account: "me@x.com", isActive: false),
+            entry(vendor: "claude-desktop", account: "me@x.com", isActive: true),
+        ].groupedForDisplay()
+        #expect(desktopOnlyActive[0].isActive == false)
+
+        // TUI active → the account is active regardless of desktop.
+        let tuiActive = [
+            entry(vendor: "claude-tui", account: "me@x.com", isActive: true),
+            entry(vendor: "claude-desktop", account: "me@x.com", isActive: false),
+        ].groupedForDisplay()
+        #expect(tuiActive[0].isActive == true)
+    }
+
+    @Test("distinct emails stay in separate single-member groups")
+    func distinctEmailsStaySeparate() {
+        let entries = [
+            entry(vendor: "claude-desktop", account: "Perso"),
+            entry(vendor: "claude-desktop", account: "Dentalsoft"),
+        ]
+        let groups = entries.groupedForDisplay()
+        #expect(groups.count == 2)
+        #expect(groups.allSatisfy { $0.members.count == 1 })
+    }
+}
+
 // MARK: - sortedForDisplay
 
 @Suite("sortedForDisplay")
@@ -204,28 +309,28 @@ struct SortedForDisplayTests {
 
     @Test("single entry returns itself")
     func singleEntry() {
-        let entries = [entry(vendor: "claude", account: "a@b.com")]
+        let entries = [entry(vendor: "claude-tui", account: "a@b.com")]
         let result = entries.sortedForDisplay()
         #expect(result.count == 1)
-        #expect(result[0].vendor.rawValue == "claude")
+        #expect(result[0].vendor.rawValue == "claude-tui")
     }
 
     @Test("sorts by vendor name alphabetically")
     func sortsByVendor() {
         let entries = [
             entry(vendor: "openai", account: "x@y.com"),
-            entry(vendor: "claude", account: "a@b.com"),
+            entry(vendor: "claude-tui", account: "a@b.com"),
         ]
         let result = entries.sortedForDisplay()
-        #expect(result[0].vendor.rawValue == "claude")
+        #expect(result[0].vendor.rawValue == "claude-tui")
         #expect(result[1].vendor.rawValue == "openai")
     }
 
     @Test("active entries come first within same vendor")
     func activeFirst() {
         let entries = [
-            entry(vendor: "claude", account: "inactive@b.com", isActive: false),
-            entry(vendor: "claude", account: "active@b.com", isActive: true),
+            entry(vendor: "claude-tui", account: "inactive@b.com", isActive: false),
+            entry(vendor: "claude-tui", account: "active@b.com", isActive: true),
         ]
         let result = entries.sortedForDisplay()
         #expect(result[0].isActive == true)
@@ -235,8 +340,8 @@ struct SortedForDisplayTests {
     @Test("sorts by account alphabetically within same vendor and activity")
     func sortsByAccount() {
         let entries = [
-            entry(vendor: "claude", account: "z@b.com", isActive: true),
-            entry(vendor: "claude", account: "a@b.com", isActive: true),
+            entry(vendor: "claude-tui", account: "z@b.com", isActive: true),
+            entry(vendor: "claude-tui", account: "a@b.com", isActive: true),
         ]
         let result = entries.sortedForDisplay()
         #expect(result[0].account.rawValue == "a@b.com")
@@ -246,14 +351,14 @@ struct SortedForDisplayTests {
     @Test("user-supplied order places listed ids first, in that order")
     func userOrderListedFirst() {
         let entries = [
-            entry(vendor: "claude", account: "a@b.com"),
+            entry(vendor: "claude-tui", account: "a@b.com"),
             entry(vendor: "openai", account: "x@y.com"),
             entry(vendor: "cursor", account: "c@d.com"),
         ]
-        let order = ["openai:x@y.com", "claude:a@b.com"]
+        let order = ["openai:x@y.com", "claude-tui:a@b.com"]
         let result = entries.sortedForDisplay(order: order)
         #expect(result[0].id == "openai:x@y.com")
-        #expect(result[1].id == "claude:a@b.com")
+        #expect(result[1].id == "claude-tui:a@b.com")
         #expect(result[2].id == "cursor:c@d.com")
     }
 
@@ -261,39 +366,39 @@ struct SortedForDisplayTests {
     func unorderedFallback() {
         let entries = [
             entry(vendor: "openai", account: "x@y.com"),
-            entry(vendor: "claude", account: "a@b.com"),
+            entry(vendor: "claude-tui", account: "a@b.com"),
             entry(vendor: "cursor", account: "c@d.com"),
         ]
         let result = entries.sortedForDisplay(order: ["openai:x@y.com"])
         #expect(result[0].id == "openai:x@y.com")
         // Remainder falls back to vendor alphabetical: claude < cursor
-        #expect(result[1].id == "claude:a@b.com")
+        #expect(result[1].id == "claude-tui:a@b.com")
         #expect(result[2].id == "cursor:c@d.com")
     }
 
     @Test("stale ids in order list are ignored without affecting present ones")
     func staleOrderIdsIgnored() {
         let entries = [
-            entry(vendor: "claude", account: "a@b.com"),
+            entry(vendor: "claude-tui", account: "a@b.com"),
             entry(vendor: "openai", account: "x@y.com"),
         ]
         let order = ["gone:ghost@x.com", "openai:x@y.com"]
         let result = entries.sortedForDisplay(order: order)
         #expect(result[0].id == "openai:x@y.com")
-        #expect(result[1].id == "claude:a@b.com")
+        #expect(result[1].id == "claude-tui:a@b.com")
     }
 
     @Test("duplicate ids in order list keep the first position")
     func duplicateOrderIdsKeepFirstPosition() {
         let entries = [
-            entry(vendor: "claude", account: "a@b.com"),
+            entry(vendor: "claude-tui", account: "a@b.com"),
             entry(vendor: "openai", account: "x@y.com"),
             entry(vendor: "cursor", account: "c@d.com"),
         ]
-        let order = ["openai:x@y.com", "claude:a@b.com", "openai:x@y.com"]
+        let order = ["openai:x@y.com", "claude-tui:a@b.com", "openai:x@y.com"]
         let result = entries.sortedForDisplay(order: order)
         #expect(result[0].id == "openai:x@y.com")
-        #expect(result[1].id == "claude:a@b.com")
+        #expect(result[1].id == "claude-tui:a@b.com")
         #expect(result[2].id == "cursor:c@d.com")
     }
 
@@ -301,9 +406,9 @@ struct SortedForDisplayTests {
     func threeLevelSort() {
         let entries = [
             entry(vendor: "openai", account: "x@y.com", isActive: true),
-            entry(vendor: "claude", account: "z@b.com", isActive: false),
-            entry(vendor: "claude", account: "a@b.com", isActive: true),
-            entry(vendor: "claude", account: "m@b.com", isActive: true),
+            entry(vendor: "claude-tui", account: "z@b.com", isActive: false),
+            entry(vendor: "claude-tui", account: "a@b.com", isActive: true),
+            entry(vendor: "claude-tui", account: "m@b.com", isActive: true),
         ]
         let result = entries.sortedForDisplay()
         // Claude active first (a, m), then claude inactive (z), then openai
@@ -331,24 +436,24 @@ struct VendorsWithMultipleAccountsTests {
 
     @Test("single entry returns empty set")
     func singleEntry() {
-        let result = [entry(vendor: "claude", account: "a@b.com")].vendorsWithMultipleAccounts()
+        let result = [entry(vendor: "claude-tui", account: "a@b.com")].vendorsWithMultipleAccounts()
         #expect(result.isEmpty)
     }
 
     @Test("two entries same vendor returns that vendor")
     func twoSameVendor() {
         let entries = [
-            entry(vendor: "claude", account: "a@b.com"),
-            entry(vendor: "claude", account: "c@d.com"),
+            entry(vendor: "claude-tui", account: "a@b.com"),
+            entry(vendor: "claude-tui", account: "c@d.com"),
         ]
         let result = entries.vendorsWithMultipleAccounts()
-        #expect(result == [Vendor(rawValue: "claude")])
+        #expect(result == [Vendor(rawValue: "claude-tui")])
     }
 
     @Test("two entries different vendors returns empty set")
     func twoDifferentVendors() {
         let entries = [
-            entry(vendor: "claude", account: "a@b.com"),
+            entry(vendor: "claude-tui", account: "a@b.com"),
             entry(vendor: "openai", account: "c@d.com"),
         ]
         let result = entries.vendorsWithMultipleAccounts()
@@ -372,7 +477,7 @@ struct ExcludingIgnoredAccountsTests {
     @Test("empty ignored list returns all entries")
     func emptyIgnoredList() {
         let entries = [
-            entry(vendor: "claude", account: "a@b.com"),
+            entry(vendor: "claude-tui", account: "a@b.com"),
             entry(vendor: "codex", account: "c@d.com"),
         ]
         let result = entries.excluding(ignoredAccounts: [])
@@ -382,10 +487,10 @@ struct ExcludingIgnoredAccountsTests {
     @Test("matching entry is removed")
     func matchingEntryRemoved() {
         let entries = [
-            entry(vendor: "claude", account: "a@b.com"),
-            entry(vendor: "claude", account: "z@b.com"),
+            entry(vendor: "claude-tui", account: "a@b.com"),
+            entry(vendor: "claude-tui", account: "z@b.com"),
         ]
-        let ignored = [IgnoredAccount(vendor: .claude, account: "a@b.com")]
+        let ignored = [IgnoredAccount(vendor: .claudeTUI, account: "a@b.com")]
         let result = entries.excluding(ignoredAccounts: ignored)
         #expect(result.count == 1)
         #expect(result[0].account.rawValue == "z@b.com")
@@ -393,8 +498,8 @@ struct ExcludingIgnoredAccountsTests {
 
     @Test("unknown ignored account has no effect")
     func unknownIgnoredAccountNoEffect() {
-        let entries = [entry(vendor: "claude", account: "a@b.com")]
-        let ignored = [IgnoredAccount(vendor: .claude, account: "other@b.com")]
+        let entries = [entry(vendor: "claude-tui", account: "a@b.com")]
+        let ignored = [IgnoredAccount(vendor: .claudeTUI, account: "other@b.com")]
         let result = entries.excluding(ignoredAccounts: ignored)
         #expect(result.count == 1)
     }
@@ -402,13 +507,13 @@ struct ExcludingIgnoredAccountsTests {
     @Test("all accounts of a vendor ignored returns empty for that vendor")
     func allVendorAccountsIgnored() {
         let entries = [
-            entry(vendor: "claude", account: "a@b.com"),
-            entry(vendor: "claude", account: "z@b.com"),
+            entry(vendor: "claude-tui", account: "a@b.com"),
+            entry(vendor: "claude-tui", account: "z@b.com"),
             entry(vendor: "codex", account: "c@d.com"),
         ]
         let ignored = [
-            IgnoredAccount(vendor: .claude, account: "a@b.com"),
-            IgnoredAccount(vendor: .claude, account: "z@b.com"),
+            IgnoredAccount(vendor: .claudeTUI, account: "a@b.com"),
+            IgnoredAccount(vendor: .claudeTUI, account: "z@b.com"),
         ]
         let result = entries.excluding(ignoredAccounts: ignored)
         #expect(result.count == 1)
@@ -417,7 +522,7 @@ struct ExcludingIgnoredAccountsTests {
 
     @Test("vendor mismatch does not filter account")
     func vendorMismatchNoFilter() {
-        let entries = [entry(vendor: "claude", account: "a@b.com")]
+        let entries = [entry(vendor: "claude-tui", account: "a@b.com")]
         let ignored = [IgnoredAccount(vendor: .codex, account: "a@b.com")]
         let result = entries.excluding(ignoredAccounts: ignored)
         #expect(result.count == 1)

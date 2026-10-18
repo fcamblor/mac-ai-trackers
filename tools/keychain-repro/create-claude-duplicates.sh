@@ -13,7 +13,7 @@ MCP_ACCOUNT="unknown"
 FAKE_OAUTH_ACCOUNT="claude-repro-user"
 
 # mcpOAuth-only payload — matches the entry shape that shadows the real
-# OAuth bearer when ClaudeCredentialLocator runs `security … -s <svc> -w`
+# OAuth bearer when ClaudeTUICredentialLocator runs `security … -s <svc> -w`
 # without an account scope (the unscoped lookup picks the first match).
 MCP_PAYLOAD='{"mcpOAuth":{"state":"pending","clientId":"repro-mcp-client","redirectUri":"http://localhost:54321/callback"}}'
 

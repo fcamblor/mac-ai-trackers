@@ -177,6 +177,45 @@ public struct TimeWindowVisualState: Sendable, Equatable {
     }
 }
 
+// MARK: - Account grouping
+
+/// A set of `VendorUsageEntry` that share one account identity across vendors,
+/// rendered as a single merged card in the popover.
+public struct AccountDisplayGroup: Identifiable, Equatable, Sendable {
+    public let account: AccountEmail
+    public let members: [VendorUsageEntry]
+
+    public init(account: AccountEmail, members: [VendorUsageEntry]) {
+        self.account = account
+        self.members = members
+    }
+
+    /// Stable across refreshes — account family + identity (so a Codex login
+    /// sharing an email with Claude gets its own group).
+    public var id: String {
+        "\(members.first?.vendor.accountFamily ?? ""):\(account.rawValue)"
+    }
+
+    /// Whether the account-level "active" state (card background + capsule) is
+    /// on. Driven ONLY by the primary (canonical / TUI) source: several Desktop
+    /// profiles can be active at once, so they must not flip the account to
+    /// active. For single-source families (Codex, Copilot) the canonical vendor
+    /// IS the only member, so this matches the plain active flag. Per-source
+    /// chips still reflect each member's own `isActive`.
+    public var isActive: Bool {
+        guard let canonical = members.first?.vendor.familyCanonicalVendor else { return false }
+        return members.contains { $0.vendor == canonical && $0.isActive }
+    }
+
+    /// The member whose usage numbers represent the group. Members of one group
+    /// authenticate the same account and report identical usage, so any works;
+    /// we prefer a healthy member, then the most recently refreshed, with active
+    /// state breaking ties so stale credentials cannot hide live data.
+    public var representativeMember: VendorUsageEntry? {
+        members.representativeEntry()
+    }
+}
+
 // MARK: - Entry sorting
 
 extension Array where Element == VendorUsageEntry {
@@ -209,10 +248,52 @@ extension Array where Element == VendorUsageEntry {
         }
     }
 
+    /// Groups entries that share the same account identity (`AccountEmail`)
+    /// across vendors into one display group, preserving the `sortedForDisplay`
+    /// order of each group's first member. A person signed into both the Claude TUI
+    /// and Claude Desktop with the same account thus appears as a single merged
+    /// group rather than two independent rows. Non-destructive: every entry is
+    /// still present, just projected under its account key.
+    public func groupedForDisplay(order: [String] = []) -> [AccountDisplayGroup] {
+        let sorted = sortedForDisplay(order: order)
+        var keyOrder: [String] = []
+        var membersByKey: [String: [VendorUsageEntry]] = [:]
+        for entry in sorted {
+            // Key on account family + email so only same-account vendors (Claude
+            // CLI + Claude Desktop) merge; a Codex/Copilot login sharing an email
+            // stays on its own card.
+            let key = "\(entry.vendor.accountFamily)\u{0000}\(entry.account.rawValue)"
+            if membersByKey[key] == nil {
+                keyOrder.append(key)
+                membersByKey[key] = []
+            }
+            membersByKey[key]?.append(entry)
+        }
+        return keyOrder.compactMap { key in
+            guard let members = membersByKey[key], let first = members.first else { return nil }
+            return AccountDisplayGroup(account: first.account, members: members)
+        }
+    }
+
     /// Returns entries that are not in the ignored set.
     public func excluding(ignoredAccounts: [IgnoredAccount]) -> [VendorUsageEntry] {
         let ignoredSet = Set(ignoredAccounts)
         return filter { !ignoredSet.contains(IgnoredAccount(vendor: $0.vendor, account: $0.account)) }
+    }
+
+    /// The entry that best represents this set of same-account members: a
+    /// healthy one, then the most recently refreshed, then an active one.
+    /// Members of one account family report identical usage, so any works; this
+    /// just prefers live data over stale/errored data. Shared by the display
+    /// group and the menubar/chart resolvers so they all agree on the winner.
+    public func representativeEntry() -> VendorUsageEntry? {
+        self.max { lhs, rhs in
+            if (lhs.lastError == nil) != (rhs.lastError == nil) { return lhs.lastError != nil }
+            let lhsDate = lhs.lastAcquiredOn?.rawValue ?? ""
+            let rhsDate = rhs.lastAcquiredOn?.rawValue ?? ""
+            if lhsDate != rhsDate { return lhsDate < rhsDate }
+            return !lhs.isActive && rhs.isActive
+        }
     }
 
     /// Set of vendors that appear more than once in the array.

@@ -6,10 +6,10 @@ import AIUsagesTrackersLib
 struct VendorBrandingTests {
     @Test("maps Claude to its branded asset and label")
     func mapsClaude() {
-        let brand = VendorBrandingResolver.brand(for: .claude)
+        let brand = VendorBrandingResolver.brand(for: .claudeTUI)
 
         #expect(brand?.assetName == "claude-mark")
-        #expect(brand?.displayName == "Claude Code")
+        #expect(brand?.displayName == "Claude TUI")
         #expect(brand?.tintHex == "DA7756")
     }
 

@@ -102,7 +102,7 @@ struct UsagesFileWatcherTests {
         defer { try? FileManager.default.removeItem(at: url) }
 
         // Write BEFORE creating the watcher — the first poll must detect it
-        let expected = #"{"usages":[{"vendor":"claude"}]}"#
+        let expected = #"{"usages":[{"vendor":"claude-tui"}]}"#
         try write(expected, to: url)
 
         let watcher = UsagesFileWatcher(path: url.path, pollInterval: 0.1)

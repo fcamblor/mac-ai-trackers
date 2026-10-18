@@ -26,13 +26,16 @@ struct VendorRegistryConformanceTests {
     /// test cares about static shape, not lifecycle).
     private func populateRegistry() {
         VendorRegistry.resetForTesting()
-        let claudeConnector = ClaudeCodeConnector()
+        let claudeConnector = ClaudeTUIConnector()
         let codexConnector = CodexConnector()
         let copilotConnector = CopilotConnector()
-        ClaudeCodePlugin.register(
+        ClaudeTUIPlugin.register(
             connector: claudeConnector,
             status: ClaudeStatusConnector(),
-            monitor: ClaudeActiveAccountMonitor(fileManager: .shared)
+            monitor: ClaudeTUIActiveAccountMonitor(fileManager: .shared)
+        )
+        ClaudeDesktopPlugin.register(
+            connector: ClaudeDesktopConnector(isEnabled: { false })
         )
         CodexPlugin.register(
             connector: codexConnector,
@@ -49,7 +52,7 @@ struct VendorRegistryConformanceTests {
     func registryHasAllVendors() {
         populateRegistry()
         let vendors = VendorRegistry.bundles.map(\.vendor.rawValue).sorted()
-        #expect(vendors == ["claude", "codex", "copilot"])
+        #expect(vendors == ["claude-desktop", "claude-tui", "codex", "copilot"])
     }
 
     @Test("each branding asset resolves to a PDF file under App/Resources/VendorBranding/")

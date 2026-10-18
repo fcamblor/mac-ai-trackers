@@ -1,6 +1,6 @@
 import Foundation
 
-/// GitHub Copilot CLI plugin namespace — see `ClaudeCodePlugin` for the
+/// GitHub Copilot CLI plugin namespace — see `ClaudeTUIPlugin` for the
 /// rationale on factory-style assembly.
 public enum CopilotCLIPlugin {
     public static let branding = VendorBranding(

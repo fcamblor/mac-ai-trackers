@@ -39,7 +39,7 @@ struct MenuBarChipsSeederTests {
     @MainActor
     func preservesUserChips() {
         let existing = MenuBarChipConfig(
-            vendor: .claude,
+            vendor: .claudeTUI,
             segments: [
                 MenuBarChipSegmentConfig(
                     account: .specific("me@example.com"),

@@ -64,7 +64,7 @@ final class MutableClock: ClockProvider {
 // MARK: - Helpers
 
 private func makeUsagesJSON(
-    vendor: String = "claude",
+    vendor: String = "claude-tui",
     account: String = "user@example.com",
     isActive: Bool = true,
     metrics: [[String: Any]] = []
@@ -81,7 +81,7 @@ private func makeUsagesJSON(
 
 /// Creates a flat-shape JSON payload with an optional sibling outages array.
 private func makeUsagesWithOutagesJSON(
-    vendor: String = "claude",
+    vendor: String = "claude-tui",
     account: String = "user@example.com",
     isActive: Bool = true,
     metrics: [[String: Any]] = [],
@@ -101,7 +101,7 @@ private func makeUsagesWithOutagesJSON(
 }
 
 private func outageJSON(
-    vendor: String = "claude",
+    vendor: String = "claude-tui",
     errorMessage: String = "API issues",
     severity: String = "major",
     since: String = "2026-04-15T14:53:00Z",
@@ -293,8 +293,8 @@ struct UsageStoreDegradationTests {
         let store = UsageStore(fileWatcher: watcher, countdownRefreshSeconds: 999)
         store.start()
 
-        let entry1: [String: Any] = ["vendor": "claude", "account": "a@example.com", "isActive": false, "metrics": [timeWindowMetric()]]
-        let entry2: [String: Any] = ["vendor": "claude", "account": "b@example.com", "isActive": false, "metrics": [timeWindowMetric()]]
+        let entry1: [String: Any] = ["vendor": "claude-tui", "account": "a@example.com", "isActive": false, "metrics": [timeWindowMetric()]]
+        let entry2: [String: Any] = ["vendor": "claude-tui", "account": "b@example.com", "isActive": false, "metrics": [timeWindowMetric()]]
         let data = try JSONSerialization.data(withJSONObject: ["usages": [entry1, entry2]])
         watcher.send(data)
         try await eventually { store.dataProcessedCount == 1 }
@@ -608,10 +608,10 @@ struct UsageStoreEntryTests {
 
         // Two active Claude entries — only the first is rendered per first(where:) semantics
         let root: [String: Any] = ["usages": [
-            ["vendor": "claude", "account": "first@example.com", "isActive": true, "metrics": [
+            ["vendor": "claude-tui", "account": "first@example.com", "isActive": true, "metrics": [
                 timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
             ]],
-            ["vendor": "claude", "account": "second@example.com", "isActive": true, "metrics": [
+            ["vendor": "claude-tui", "account": "second@example.com", "isActive": true, "metrics": [
                 timeWindowMetric(name: "Weekly (all models)", resetAt: "2026-04-17T14:00:00Z", usagePercent: 50),
             ]],
         ]]
@@ -674,7 +674,7 @@ struct UsageStoreEntryTests {
         // After the MetricKind.unknown fix, the unknown entry decodes as .unknown(...)
         // and is silently skipped by formatTimeWindowSegment, so only the known metric renders.
         let root: [String: Any] = ["usages": [
-            ["vendor": "claude", "account": "user@example.com", "isActive": true, "metrics": [
+            ["vendor": "claude-tui", "account": "user@example.com", "isActive": true, "metrics": [
                 timeWindowMetric(name: "5h sessions (all models)", resetAt: "2026-04-17T13:00:00Z", usagePercent: 10),
                 ["type": "unknown-future-type", "name": "x"],
             ]],
@@ -709,7 +709,7 @@ struct UsageStoreEntriesTests {
         store.start()
 
         let data = try makeUsagesJSON(
-            vendor: "claude",
+            vendor: "claude-tui",
             account: "a@b.com",
             isActive: true,
             metrics: [timeWindowMetric(name: "5h sessions (all models)", usagePercent: 42)]
@@ -718,7 +718,7 @@ struct UsageStoreEntriesTests {
         try await eventually { store.entries.count == 1 }
 
         #expect(store.entries.count == 1)
-        #expect(store.entries[0].vendor == .claude)
+        #expect(store.entries[0].vendor == .claudeTUI)
         #expect(store.entries[0].account == AccountEmail(rawValue: "a@b.com"))
         store.stop()
     }
@@ -753,13 +753,13 @@ struct UsageStoreEntriesTests {
 
         // Build JSON with two entries manually
         let entry1: [String: Any] = [
-            "vendor": "claude",
+            "vendor": "claude-tui",
             "account": "a@b.com",
             "isActive": true,
             "metrics": [timeWindowMetric(name: "5h sessions (all models)", usagePercent: 48)],
         ]
         let entry2: [String: Any] = [
-            "vendor": "claude",
+            "vendor": "claude-tui",
             "account": "c@d.com",
             "isActive": false,
             "metrics": [payAsYouGoMetric()],
@@ -787,13 +787,13 @@ struct UsageStoreEntriesTests {
         // that should be skipped or cause graceful degradation
         let root: [String: Any] = ["usages": [
             [
-                "vendor": "claude",
+                "vendor": "claude-tui",
                 "account": "good@example.com",
                 "isActive": true,
                 "metrics": [timeWindowMetric(name: "5h sessions (all models)", usagePercent: 42)],
             ],
             [
-                "vendor": "claude",
+                "vendor": "claude-tui",
                 "account": "bad@example.com",
                 "isActive": true,
                 "metrics": "not-an-array",
@@ -1118,7 +1118,7 @@ struct UsageStoreOutageRoundTripTests {
         watcher.send(withOutageData)
         try await eventually { !store.outagesByVendor.isEmpty }
 
-        let outages = store.outagesByVendor[.claude]
+        let outages = store.outagesByVendor[.claudeTUI]
         #expect(outages?.count == 1)
         #expect(outages?[0].errorMessage == "Messages API latency spike")
         #expect(outages?[0].severity == .critical)
@@ -1166,7 +1166,7 @@ struct UsageStoreOutagesTests {
         watcher.send(data)
         try await eventually { !store.outagesByVendor.isEmpty }
 
-        let claudeOutages = store.outagesByVendor[.claude]
+        let claudeOutages = store.outagesByVendor[.claudeTUI]
         #expect(claudeOutages?.count == 1)
         #expect(claudeOutages?[0].errorMessage == "Elevated error rate")
         #expect(claudeOutages?[0].severity == .major)
@@ -1200,7 +1200,7 @@ struct UsageStoreOutagesTests {
         let data = try makeUsagesWithOutagesJSON(outages: [outageJSON()])
         watcher.send(data)
         try await eventually { !store.outagesByVendor.isEmpty }
-        #expect(store.outagesByVendor[.claude] != nil)
+        #expect(store.outagesByVendor[.claudeTUI] != nil)
 
         // Then: malformed data
         watcher.send("bad".data(using: .utf8)!)
@@ -1216,7 +1216,7 @@ struct UsageStoreOutagesTests {
         let prefs = InMemoryAppPreferences(
             menuBarChips: [
                 MenuBarChipConfig(
-                    vendor: .claude,
+                    vendor: .claudeTUI,
                     showOutageWarning: true,
                     outageWarningText: "⚠️",
                     segments: [
@@ -1258,7 +1258,7 @@ struct UsageStoreOutagesTests {
         let prefs = InMemoryAppPreferences(
             menuBarChips: [
                 MenuBarChipConfig(
-                    vendor: .claude,
+                    vendor: .claudeTUI,
                     showOutageWarning: false,
                     segments: [
                         MenuBarChipSegmentConfig(

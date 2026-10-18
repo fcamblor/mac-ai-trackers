@@ -49,7 +49,7 @@ struct SnapshotRecorderTests {
             // no calendar arg — uses the production default
         )
         let file = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
                 .timeWindow(name: "session", resetAt: nil, windowDuration: 300, usagePercent: 42),
             ]),
         ])
@@ -72,7 +72,7 @@ struct SnapshotRecorderTests {
             calendar: Self.utcCalendar()
         )
         let file = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
                 .timeWindow(name: "session", resetAt: nil, windowDuration: 300, usagePercent: 42),
                 .timeWindow(name: "weekly", resetAt: nil, windowDuration: 10_080, usagePercent: 17),
             ]),
@@ -91,7 +91,7 @@ struct SnapshotRecorderTests {
         #expect(tick != nil)
         #expect(tick?.timestamp.rawValue == "2026-04-19T12:00:00Z")
         #expect(tick?.accounts.count == 2)
-        #expect(tick?.accounts.first(where: { $0.vendor == "claude" })?.metrics.count == 2)
+        #expect(tick?.accounts.first(where: { $0.vendor == "claude-tui" })?.metrics.count == 2)
         #expect(tick?.accounts.first(where: { $0.vendor == "codex" })?.metrics.first?.currentAmount == 12.34)
     }
 
@@ -104,7 +104,7 @@ struct SnapshotRecorderTests {
             calendar: Self.utcCalendar()
         )
         let file = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
                 .timeWindow(name: "session", resetAt: nil, windowDuration: 300, usagePercent: 42),
             ]),
         ])
@@ -145,7 +145,7 @@ struct SnapshotRecorderTests {
             calendar: Self.utcCalendar()
         )
         let file = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
                 .timeWindow(name: "session", resetAt: nil, windowDuration: 300, usagePercent: 10),
             ]),
         ])
@@ -167,12 +167,12 @@ struct SnapshotRecorderTests {
             calendar: Self.utcCalendar()
         )
         let file1 = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
                 .timeWindow(name: "session", resetAt: nil, windowDuration: 300, usagePercent: 10),
             ]),
         ])
         let file2 = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
                 .timeWindow(name: "session", resetAt: nil, windowDuration: 300, usagePercent: 11),
             ]),
         ])
@@ -198,7 +198,7 @@ struct SnapshotRecorderTests {
         let exactReset = ISODate(date: now)
         let futureReset = ISODate(date: now.addingTimeInterval(3600))
         let file = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
                 .timeWindow(name: "outdated", resetAt: pastReset, windowDuration: 300, usagePercent: 42),
                 .timeWindow(name: "at-reset", resetAt: exactReset, windowDuration: 300, usagePercent: 88),
                 .timeWindow(name: "fresh", resetAt: futureReset, windowDuration: 300, usagePercent: 17),
@@ -235,7 +235,7 @@ struct SnapshotRecorderTests {
         // Same persisted value, but resetAt has been crossed between the two ticks.
         let resetAt = ISODate(date: Self.isoDate("2026-04-19T12:00:30Z"))
         let file = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
                 .timeWindow(name: "session", resetAt: resetAt, windowDuration: 300, usagePercent: 42),
             ]),
         ])
@@ -259,12 +259,12 @@ struct SnapshotRecorderTests {
             calendar: Self.utcCalendar()
         )
         let single = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
                 .timeWindow(name: "session", resetAt: nil, windowDuration: 300, usagePercent: 10),
             ]),
         ])
         let pair = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
                 .timeWindow(name: "session", resetAt: nil, windowDuration: 300, usagePercent: 10),
             ]),
             VendorUsageEntry(vendor: "codex", account: "c@d.com", metrics: [
@@ -285,7 +285,7 @@ struct SnapshotRecorderTests {
     @Test("hash ignores the timestamp so dedup only compares payloads")
     func hashIsTimestampIndependent() throws {
         let accounts = [
-            AccountSnapshot(vendor: "claude", account: "a@b.com", metrics: [
+            AccountSnapshot(vendor: "claude-tui", account: "a@b.com", metrics: [
                 MetricSnapshot(name: "session", kind: .timeWindow, usagePercent: 42),
             ]),
         ]
@@ -295,7 +295,7 @@ struct SnapshotRecorderTests {
         #expect(!h1.isEmpty)
 
         let other = [
-            AccountSnapshot(vendor: "claude", account: "a@b.com", metrics: [
+            AccountSnapshot(vendor: "claude-tui", account: "a@b.com", metrics: [
                 MetricSnapshot(name: "session", kind: .timeWindow, usagePercent: 43),
             ]),
         ]
@@ -314,7 +314,7 @@ struct SnapshotRecorderTests {
             calendar: Self.utcCalendar()
         )
         let file = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
                 .timeWindow(name: "session", resetAt: nil, windowDuration: 300, usagePercent: 10),
             ]),
         ])
@@ -333,7 +333,7 @@ struct SnapshotRecorderTests {
         let calendar = Self.utcCalendar()
         let logger = Self.makeLogger(in: root)
         let file = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
                 .timeWindow(name: "session", resetAt: nil, windowDuration: 300, usagePercent: 10),
             ]),
             VendorUsageEntry(vendor: "codex", account: "c@d.com", metrics: [
@@ -361,7 +361,7 @@ struct SnapshotRecorderTests {
         let calendar = Self.utcCalendar()
         let logger = Self.makeLogger(in: root)
         let file = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
                 .timeWindow(name: "session", resetAt: nil, windowDuration: 300, usagePercent: 10),
             ]),
         ])
@@ -385,12 +385,12 @@ struct SnapshotRecorderTests {
         let calendar = Self.utcCalendar()
         let logger = Self.makeLogger(in: root)
         let file1 = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
                 .timeWindow(name: "session", resetAt: nil, windowDuration: 300, usagePercent: 10),
             ]),
         ])
         let file2 = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
                 .timeWindow(name: "session", resetAt: nil, windowDuration: 300, usagePercent: 55),
             ]),
         ])
@@ -415,12 +415,12 @@ struct SnapshotRecorderTests {
             calendar: Self.utcCalendar()
         )
         let file1 = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
                 .timeWindow(name: "session", resetAt: nil, windowDuration: 300, usagePercent: 10),
             ]),
         ])
         let file2 = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
                 .timeWindow(name: "session", resetAt: nil, windowDuration: 300, usagePercent: 11),
             ]),
         ])
@@ -450,7 +450,7 @@ struct SnapshotRecorderTests {
             calendar: Self.utcCalendar()
         )
         let file = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
                 .timeWindow(name: "session", resetAt: nil, windowDuration: 300, usagePercent: 42),
                 .payAsYouGo(name: "spend", currentAmount: 1.5, currency: "USD"),
             ]),
@@ -474,7 +474,7 @@ struct SnapshotRecorderTests {
             calendar: Self.utcCalendar()
         )
         let file = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
                 .timeWindow(name: "session", resetAt: nil, windowDuration: 300, usagePercent: 42),
                 .unknown("future-kind"),
             ]),
@@ -490,7 +490,7 @@ struct SnapshotRecorderTests {
         #expect(lines.count == 1)
         let tick = Self.decode(lines[0])
         #expect(tick?.accounts.count == 1)
-        #expect(tick?.accounts.first?.vendor == "claude")
+        #expect(tick?.accounts.first?.vendor == "claude-tui")
         #expect(tick?.accounts.first?.metrics.count == 1)
         #expect(tick?.accounts.first?.metrics.first?.name == "session")
     }

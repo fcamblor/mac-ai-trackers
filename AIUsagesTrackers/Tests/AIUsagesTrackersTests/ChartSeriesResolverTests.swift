@@ -7,7 +7,7 @@ struct ChartSeriesResolverTests {
     private static let now = Date(timeIntervalSince1970: 1_775_000_000)
 
     private static func point(
-        vendor: Vendor = .claude,
+        vendor: Vendor = .claudeTUI,
         account: AccountEmail,
         metricName: String,
         value: Double
@@ -24,7 +24,7 @@ struct ChartSeriesResolverTests {
     }
 
     private static func nullPoint(
-        vendor: Vendor = .claude,
+        vendor: Vendor = .claudeTUI,
         account: AccountEmail,
         metricName: String,
         offset: Double
@@ -61,16 +61,16 @@ struct ChartSeriesResolverTests {
     @Test("custom filters by vendor account and metric")
     func customFiltersByVendorAccountMetric() {
         let points = [
-            Self.point(vendor: .claude, account: "a@example.com", metricName: "session", value: 10),
-            Self.point(vendor: .claude, account: "b@example.com", metricName: "session", value: 20),
+            Self.point(vendor: .claudeTUI, account: "a@example.com", metricName: "session", value: 10),
+            Self.point(vendor: .claudeTUI, account: "b@example.com", metricName: "session", value: 20),
             Self.point(vendor: .codex, account: "a@example.com", metricName: "session", value: 30),
-            Self.point(vendor: .claude, account: "a@example.com", metricName: "weekly", value: 40),
+            Self.point(vendor: .claudeTUI, account: "a@example.com", metricName: "weekly", value: 40),
         ]
         let config = ChartConfiguration(
             title: "Custom",
             selection: .custom([
                 ChartSeriesConfig(
-                    vendor: .claude,
+                    vendor: .claudeTUI,
                     account: .specific("a@example.com"),
                     metricName: "session"
                 ),
@@ -87,6 +87,68 @@ struct ChartSeriesResolverTests {
         #expect(resolved[0].points.map(\.value) == [10.0])
     }
 
+    @Test("custom series merges the Claude family and de-duplicates by timestamp")
+    func customMergesClaudeFamilyDeduped() {
+        let points = [
+            // Same account + metric + timestamp from both Claude vendors → one point.
+            Self.point(vendor: .claudeTUI, account: "a@example.com", metricName: "session", value: 50),
+            Self.point(vendor: .claudeDesktop, account: "a@example.com", metricName: "session", value: 50),
+            // A later desktop-only point still contributes to the merged series.
+            Self.point(vendor: .claudeDesktop, account: "a@example.com", metricName: "session", value: 60),
+        ]
+        let config = ChartConfiguration(
+            title: "Custom",
+            selection: .custom([
+                ChartSeriesConfig(vendor: .claudeTUI, account: .specific("a@example.com"), metricName: "session"),
+            ])
+        )
+        let resolved = ChartSeriesResolver.resolve(configuration: config, points: points, currentEntries: [])
+        #expect(resolved.count == 1)
+        #expect(resolved[0].points.map(\.value) == [50.0, 60.0])
+    }
+
+    @Test("currentlyActive anchors to the TUI active account, then merges history")
+    func currentlyActiveAnchorsToTui() {
+        let points = [
+            Self.point(vendor: .claudeTUI, account: "me@example.com", metricName: "session", value: 25),
+            Self.point(vendor: .claudeDesktop, account: "me@example.com", metricName: "session", value: 25),
+        ]
+        let config = ChartConfiguration(
+            title: "Active",
+            selection: .custom([
+                ChartSeriesConfig(vendor: .claudeTUI, account: .currentlyActive, metricName: "session"),
+            ])
+        )
+        // The TUI (.claudeTUI) account is the active anchor; history then merges and
+        // de-duplicates the desktop point sharing the same timestamp.
+        let resolved = ChartSeriesResolver.resolve(
+            configuration: config,
+            points: points,
+            currentEntries: [VendorUsageEntry(vendor: .claudeTUI, account: "me@example.com", isActive: true)]
+        )
+        #expect(resolved[0].points.map(\.value) == [25.0])
+    }
+
+    @Test("currentlyActive ignores a desktop-only active account")
+    func currentlyActiveIgnoresDesktopOnly() {
+        let points = [
+            Self.point(vendor: .claudeDesktop, account: "me@example.com", metricName: "session", value: 25),
+        ]
+        let config = ChartConfiguration(
+            title: "Active",
+            selection: .custom([
+                ChartSeriesConfig(vendor: .claudeTUI, account: .currentlyActive, metricName: "session"),
+            ])
+        )
+        // No TUI account is active, so "currently active TUI" resolves to nothing.
+        let resolved = ChartSeriesResolver.resolve(
+            configuration: config,
+            points: points,
+            currentEntries: [VendorUsageEntry(vendor: .claudeDesktop, account: "me@example.com", isActive: true)]
+        )
+        #expect(resolved[0].points.isEmpty)
+    }
+
     @Test("custom label overrides generated series label")
     func customLabelOverridesGeneratedLabel() {
         let points = [
@@ -96,7 +158,7 @@ struct ChartSeriesResolverTests {
             title: "Custom",
             selection: .custom([
                 ChartSeriesConfig(
-                    vendor: .claude,
+                    vendor: .claudeTUI,
                     account: .specific("a@example.com"),
                     metricName: "session",
                     label: "Claude sessions"
@@ -120,14 +182,14 @@ struct ChartSeriesResolverTests {
             Self.point(account: "active@example.com", metricName: "session", value: 20),
         ]
         let entries = [
-            VendorUsageEntry(vendor: .claude, account: "old@example.com", isActive: false),
-            VendorUsageEntry(vendor: .claude, account: "active@example.com", isActive: true),
+            VendorUsageEntry(vendor: .claudeTUI, account: "old@example.com", isActive: false),
+            VendorUsageEntry(vendor: .claudeTUI, account: "active@example.com", isActive: true),
         ]
         let config = ChartConfiguration(
             title: "Active",
             selection: .custom([
                 ChartSeriesConfig(
-                    vendor: .claude,
+                    vendor: .claudeTUI,
                     account: .currentlyActive,
                     metricName: "session"
                 ),
@@ -170,7 +232,7 @@ struct ChartSeriesResolverTests {
             title: "Active",
             selection: .custom([
                 ChartSeriesConfig(
-                    vendor: .claude,
+                    vendor: .claudeTUI,
                     account: .currentlyActive,
                     metricName: "session"
                 ),

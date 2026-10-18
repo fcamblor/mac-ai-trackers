@@ -26,7 +26,7 @@ struct ChartConfigurationTests {
             selection: .custom([
                 ChartSeriesConfig(
                     id: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!,
-                    vendor: .claude,
+                    vendor: .claudeTUI,
                     account: .specific("me@example.com"),
                     metricName: "Weekly (all models)",
                     label: "Claude weekly",
@@ -46,7 +46,7 @@ struct ChartConfigurationTests {
         let json = """
         {
           "id": "00000000-0000-0000-0000-000000000004",
-          "vendor": "claude",
+          "vendor": "claude-tui",
           "account": {
             "kind": "specific",
             "email": "me@example.com"

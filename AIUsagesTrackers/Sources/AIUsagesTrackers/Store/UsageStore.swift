@@ -124,7 +124,7 @@ public final class UsageStore {
         // callers that rely on `UsageStore` rendering meaningful output
         // without an explicit preferences store.
         let chip = MenuBarChipConfig(
-            vendor: .claude,
+            vendor: .claudeTUI,
             segments: [
                 MenuBarChipSegmentConfig(
                     account: .currentlyActive,

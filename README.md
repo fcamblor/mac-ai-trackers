@@ -47,7 +47,7 @@ brew install --cask jordanbaird-ice@beta
 
 ### Multi-account support
 
-Monitor multiple AI assistant accounts side by side. The active account is highlighted so the currently billed usage is always visible at a glance.
+Monitor multiple AI assistant accounts side by side. The active account is highlighted so the currently billed usage is always visible at a glance. When the same Anthropic account is signed in to both the Claude TUI and Claude Desktop, the popover shows it as a single card with one chip per source.
 
 <img src="docs/assets/screenshots/Multi-claude_accounts.png" alt="Multi-account popover" height="400">
 
@@ -95,7 +95,14 @@ No manual account setup is required. While the app runs, it periodically scans t
 
 ### Multiple accounts per vendor
 
-The tracker can display multiple accounts for the same vendor simultaneously. For vendors where only one account can be active at a time — such as Claude Code — the app highlights the active account so the currently billed usage is always clear at a glance.
+The tracker can display multiple accounts for the same vendor simultaneously. For vendors where only one account can be active at a time — such as the Claude TUI — the app highlights the active account so the currently billed usage is always clear at a glance.
+
+The Claude TUI and Claude Desktop authenticate the same Anthropic accounts and report identical usage, so they are treated as one account family:
+
+- An account seen by both sources is merged into a single card; per-source chips show which source is signed in and which Desktop profiles are running.
+- The card's active highlight and every **Currently active** selection (menu bar chips, chart series) follow the Claude TUI account only. Several Claude Desktop profiles can run at once, so they never change which account is considered active.
+- Menu bar and chart pickers expose a single **Claude** vendor covering both sources.
+- Ignoring or reordering a merged account from Settings applies to all of its sources.
 
 ### Snapshot-based history
 
@@ -117,9 +124,33 @@ The history tab is driven by the chart list in **Settings > Charts**. A fresh in
 
 Each assistant entry below corresponds to a vendor-specific connector and a dated API snapshot under `docs/vendors/`. Adding or evolving a vendor goes through the workflow described in [`docs/ASSISTANT-ONBOARDING.md`](docs/ASSISTANT-ONBOARDING.md): a GitHub issue, a tester DMG built by CI, ≥ 2 distinct tester confirmations, and finally a tagged release that re-attaches the new entry to this section.
 
-### Claude Code
+### Claude TUI
 
-AI Usages Tracker reads the active Claude Code account from `~/.claude.json` and retrieves OAuth credentials from the macOS Keychain service `Claude Code-credentials`.
+The Claude TUI is the `claude` command-line app (Claude Code CLI). AI Usages Tracker reads its active account from `~/.claude.json` and retrieves OAuth credentials from the macOS Keychain service `Claude Code-credentials`.
+
+### Claude Desktop
+
+Claude Desktop support is **off by default** and must be enabled in **Settings > Coding Assistants**. Turning it on makes the next refresh ask macOS for access to the `Claude Safe Storage` Keychain item; no Keychain prompt is raised before you opt in.
+
+AI Usages Tracker reads the encrypted OAuth token cache stored in each Claude Desktop profile directory and decrypts it with the `Claude Safe Storage` key. Every existing profile directory is read:
+
+- `~/Library/Application Support/Claude` (default profile)
+- `~/Library/Application Support/Claude-3p` (secondary profile created by the installer)
+- any custom folder added with **Add profile folder…** in **Settings > Coding Assistants**
+
+The account email is resolved from Anthropic's profile endpoint so a Desktop profile matches the corresponding Claude TUI account. A profile is shown as running when a Claude Desktop process is open on its directory.
+
+#### Running several Claude Desktop instances side by side
+
+Claude Desktop normally runs a single instance tied to one account. Launching it with a dedicated `--user-data-dir` gives each instance its own profile directory, and therefore its own signed-in account:
+
+```sh
+open -n -a ~/Applications/Claude.app --args --user-data-dir="$HOME/Claude/Profiles/Perso"
+```
+
+`-n` forces a new instance even when Claude Desktop is already running. Adjust the app path to where Claude is installed (typically `/Applications/Claude.app`). Add each custom directory with **Add profile folder…** so the tracker picks up its usage.
+
+See [`docs/vendors/claude-desktop.md`](docs/vendors/claude-desktop.md) for the full credential and API details.
 
 ### Codex
 
@@ -158,10 +189,12 @@ It contains:
 - `usages.json.lock`: advisory lock file used to coordinate safe reads and writes.
 - `usage-history/YYYY/MM/YYYY-MM-DD.jsonl`: append-only daily usage-history snapshots, grouped by UTC date.
 - `app.log`: app lifecycle, polling, persistence, and UI-adjacent logs.
-- `claude-usages-connector.log`: Claude Code connector and status-fetch logs.
+- `claude-tui-usages-connector.log`: Claude TUI connector and status-fetch logs.
+- `claude-desktop-usages-connector.log`: Claude Desktop connector logs.
 - `codex-usages-connector.log`: Codex connector and status-fetch logs.
 - `copilot-usages-connector.log`: GitHub Copilot CLI connector logs.
 - `*.log.1`: rotated log backups. Each managed log rotates after 5 MB.
+- `backuped-files/migration-to-0.8/`: snapshot of the preferences and cache files taken before the 0.7.x → 0.8 data migration. **Settings > Updates > Advanced** can restore it before downgrading to 0.7.x.
 
 Deleting the cache directory resets local usage snapshots, history, and logs. It does not remove assistant credentials or macOS user preferences.
 
@@ -178,11 +211,22 @@ The app stores these preference keys:
 - `ai-tracker.refreshIntervalSeconds`: automatic refresh interval.
 - `ai-tracker.launchAtLogin`: launch-at-login preference mirrored from the system login item state.
 - `ai-tracker.logLevel`: selected log verbosity.
-- `ai-tracker.menuBarSegments`: configured menu bar label segments.
-- `ai-tracker.menuBarSegmentsInitialized`: internal flag that prevents reseeding segments after the user edits them.
-- `ai-tracker.menuBarSeparator`: separator inserted between menu bar label segments.
+- `ai-tracker.menuBarChips`: configured menu bar chips and their segments.
+- `ai-tracker.menuBarChipsInitialized`: internal flag that prevents reseeding chips after the user edits them.
+- `ai-tracker.menuBarChipBackground`: colour scheme of the menu bar chip pills.
 - `ai-tracker.chartConfigurations`: configured history chart panels and custom series.
 - `ai-tracker.chartConfigurationsInitialized`: internal flag that prevents reseeding charts after the user edits them.
+- `ai-tracker.ignoredAccounts`: accounts hidden from the popover.
+- `ai-tracker.accountsOrder`: custom account order in the popover.
+- `ai-tracker.updatesAutoCheckEnabled`, `ai-tracker.updatesDismissedVersions`: update-check preferences.
+- `ai-tracker.statusComponentSubscriptions`: vendor status components the user subscribed to.
+- `ai-tracker.claudeKeychainAccount`: Keychain entry pinned for Claude TUI credentials when several exist.
+- `ai-tracker.claudeDesktopEnabled`: whether the Claude Desktop source is enabled.
+- `ai-tracker.claudeDesktopProfilePaths`: custom Claude Desktop profile folders.
+- `ai-tracker.storageSchemaVersion`: version of the stored preferences layout, used to migrate settings from older releases.
+- `ai-tracker.pendingUpgradeChangelog`: internal flag that shows the "What's new" window once after such a migration.
+
+Other `ai-tracker.*Migration*` keys are internal one-shot migration markers.
 
 Assistant OAuth credentials are not stored in this preferences file. They are read from the assistant-specific files and Keychain services listed above.
 

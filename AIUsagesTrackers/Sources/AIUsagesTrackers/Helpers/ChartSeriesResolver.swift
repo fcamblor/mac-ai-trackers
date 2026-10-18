@@ -70,12 +70,27 @@ public enum ChartSeriesResolver {
             )
         }
 
-        let matching = points.filter { point in
-            point.vendor == config.vendor
+        // Match history across the account family (Claude CLI + Claude Desktop
+        // write separate but identical points for one account); de-duplicate by
+        // timestamp so the merged series is not drawn twice, preferring the
+        // representative vendor's point and any point that actually has a value.
+        let representativeVendor = currentEntries
+            .filter { $0.vendor.accountFamily == config.vendor.accountFamily && $0.account == account }
+            .representativeEntry()?.vendor
+        let familyMatching = points.filter { point in
+            point.vendor.accountFamily == config.vendor.accountFamily
                 && point.account == account
                 && point.metricName == config.metricName
         }
-        .sorted(by: usageHistoryPointSort)
+        var byTimestamp: [Date: UsageHistoryPoint] = [:]
+        for point in familyMatching {
+            guard let existing = byTimestamp[point.timestamp] else {
+                byTimestamp[point.timestamp] = point
+                continue
+            }
+            byTimestamp[point.timestamp] = Self.preferredPoint(existing, point, representativeVendor: representativeVendor)
+        }
+        let matching = byTimestamp.values.sorted(by: usageHistoryPointSort)
 
         let defaultLabel = matching.last?.seriesLabel ?? "\(config.vendor.rawValue) / \(account.rawValue) / \(config.metricName)"
         return ResolvedChartSeries(
@@ -93,16 +108,38 @@ public enum ChartSeriesResolver {
     ) -> AccountEmail? {
         switch account {
         case .currentlyActive:
-            return currentEntries.first { $0.vendor == vendor && $0.isActive }?.account
+            // Anchor to the primary (TUI) source's active account; a merged
+            // family can have several active accounts at once.
+            return currentEntries
+                .first { $0.vendor == vendor.familyCanonicalVendor && $0.isActive }?.account
         case .specific(let email):
             return email
         }
     }
 
+    /// Chooses which of two same-timestamp history points to keep when merging a
+    /// family's series: one with a real value wins over a gap; among equals, the
+    /// representative vendor's point wins so the merged line is stable.
+    private static func preferredPoint(
+        _ lhs: UsageHistoryPoint,
+        _ rhs: UsageHistoryPoint,
+        representativeVendor: Vendor?
+    ) -> UsageHistoryPoint {
+        if (lhs.value == nil) != (rhs.value == nil) {
+            return lhs.value != nil ? lhs : rhs
+        }
+        if let representativeVendor {
+            if lhs.vendor == representativeVendor { return lhs }
+            if rhs.vendor == representativeVendor { return rhs }
+        }
+        return lhs
+    }
+
     private static func fallbackLabel(for config: ChartSeriesConfig) -> String {
         switch config.account {
         case .currentlyActive:
-            return "\(config.vendor.rawValue) / currently active / \(config.metricName)"
+            let activeLabel = config.vendor.accountFamily == "claude" ? "currently active TUI" : "currently active"
+            return "\(config.vendor.rawValue) / \(activeLabel) / \(config.metricName)"
         case .specific(let email):
             return "\(config.vendor.rawValue) / \(email.rawValue) / \(config.metricName)"
         }

@@ -38,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// is a production build) and the renderer must use real tiers.
     private var pacingCycleTier: ConsumptionTier?
     private var pacingCycleTask: Task<Void, Never>?
+    private var upgradeChangelogWindow: NSWindow?
 
     /// Shared preferences store — exposed as static so the SwiftUI Settings scene
     /// (constructed before applicationDidFinishLaunching) can access it.
@@ -67,6 +68,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Closure called when the user clicks "Restart now" once the update has
     /// been downloaded/extracted (manual) or installed by Homebrew.
     static var sharedTriggerRestart: (() -> Void)?
+
+    /// Lets the Updates settings tab reopen the "What's new" window.
+    static var sharedShowWhatsNew: (() -> Void)?
+
+    /// Restores the pre-0.8 backup then quits; nil until launch completes.
+    /// Resolves to an error message when the restore failed (app keeps running).
+    static var sharedRestorePreMigrationBackup: (() async -> String?)?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
@@ -99,6 +107,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         Loggers.setPreferences(Self.sharedPreferences)
 
+        // Must precede every seeder: it tells a pre-0.8 upgrade apart from a
+        // fresh install by the "initialized" markers those seeders write.
+        StorageSchemaMigration.migrateIfNeeded(preferences: Self.sharedPreferences)
         ChartConfigurationsSeeder.seedIfNeeded(preferences: Self.sharedPreferences)
         // OutageWarningMigration MUST run before MenuBarChipsMigration: it
         // rewrites the legacy per-segment outage fields (still stored under
@@ -124,7 +135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // refresh as soon as the auto-pin fires.
         let preferences: any AppPreferences = Self.sharedPreferences
         let claudeKeychainAccountKey = AppPreferenceKeys.claudeKeychainAccount.rawValue
-        let claudeLocator = ClaudeCredentialLocator(
+        let claudeLocator = ClaudeTUICredentialLocator(
             accountOverride: {
                 let raw = UserDefaults.standard.string(forKey: claudeKeychainAccountKey)
                 guard let raw, !raw.isEmpty else { return nil }
@@ -136,8 +147,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         )
-        let claudeConnector = ClaudeCodeConnector(credentialLocator: claudeLocator)
+        let claudeConnector = ClaudeTUIConnector(credentialLocator: claudeLocator)
         let claudeStatus = ClaudeStatusConnector()
+        // Claude Desktop source — reads the Electron profiles' OAuth token cache.
+        // Gated behind an explicit preference so no `Claude Safe Storage` Keychain
+        // read (and therefore no authorisation prompt) happens until the user
+        // opts in from the Coding Assistants tab. The gate and the custom profile
+        // paths are read from raw UserDefaults so the background actor avoids an
+        // @MainActor Observation hop on every poll.
+        let claudeDesktopEnabledKey = AppPreferenceKeys.claudeDesktopEnabled.rawValue
+        let claudeDesktopPathsKey = AppPreferenceKeys.claudeDesktopProfilePaths.rawValue
+        let claudeDesktopConnector = ClaudeDesktopConnector(
+            credentialLocator: ClaudeDesktopCredentialLocator(
+                profileStore: ClaudeDesktopProfileStore(
+                    customProfilePaths: {
+                        UserDefaults.standard.stringArray(forKey: claudeDesktopPathsKey) ?? []
+                    }
+                )
+            ),
+            isEnabled: { UserDefaults.standard.bool(forKey: claudeDesktopEnabledKey) }
+        )
         let codexConnector = CodexConnector()
         let codexStatusRegistry = StatusComponentRegistry(
             platform: .incidentIO,
@@ -154,13 +183,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         let copilotConnector = CopilotConnector()
         let poller = UsagePoller(
-            connectors: [claudeConnector, codexConnector, copilotConnector],
+            connectors: [claudeConnector, claudeDesktopConnector, codexConnector, copilotConnector],
             statusConnectors: [claudeStatus, codexStatus],
             fileManager: fileManager,
             refreshState: refreshState,
             preferences: Self.sharedPreferences
         )
-        let claudeMonitor = ClaudeActiveAccountMonitor(
+        let claudeMonitor = ClaudeTUIActiveAccountMonitor(
             fileManager: fileManager,
             onActiveAccountChanged: { [weak poller] _ in
                 await poller?.pollOnce(force: true)
@@ -180,7 +209,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         )
         VendorRegistry.resetForTesting()
-        ClaudeCodePlugin.register(connector: claudeConnector, status: claudeStatus, monitor: claudeMonitor)
+        ClaudeTUIPlugin.register(connector: claudeConnector, status: claudeStatus, monitor: claudeMonitor)
+        ClaudeDesktopPlugin.register(connector: claudeDesktopConnector)
         CodexPlugin.register(connector: codexConnector, status: codexStatus, monitor: codexMonitor)
         CopilotCLIPlugin.register(connector: copilotConnector, monitor: copilotMonitor)
         let snapshotRecorder = SnapshotRecorder()
@@ -204,6 +234,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupStatusItem(store: store, refreshState: refreshState, historyReader: historyReader)
         trackStoreChanges(store: store)
         setupUpdateScheduler()
+        Self.sharedShowWhatsNew = { [weak self] in self?.presentWhatsNew() }
+        Self.sharedRestorePreMigrationBackup = { [weak self] in
+            await self?.restorePreMigrationBackupAndTerminate()
+        }
+        presentUpgradeChangelogIfPending()
 
         Task {
             await StartupMigrationRunner(fileManager: fileManager).run()
@@ -462,6 +497,74 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // No-op in release: keep the field nil so the renderer uses real tiers.
         pacingCycleTier = nil
         #endif
+    }
+
+    // MARK: - Upgrade changelog
+
+    private func presentUpgradeChangelogIfPending() {
+        guard let version = StorageSchemaMigration.pendingChangelog() else { return }
+        presentWhatsNew(version: version)
+    }
+
+    /// Opens the "What's new" window on `version` (newest when nil), or brings
+    /// the already-open one to front.
+    func presentWhatsNew(version: String? = nil) {
+        if let existing = upgradeChangelogWindow {
+            NSApp.activate(ignoringOtherApps: true)
+            existing.makeKeyAndOrderFront(nil)
+            return
+        }
+        let window = NSWindow(
+            contentRect: .zero,
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "What's new"
+        window.isReleasedWhenClosed = false
+        let hosting = NSHostingController(rootView: UpgradeChangelogView(
+            initialVersion: version,
+            onOpenAssistantsSettings: { [weak self] in
+                self?.upgradeChangelogWindow?.close()
+                self?.openSettings(targetTab: .codingAssistants)
+            },
+            onDismiss: { [weak self] in
+                self?.upgradeChangelogWindow?.close()
+            }
+        ))
+        // A window built from a zero content rect is never resized to the
+        // SwiftUI content unless the hosting controller publishes its size —
+        // without this the window opens as a bare, empty title bar.
+        hosting.sizingOptions = [.preferredContentSize]
+        window.contentViewController = hosting
+        window.setContentSize(hosting.view.fittingSize)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleUpgradeChangelogWillClose(_:)),
+            name: NSWindow.willCloseNotification,
+            object: window
+        )
+        upgradeChangelogWindow = window
+        // .accessory apps cannot make a window key without a temporary
+        // .regular policy (same constraint as the Settings window).
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    @objc private func handleUpgradeChangelogWillClose(_ notification: Notification) {
+        // Any way of closing (button, red close, settings shortcut) counts as
+        // read: the changelog must never come back after the user saw it.
+        StorageSchemaMigration.acknowledgeChangelog()
+        NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: notification.object)
+        upgradeChangelogWindow = nil
+        DispatchQueue.main.async {
+            // Settings may have been opened from the changelog and still needs
+            // the .regular policy; it restores .accessory itself on close.
+            guard Self.findSettingsWindow()?.isVisible != true else { return }
+            NSApp.setActivationPolicy(.accessory)
+        }
     }
 
     // MARK: - Settings
@@ -885,6 +988,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// terminate. Used both by the menu's Quit item and by the update flow's
     /// "Restart now" path — in the latter case, the finalize script polls our
     /// PID, so a clean exit unblocks the swap quicker.
+    /// Downgrade escape hatch: stops every writer so nothing re-migrates the
+    /// restored files, puts the pre-0.8 backup back, then quits so the user
+    /// can install 0.7.x. Returns an error message (and keeps running, with
+    /// the writers restarted) when the restore fails.
+    @MainActor
+    private func restorePreMigrationBackupAndTerminate() async -> String? {
+        let fileManager = await poller?.fileManager ?? UsagesFileManager.shared
+        await fileManager.setWritesSuspended(true)
+        await poller?.stop()
+        await snapshotScheduler?.stop()
+        do {
+            try PreMigrationBackup.migrationTo080().restore(defaults: .standard)
+        } catch {
+            Loggers.app.log(.error, "Pre-migration restore failed: \(error)")
+            await fileManager.setWritesSuspended(false)
+            await poller?.start()
+            await snapshotScheduler?.start()
+            return "\(error)"
+        }
+        Loggers.app.log(.info, "Pre-migration backup restored; quitting for downgrade")
+        await gracefulShutdownAndTerminate()
+        return nil
+    }
+
     @MainActor
     private func gracefulShutdownAndTerminate() async {
         let pollerRef = poller

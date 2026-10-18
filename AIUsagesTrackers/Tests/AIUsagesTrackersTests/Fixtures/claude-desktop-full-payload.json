@@ -1,0 +1,41 @@
+{
+  "five_hour": {
+    "utilization": 100.0,
+    "resets_at": "2026-10-17T16:20:00.026761+00:00"
+  },
+  "seven_day": {
+    "utilization": 60.0,
+    "resets_at": "2026-10-21T04:00:00.026785+00:00"
+  },
+  "seven_day_opus": null,
+  "seven_day_sonnet": null,
+  "seven_day_breakdown": {
+    "as_of": "2026-10-17T15:58:19.072957+00:00",
+    "window_started_at": "2026-10-14T04:00:00.026785+00:00",
+    "rows": [
+      { "key": "claude_code", "display_name": "Claude Code", "percent": 0 },
+      { "key": "chat", "display_name": "Chats", "percent": 3 },
+      { "key": "cowork", "display_name": "Cowork", "percent": 97 },
+      { "key": "other", "display_name": "Other", "percent": 0 }
+    ]
+  },
+  "extra_usage": {
+    "is_enabled": false,
+    "monthly_limit": null,
+    "used_credits": null,
+    "utilization": null,
+    "currency": null
+  },
+  "_seeded_secrets_for_leakage_test": {
+    "oauth_token": "sk-ant-oat01-DEADBEEFseededFakeToken",
+    "refresh_token": "sk-ant-ort01-AnotherFakeToken",
+    "account": {
+      "id": "acct_seededfakeid",
+      "email": "victim-seeded@example.com"
+    },
+    "api_key": "anth_apikey_seededfake",
+    "credential_blob": "seeded-credential-blob",
+    "safe_storage_cipher": "v10c2VlZGVkRmFrZUNpcGhlclRleHRCbG9iVmFsdWU=",
+    "comment_with_email": "Contact victim-seeded@example.com for help"
+  }
+}

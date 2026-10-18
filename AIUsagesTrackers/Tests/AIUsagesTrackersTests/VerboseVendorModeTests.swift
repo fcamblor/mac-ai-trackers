@@ -19,10 +19,10 @@ struct VerboseVendorModeTests {
         // exercises the env-only path. The plist-only path is covered by the
         // app-target tests where Bundle.main is the running test bundle.
         let resolved = VerboseVendorMode.resolveActiveVendor(
-            environment: [VerboseVendorMode.environmentVariableName: "claude"],
+            environment: [VerboseVendorMode.environmentVariableName: "claude-tui"],
             bundle: nil
         )
-        #expect(resolved == .claude)
+        #expect(resolved == .claudeTUI)
     }
 
     @Test("empty environment value falls through")
@@ -54,8 +54,8 @@ struct VerboseVendorModeTests {
         // The activeVendor static is process-cached; the test exercises the
         // logger() helper's branching independently of which vendor (if
         // any) is the real verbose target during this run.
-        let pinned = VerboseVendorMode.logger(for: .claude, default: baseline)
-        if VerboseVendorMode.activeVendor == .claude {
+        let pinned = VerboseVendorMode.logger(for: .claudeTUI, default: baseline)
+        if VerboseVendorMode.activeVendor == .claudeTUI {
             #expect(pinned.effectiveMinLevel == .debug)
         } else {
             #expect(pinned.filePath == baseline.filePath)

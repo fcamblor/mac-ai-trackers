@@ -20,12 +20,12 @@ struct TesterFeedbackContextTests {
         ])) == nil)
 
         #expect(TesterFeedbackContext.resolve(bundle: stubBundle(values: [
-            TesterFeedbackContext.vendorPlistKey: "claude",
+            TesterFeedbackContext.vendorPlistKey: "claude-tui",
             TesterFeedbackContext.issueURLPlistKey: url,
         ])) == nil)
 
         #expect(TesterFeedbackContext.resolve(bundle: stubBundle(values: [
-            TesterFeedbackContext.vendorPlistKey: "claude",
+            TesterFeedbackContext.vendorPlistKey: "claude-tui",
             TesterFeedbackContext.buildCommitPlistKey: validCommit,
         ])) == nil)
     }
@@ -33,7 +33,7 @@ struct TesterFeedbackContextTests {
     @Test("rejects a non-40-char build commit")
     func shortCommitRejected() {
         let bundle = stubBundle(values: [
-            TesterFeedbackContext.vendorPlistKey: "claude",
+            TesterFeedbackContext.vendorPlistKey: "claude-tui",
             TesterFeedbackContext.buildCommitPlistKey: "abc123",
             TesterFeedbackContext.issueURLPlistKey: "https://github.com/owner/repo/issues/42",
         ])
@@ -43,7 +43,7 @@ struct TesterFeedbackContextTests {
     @Test("rejects a non-hex build commit of correct length")
     func nonHexCommitRejected() {
         let bundle = stubBundle(values: [
-            TesterFeedbackContext.vendorPlistKey: "claude",
+            TesterFeedbackContext.vendorPlistKey: "claude-tui",
             TesterFeedbackContext.buildCommitPlistKey: String(repeating: "z", count: 40),
             TesterFeedbackContext.issueURLPlistKey: "https://github.com/owner/repo/issues/42",
         ])
@@ -62,7 +62,7 @@ struct TesterFeedbackContextTests {
         ]
         for raw in cases {
             let bundle = stubBundle(values: [
-                TesterFeedbackContext.vendorPlistKey: "claude",
+                TesterFeedbackContext.vendorPlistKey: "claude-tui",
                 TesterFeedbackContext.buildCommitPlistKey: validCommit,
                 TesterFeedbackContext.issueURLPlistKey: raw,
             ])
@@ -74,18 +74,18 @@ struct TesterFeedbackContextTests {
     func happyPath() throws {
         let validCommit = String(repeating: "f", count: 40)
         let bundle = stubBundle(values: [
-            TesterFeedbackContext.vendorPlistKey: "claude",
+            TesterFeedbackContext.vendorPlistKey: "claude-tui",
             TesterFeedbackContext.buildCommitPlistKey: validCommit,
             TesterFeedbackContext.issueURLPlistKey: "https://github.com/owner/repo/issues/42",
         ])
         let context = try #require(TesterFeedbackContext.resolve(bundle: bundle))
-        #expect(context.vendor == .claude)
+        #expect(context.vendor == .claudeTUI)
         #expect(context.buildCommit == validCommit)
         #expect(context.shortCommit == String(repeating: "f", count: 8))
 
         let home = URL(fileURLWithPath: "/Users/tester")
         let logURL = context.connectorLogURL(home: home)
-        #expect(logURL.path == "/Users/tester/.cache/ai-usages-tracker/claude-usages-connector.log")
+        #expect(logURL.path == "/Users/tester/.cache/ai-usages-tracker/claude-tui-usages-connector.log")
     }
 
     @Test("trims surrounding whitespace before parsing")
@@ -97,7 +97,7 @@ struct TesterFeedbackContextTests {
             TesterFeedbackContext.issueURLPlistKey: " https://github.com/owner/repo/issues/1 ",
         ])
         let context = try #require(TesterFeedbackContext.resolve(bundle: bundle))
-        #expect(context.vendor == .claude)
+        #expect(context.vendor == .claudeTUI)
         #expect(context.buildCommit.count == 40)
     }
 

@@ -1,6 +1,6 @@
 import Foundation
 
-/// What `ClaudeCredentialLocator.locate()` produces — a Claude OAuth bearer
+/// What `ClaudeTUICredentialLocator.locate()` produces — a Claude OAuth bearer
 /// token resolved from the macOS Keychain entry written by the `claude` CLI.
 public struct ClaudeCredentials: Sendable, Equatable {
     public let accessToken: String
@@ -39,7 +39,7 @@ public enum ClaudeAuthError: Error, CustomStringConvertible {
         case let .missingOAuthBlock(svc, account):
             "Keychain entry for service '\(svc)' (account: \(account ?? "(none)")) has no `claudeAiOauth.accessToken`"
         case let .apiKeyOnlyUnsupported(svc):
-            "Claude Code is authenticated with a standard API key in service '\(svc)'; usage reporting requires Claude Code OAuth credentials"
+            "The Claude TUI is authenticated with a standard API key in service '\(svc)'; usage reporting requires Claude TUI OAuth credentials"
         case let .tokenExpired(svc, expiredAt):
             "OAuth access token for service '\(svc)' expired at \(expiredAt)"
         }
@@ -57,7 +57,7 @@ public enum ClaudeAuthError: Error, CustomStringConvertible {
 /// `-w`/`-g`) are safe because they don't access the secret data. The
 /// password fetch (`-w`) reuses the same ACL slot the user has already
 /// approved for the connector poll, so no additional prompt is triggered.
-public actor ClaudeCredentialLocator: CredentialLocator {
+public actor ClaudeTUICredentialLocator: CredentialLocator {
     public typealias Credentials = ClaudeCredentials
 
     public static let defaultKeychainService = "Claude Code-credentials"
@@ -93,9 +93,9 @@ public actor ClaudeCredentialLocator: CredentialLocator {
     private let accountPersistor: @Sendable (String?) -> Void
 
     public init(
-        keychainServiceName: String = ClaudeCredentialLocator.defaultKeychainService,
+        keychainServiceName: String = ClaudeTUICredentialLocator.defaultKeychainService,
         processRunner: ProcessRunning = FoundationProcessRunner(),
-        logger: FileLogger = Loggers.claude,
+        logger: FileLogger = Loggers.claudeTUI,
         clock: @escaping @Sendable () -> Date = { Date() },
         accountOverride: @escaping @Sendable () -> String? = { nil },
         accountPersistor: @escaping @Sendable (String?) -> Void = { _ in }

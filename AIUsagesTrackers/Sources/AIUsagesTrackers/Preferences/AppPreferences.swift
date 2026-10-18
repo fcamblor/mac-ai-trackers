@@ -50,6 +50,14 @@ public protocol AppPreferences: AnyObject, Observable, Sendable {
     /// behaviour). Set from the Coding Assistants tab when the diagnostic
     /// finds multiple entries — we never delete the duplicates ourselves.
     var claudeKeychainAccount: String? { get set }
+
+    /// Whether the Claude Desktop usage source is enabled. Off by default; the
+    /// connector performs no Keychain Safe Storage read while this is false.
+    var claudeDesktopEnabled: Bool { get set }
+
+    /// Extra Claude Desktop profile directories (absolute paths) opened via
+    /// `--user-data-dir`, on top of the two standard installer directories.
+    var claudeDesktopProfilePaths: [String] { get set }
 }
 
 // MARK: - UserDefaults-backed implementation
@@ -304,6 +312,30 @@ public final class UserDefaultsAppPreferences: AppPreferences {
             }
         }
     }
+
+    public var claudeDesktopEnabled: Bool {
+        get {
+            access(keyPath: \.claudeDesktopEnabled)
+            return defaults.bool(forKey: AppPreferenceKeys.claudeDesktopEnabled.rawValue)
+        }
+        set {
+            withMutation(keyPath: \.claudeDesktopEnabled) {
+                defaults.set(newValue, forKey: AppPreferenceKeys.claudeDesktopEnabled.rawValue)
+            }
+        }
+    }
+
+    public var claudeDesktopProfilePaths: [String] {
+        get {
+            access(keyPath: \.claudeDesktopProfilePaths)
+            return defaults.stringArray(forKey: AppPreferenceKeys.claudeDesktopProfilePaths.rawValue) ?? []
+        }
+        set {
+            withMutation(keyPath: \.claudeDesktopProfilePaths) {
+                defaults.set(newValue, forKey: AppPreferenceKeys.claudeDesktopProfilePaths.rawValue)
+            }
+        }
+    }
 }
 
 // MARK: - In-memory test double
@@ -327,6 +359,8 @@ public final class InMemoryAppPreferences: AppPreferences {
     public var updatesDismissedVersions: [String]
     public var statusComponentSubscriptions: [String: Bool]
     public var claudeKeychainAccount: String?
+    public var claudeDesktopEnabled: Bool
+    public var claudeDesktopProfilePaths: [String]
 
     public init(
         refreshInterval: RefreshInterval = .default,
@@ -343,7 +377,9 @@ public final class InMemoryAppPreferences: AppPreferences {
         updatesAutoCheckEnabled: Bool = true,
         updatesDismissedVersions: [String] = [],
         statusComponentSubscriptions: [String: Bool] = [:],
-        claudeKeychainAccount: String? = nil
+        claudeKeychainAccount: String? = nil,
+        claudeDesktopEnabled: Bool = false,
+        claudeDesktopProfilePaths: [String] = []
     ) {
         self.refreshInterval = refreshInterval
         self.launchAtLogin = launchAtLogin
@@ -360,5 +396,7 @@ public final class InMemoryAppPreferences: AppPreferences {
         self.updatesDismissedVersions = updatesDismissedVersions
         self.statusComponentSubscriptions = statusComponentSubscriptions
         self.claudeKeychainAccount = claudeKeychainAccount
+        self.claudeDesktopEnabled = claudeDesktopEnabled
+        self.claudeDesktopProfilePaths = claudeDesktopProfilePaths
     }
 }

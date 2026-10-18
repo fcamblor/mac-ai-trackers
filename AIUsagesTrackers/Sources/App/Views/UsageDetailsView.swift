@@ -130,9 +130,10 @@ struct UsageDetailsView: View {
     @ViewBuilder
     private var listingContent: some View {
         let prefs = AppDelegate.sharedPreferences
-        let sorted = store.entries
+        let visible = store.entries
             .excluding(ignoredAccounts: prefs.ignoredAccounts)
-            .sortedForDisplay(order: prefs.accountsOrder)
+        let sorted = visible.sortedForDisplay(order: prefs.accountsOrder)
+        let groups = visible.groupedForDisplay(order: prefs.accountsOrder)
         if sorted.isEmpty && !store.entries.isEmpty {
             allAccountsIgnoredState
         } else if sorted.isEmpty {
@@ -148,27 +149,44 @@ struct UsageDetailsView: View {
                             VendorStatusBanner(outages: outages)
                         }
                     }
-                    ForEach(sorted, id: \.id) { entry in
-                        AccountCardView(
-                            entry: entry,
-                            isRefreshing: refreshState.isRefreshing(
-                                vendor: entry.vendor,
-                                account: entry.account
-                            ),
-                            onIgnore: {
-                                let ignored = IgnoredAccount(vendor: entry.vendor, account: entry.account)
-                                if !prefs.ignoredAccounts.contains(ignored) {
-                                    prefs.ignoredAccounts.append(ignored)
-                                }
-                            },
-                            onOpenAssistantsSettings: onOpenAssistantsSettings
-                        )
+                    ForEach(groups) { group in
+                        // Claude-family accounts (CLI + Desktop) always use the
+                        // chip card so the auth source(s) are labelled, even with
+                        // a single source. Other vendors keep the plain card.
+                        let usesChips = group.members.contains { $0.vendor.accountFamily == "claude" }
+                        if !usesChips, let entry = group.members.first {
+                            AccountCardView(
+                                entry: entry,
+                                isRefreshing: refreshState.isRefreshing(
+                                    vendor: entry.vendor,
+                                    account: entry.account
+                                ),
+                                onIgnore: { ignore(entry, prefs: prefs) },
+                                onOpenAssistantsSettings: onOpenAssistantsSettings
+                            )
+                        } else {
+                            AccountGroupCardView(
+                                group: group,
+                                isRefreshing: { member in
+                                    refreshState.isRefreshing(vendor: member.vendor, account: member.account)
+                                },
+                                onIgnoreMember: { member in ignore(member, prefs: prefs) },
+                                onOpenAssistantsSettings: onOpenAssistantsSettings
+                            )
+                        }
                     }
                 }
                 .padding(12)
             }
             .frame(maxHeight: maxScrollHeight)
             .background(Color(NSColor.windowBackgroundColor).opacity(0.4))
+        }
+    }
+
+    private func ignore(_ entry: VendorUsageEntry, prefs: UserDefaultsAppPreferences) {
+        let ignored = IgnoredAccount(vendor: entry.vendor, account: entry.account)
+        if !prefs.ignoredAccounts.contains(ignored) {
+            prefs.ignoredAccounts.append(ignored)
         }
     }
 

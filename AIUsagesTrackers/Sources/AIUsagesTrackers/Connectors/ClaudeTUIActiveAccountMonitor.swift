@@ -1,7 +1,7 @@
 import Foundation
 
-public actor ClaudeActiveAccountMonitor: ActiveAccountMonitoring {
-    nonisolated public let vendor: Vendor = .claude
+public actor ClaudeTUIActiveAccountMonitor: ActiveAccountMonitoring {
+    nonisolated public let vendor: Vendor = .claudeTUI
 
     // 15 s: short enough to react to account switches without hammering the disk.
     // Public so it can be referenced as a default argument value in callers' code.
@@ -16,13 +16,13 @@ public actor ClaudeActiveAccountMonitor: ActiveAccountMonitoring {
     private var monitorTask: Task<Void, Never>?
     private var lastObservedActiveAccount: AccountEmail?
 
-    private static let monitoredVendor: Vendor = .claude
+    private static let monitoredVendor: Vendor = .claudeTUI
 
     public init(
         claudeConfigPath: String? = nil,
         fileManager: UsagesFileManager,
-        logger: FileLogger = Loggers.claude,
-        interval: Duration = ClaudeActiveAccountMonitor.defaultInterval,
+        logger: FileLogger = Loggers.claudeTUI,
+        interval: Duration = ClaudeTUIActiveAccountMonitor.defaultInterval,
         onActiveAccountChanged: (@Sendable (AccountEmail) async -> Void)? = nil
     ) {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
