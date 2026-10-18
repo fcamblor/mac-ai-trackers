@@ -36,6 +36,7 @@ public protocol AppPreferences: AnyObject, Observable, Sendable {
     /// Popover rows hidden per assistant family. Popover-only: menu bar chips
     /// and charts are unaffected.
     var popoverMetricVisibility: PopoverMetricVisibility { get set }
+    var popoverWidth: PopoverWidth { get set }
     /// When true, the scheduler periodically polls GitHub for new releases.
     /// Defaults to true (opt-out).
     var updatesAutoCheckEnabled: Bool { get set }
@@ -238,6 +239,19 @@ public final class UserDefaultsAppPreferences: AppPreferences {
         }
     }
 
+    public var popoverWidth: PopoverWidth {
+        get {
+            access(keyPath: \.popoverWidth)
+            let raw = defaults.string(forKey: AppPreferenceKeys.popoverWidth.rawValue) ?? ""
+            return PopoverWidth(rawValue: raw) ?? .default
+        }
+        set {
+            withMutation(keyPath: \.popoverWidth) {
+                defaults.set(newValue.rawValue, forKey: AppPreferenceKeys.popoverWidth.rawValue)
+            }
+        }
+    }
+
     public var popoverMetricVisibility: PopoverMetricVisibility {
         get {
             access(keyPath: \.popoverMetricVisibility)
@@ -384,6 +398,7 @@ public final class InMemoryAppPreferences: AppPreferences {
     public var ignoredAccounts: [IgnoredAccount]
     public var accountsOrder: [String]
     public var popoverMetricVisibility: PopoverMetricVisibility
+    public var popoverWidth: PopoverWidth
     public var updatesAutoCheckEnabled: Bool
     public var updatesDismissedVersions: [String]
     public var statusComponentSubscriptions: [String: Bool]
@@ -404,6 +419,7 @@ public final class InMemoryAppPreferences: AppPreferences {
         ignoredAccounts: [IgnoredAccount] = [],
         accountsOrder: [String] = [],
         popoverMetricVisibility: PopoverMetricVisibility = PopoverMetricVisibility(),
+        popoverWidth: PopoverWidth = .default,
         updatesAutoCheckEnabled: Bool = true,
         updatesDismissedVersions: [String] = [],
         statusComponentSubscriptions: [String: Bool] = [:],
@@ -423,6 +439,7 @@ public final class InMemoryAppPreferences: AppPreferences {
         self.ignoredAccounts = ignoredAccounts
         self.accountsOrder = accountsOrder
         self.popoverMetricVisibility = popoverMetricVisibility
+        self.popoverWidth = popoverWidth
         self.updatesAutoCheckEnabled = updatesAutoCheckEnabled
         self.updatesDismissedVersions = updatesDismissedVersions
         self.statusComponentSubscriptions = statusComponentSubscriptions

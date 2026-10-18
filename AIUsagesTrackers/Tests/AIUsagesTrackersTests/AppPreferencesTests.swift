@@ -125,6 +125,22 @@ struct UserDefaultsAppPreferencesTests {
         #expect(reader.menuBarChipBackground == .slate)
     }
 
+    @Test("popoverWidth round-trips and falls back to standard on unknown values")
+    @MainActor
+    func popoverWidthRoundTrip() {
+        let (defaults, name) = makeSuite()
+        defer { cleanUp(suiteName: name) }
+
+        let prefs = UserDefaultsAppPreferences(defaults: defaults)
+        #expect(prefs.popoverWidth == .standard)
+        prefs.popoverWidth = .large
+        #expect(UserDefaultsAppPreferences(defaults: defaults).popoverWidth == .large)
+
+        defaults.set("gigantic", forKey: AppPreferenceKeys.popoverWidth.rawValue)
+        #expect(UserDefaultsAppPreferences(defaults: defaults).popoverWidth == .standard)
+        #expect(PopoverWidth.large.points == PopoverWidth.standard.points * 1.5)
+    }
+
     @Test("menuBarPacingColorCycleEnabled round-trips")
     @MainActor
     func menuBarPacingColorCycleRoundTrip() {

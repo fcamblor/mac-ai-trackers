@@ -36,6 +36,20 @@ struct GeneralSettingsView: View {
                 }
             }
 
+            Section("Popover") {
+                Picker("Width", selection: Binding(
+                    get: { concretePrefs.popoverWidth },
+                    set: { concretePrefs.popoverWidth = $0 }
+                )) {
+                    Text("Standard").tag(PopoverWidth.standard)
+                    Text("Large").tag(PopoverWidth.large)
+                }
+                .pickerStyle(.segmented)
+                Text("Large is 1.5× wider — handy for long metric names or many accounts.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Vendor API") {
                 UsageDataRefreshIntervalView()
             }

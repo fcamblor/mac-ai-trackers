@@ -138,6 +138,7 @@ enum WhatsNewCatalog {
     ## Choose the metrics shown in the popover
     - Hide rows you don't need, per assistant, in *Settings › Coding Assistants › Popover metrics* - for example Claude's **Weekly share** rows, or Codex's **Credits balance** / **Messages left**.
     - Hidden metrics keep working in menu bar chips and charts.
+    - Want more room? Switch the popover to **Large** (1.5× wider) in *Settings › General › Popover*.
 
     ## Your settings were migrated
     - Claude accounts you had ignored stay hidden for their Claude Desktop source too.

@@ -29,7 +29,6 @@ struct UsageDetailsView: View {
     /// only on tester DMGs; absent on stable releases by construction.
     private let testerFeedbackContext: TesterFeedbackContext? = TesterFeedbackContext.resolved
 
-    private static let popoverWidth: CGFloat = 320
     private static let maxScreenHeightRatio: CGFloat = 0.9
     private static let fallbackScreenHeight: CGFloat = 800
     private static let historyAutoRefreshInterval: Duration = .seconds(60)
@@ -80,7 +79,9 @@ struct UsageDetailsView: View {
 
             footer
         }
-        .frame(width: Self.popoverWidth)
+        // Read from the shared preference so switching the preset in Settings
+        // resizes the popover live (the hosting controller tracks preferred size).
+        .frame(width: CGFloat(AppDelegate.sharedPreferences.popoverWidth.points))
         .task(id: historyTaskID) {
             await runHistoryRefreshLoopIfNeeded()
         }

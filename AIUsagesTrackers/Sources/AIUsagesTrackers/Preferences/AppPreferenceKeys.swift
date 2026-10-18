@@ -33,6 +33,8 @@ public enum AppPreferenceKeys: String {
     case accountsOrder = "ai-tracker.accountsOrder"
     /// JSON-encoded `PopoverMetricVisibility`: popover rows hidden per
     /// assistant family.
+    /// `PopoverWidth.rawValue`; absent or unknown → `.standard`.
+    case popoverWidth = "ai-tracker.popoverWidth"
     case popoverMetricVisibility = "ai-tracker.popoverMetricVisibility"
     case updatesAutoCheckEnabled = "ai-tracker.updatesAutoCheckEnabled"
     case updatesAutoCheckEnabledInitialized = "ai-tracker.updatesAutoCheckEnabledInitialized"
