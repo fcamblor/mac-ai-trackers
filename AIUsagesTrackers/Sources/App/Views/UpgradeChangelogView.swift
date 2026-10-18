@@ -22,8 +22,8 @@ struct UpgradeChangelogView: View {
 
     private var entry: WhatsNewEntry { WhatsNewCatalog.entry(for: selectedVersion) }
 
-    private static let width: CGFloat = 520
-    private static let bodyHeight: CGFloat = 420
+    private static let width: CGFloat = 680
+    private static let bodyHeight: CGFloat = 600
 
 
 
@@ -118,15 +118,15 @@ enum WhatsNewCatalog {
     - It is **off by default**: enable it in *Settings › Coding Assistants*. macOS will ask once for access to the `Claude Safe Storage` Keychain entry - only when you turn it on.
 
     ## One card per Claude account
-    - When the same Anthropic account is signed in to both Claude Code (CLI) and Claude Desktop, the popover shows **a single merged card** with one chip per source, and the usage of both sources is merged.
-    - Claude Desktop profiles are always considered active, so the highlight is not shown for them. As soon as a Claude Desktop account is set up, its usage stays up to date even when Claude Code is signed in to another account.
-    - **"Currently active"** selections (menu bar chips, charts) follow the **Claude Code CLI (TUI)** account only and no longer target Claude Desktop. A selection pinned to a **specific account** covers both its Claude Code and Claude Desktop sources.
+    - When the same Anthropic account is signed in to both the Claude TUI (CLI) and Claude Desktop, the popover shows **a single merged card** with one chip per source, and the usage of both sources is merged.
+    - Claude Desktop profiles are always considered active, so the highlight is not shown for them. As soon as a Claude Desktop account is set up, its usage stays up to date even when the Claude TUI is signed in to another account - but only while its Claude Desktop token is valid. AI Usages Tracker never refreshes it itself (it never alters an assistant's configuration or sessions), so open Claude Desktop from time to time to keep that profile's token fresh.
+    - **"Currently active"** selections (menu bar chips, charts) follow the **Claude TUI (CLI)** account only and no longer target Claude Desktop. A selection pinned to a **specific account** covers both its Claude TUI and Claude Desktop sources.
     - ⚠️ **Behaviour change:** once Claude Desktop tracking is enabled, every Desktop profile keeps its usage up to date on its own, so which account is "active" matters much less than before. Consider replacing **"Currently active"** with a **specific account** in your menu bar chips and charts.
     - Menu bar chip and chart pickers list a single **Claude** vendor covering both sources.
 
     ## Your settings were migrated
     - Claude accounts you had ignored stay hidden for their Claude Desktop source too.
-    - Your custom account order is preserved; Claude Desktop sources sit with their Claude Code account.
+    - Your custom account order is preserved; Claude Desktop sources sit with their Claude TUI account.
     - Existing menu bar chips and charts keep working unchanged.
 
     Frédéric
