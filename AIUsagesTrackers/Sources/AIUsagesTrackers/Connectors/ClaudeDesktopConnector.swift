@@ -157,7 +157,7 @@ public actor ClaudeDesktopConnector: UsageConnector {
     }
 
     /// Resolves the account identity for a credential, preferring the real
-    /// account email (so Claude Desktop and Claude Code entries for the same
+    /// account email (so Claude Desktop and Claude TUI entries for the same
     /// person share an identity). Resolution is cached per account UUID. Falls
     /// back to the profile-derived label when the email cannot be fetched (no
     /// UUID, expired token, or profile endpoint failure).

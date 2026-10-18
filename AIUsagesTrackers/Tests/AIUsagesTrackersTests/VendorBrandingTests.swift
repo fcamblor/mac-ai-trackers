@@ -9,7 +9,7 @@ struct VendorBrandingTests {
         let brand = VendorBrandingResolver.brand(for: .claude)
 
         #expect(brand?.assetName == "claude-mark")
-        #expect(brand?.displayName == "Claude Code")
+        #expect(brand?.displayName == "Claude TUI")
         #expect(brand?.tintHex == "DA7756")
     }
 

@@ -250,7 +250,7 @@ extension Array where Element == VendorUsageEntry {
 
     /// Groups entries that share the same account identity (`AccountEmail`)
     /// across vendors into one display group, preserving the `sortedForDisplay`
-    /// order of each group's first member. A person signed into both Claude Code
+    /// order of each group's first member. A person signed into both the Claude TUI
     /// and Claude Desktop with the same account thus appears as a single merged
     /// group rather than two independent rows. Non-destructive: every entry is
     /// still present, just projected under its account key.

@@ -39,7 +39,7 @@ public enum ClaudeAuthError: Error, CustomStringConvertible {
         case let .missingOAuthBlock(svc, account):
             "Keychain entry for service '\(svc)' (account: \(account ?? "(none)")) has no `claudeAiOauth.accessToken`"
         case let .apiKeyOnlyUnsupported(svc):
-            "Claude Code is authenticated with a standard API key in service '\(svc)'; usage reporting requires Claude Code OAuth credentials"
+            "The Claude TUI is authenticated with a standard API key in service '\(svc)'; usage reporting requires Claude TUI OAuth credentials"
         case let .tokenExpired(svc, expiredAt):
             "OAuth access token for service '\(svc)' expired at \(expiredAt)"
         }

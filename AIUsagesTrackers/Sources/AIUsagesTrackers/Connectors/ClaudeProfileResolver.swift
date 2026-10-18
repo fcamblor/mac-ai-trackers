@@ -3,7 +3,7 @@ import Foundation
 /// Resolves the Anthropic account email behind an OAuth bearer. Used by the
 /// Claude Desktop connector to turn a profile bearer into the same
 /// `AccountEmail` the `claude` CLI connector reports, so the UI can detect that
-/// a Claude Desktop profile and a Claude Code login are the same account.
+/// a Claude Desktop profile and a Claude TUI login are the same account.
 public protocol ClaudeProfileResolving: Sendable {
     /// Returns the account email for `accessToken`, or nil on any failure — the
     /// caller falls back to a profile-derived label, so this never throws.

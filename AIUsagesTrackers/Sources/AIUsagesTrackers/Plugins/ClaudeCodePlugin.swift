@@ -1,6 +1,6 @@
 import Foundation
 
-/// Claude Code plugin namespace — assembles a `VendorBundle` from
+/// Claude TUI (`claude` CLI) plugin namespace — assembles a `VendorBundle` from
 /// pre-constructed sub-components and registers it with
 /// `VendorRegistry`. The factory does not build the connectors itself
 /// because the active-account monitor's callback typically references
@@ -9,7 +9,7 @@ import Foundation
 public enum ClaudeCodePlugin {
     public static let branding = VendorBranding(
         vendor: .claude,
-        displayName: "Claude Code",
+        displayName: "Claude TUI",
         tintHex: "DA7756",
         assetName: "claude-mark"
     )

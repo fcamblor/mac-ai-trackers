@@ -2,7 +2,7 @@ import Foundation
 
 /// Parses the `https://api.anthropic.com/api/oauth/usage` JSON payload into a
 /// vendor-neutral list of `UsageMetric`. Shared by every connector that reads
-/// this endpoint (the Claude Code CLI connector and the Claude Desktop
+/// this endpoint (the Claude TUI connector and the Claude Desktop
 /// connector) so the window/breakdown mapping lives in exactly one place and
 /// both vendors benefit from the same enrichment.
 ///

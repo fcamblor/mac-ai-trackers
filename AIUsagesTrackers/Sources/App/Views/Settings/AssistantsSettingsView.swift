@@ -13,7 +13,7 @@ struct AssistantsSettingsView: View {
             Section("Ignored accounts") {
                 IgnoredAccountsSection()
             }
-            Section("Claude Code credentials") {
+            Section("Claude TUI credentials") {
                 KeychainDiagnosticView()
             }
             Section("Claude Desktop") {
@@ -655,7 +655,7 @@ private struct ReportView: View {
                 Divider()
                 Label {
                     Text("An `sk-ant-api…` API key is present under \"\(report.apiKeyServiceName)\". " +
-                         "Usage metrics require Claude Code OAuth credentials — sign in with " +
+                         "Usage metrics require Claude TUI OAuth credentials — sign in with " +
                          "`claude` to generate an OAuth entry.")
                         .font(.caption)
                         .fixedSize(horizontal: false, vertical: true)
@@ -686,7 +686,7 @@ private struct ReportView: View {
                             "cannot be selected.")
         } else if report.hasUsableOAuthToken {
             badge(systemImage: "checkmark.seal.fill", color: .green,
-                  title: "Claude Code credentials look healthy.",
+                  title: "Claude TUI credentials look healthy.",
                   subtitle: nil)
         } else if report.hasPinnableOAuthEntry, preferences.claudeKeychainAccount != nil {
             badge(systemImage: "clock.badge.exclamationmark.fill", color: .orange,

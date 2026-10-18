@@ -310,7 +310,7 @@ struct EntryBodyView: View {
     private func errorDetail(for type: String, vendor: Vendor) -> String {
         switch type {
         case "api_key_usage_unsupported":
-            "Claude standard API keys cannot expose usage here. Claude Code OAuth credentials are required."
+            "Claude standard API keys cannot expose usage here. Claude TUI OAuth credentials are required."
         case "token_error":
             "No usable local credentials were found."
         case "credential_error":
@@ -337,7 +337,7 @@ struct EntryBodyView: View {
     private func tokenExpiredDetail(for vendor: Vendor) -> String {
         switch vendor {
         case .claude:
-            "Your Claude Code session has expired. Run \"/login\" in the Claude Code CLI to re-authenticate — the next refresh will pick up the new token."
+            "Your Claude TUI session has expired. Run \"/login\" in the `claude` CLI to re-authenticate — the next refresh will pick up the new token."
         case .claudeDesktop:
             "This Claude Desktop profile's session has expired. Open Claude Desktop for that profile to refresh — the next refresh will pick up the new token."
         case .copilot:
