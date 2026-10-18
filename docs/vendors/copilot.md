@@ -146,6 +146,9 @@ _verified: 2026-05-07_
 | `.timeWindow("Chat")`    | `(monthly_quotas.chat - limited_user_quotas.chat) / monthly_quotas.chat × 100` / `limited_user_reset_date` | calendar monthly | percent | free tier — emitted only when both blocks present |
 | `.timeWindow("Completions")` | `(monthly_quotas.completions - limited_user_quotas.completions) / ...` / `limited_user_reset_date` | calendar monthly | percent | free tier |
 
+`accountStatus.plan` comes from `access_type_sku` (`free_limited_copilot`,
+`copilot_pro`…), falling back to `copilot_plan` (`individual`, `business`).
+
 Free-tier "Chat" and paid-tier "Chat" share the metric name on purpose —
 the UI keys on vendor + name, and a single user is on exactly one tier
 at a time, so there's no collision.
@@ -223,3 +226,4 @@ the UI.
 - 2026-05-07 — initial capture: free-limited plan response shape,
   calendar-date reset semantics, three-source token cascade
   (env / keychain / hosts.yml), `go-keyring-base64:` decoding tolerance.
+- 2026-10-18 — plan label mapped from `access_type_sku` / `copilot_plan`.

@@ -30,13 +30,7 @@ struct AccountCardView: View {
 
                 Spacer()
 
-                if let resetCredits = entry.accountStatus?.resetCredits, resetCredits.available > 0 {
-                    ResetCreditsBadge(resetCredits: resetCredits)
-                }
-
-                if let plan = entry.accountStatus?.plan {
-                    PlanCapsule(plan: plan)
-                }
+                AccountStatusHeaderAccessories(status: entry.accountStatus)
 
                 if entry.isActive {
                     ActiveCapsule()
@@ -85,6 +79,8 @@ struct AccountGroupCardView: View {
                 }
 
                 Spacer()
+
+                AccountStatusHeaderAccessories(status: group.representativeMember?.accountStatus)
 
                 // Same top-right "active" capsule as every other vendor card, so
                 // the account-level active state reads consistently; the chips

@@ -486,6 +486,36 @@ struct ClaudeTUIConnectorFetchTests {
         #expect(MockURLProtocol.capturedRequest?.value(forHTTPHeaderField: "anthropic-beta") == "oauth-2025-04-20")
     }
 
+    @Test("usage request asks for the limit-resets block")
+    func requestsResetsBlock() async throws {
+        let dir = makeTempDir()
+        MockURLProtocol.capturedRequest = nil
+        MockURLProtocol.errorToThrow = nil
+        mockHTTP200(json: #"{"five_hour":{"utilization":1,"resets_at":"2026-04-17T15:00:00+00:00"}}"#)
+        let connector = makeConnector(dir: dir) { "fake-token" }
+        _ = try await connector.fetchUsages()
+
+        let url = try #require(MockURLProtocol.capturedRequest?.url)
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        #expect(url.path == "/api/oauth/usage")
+        #expect(items.contains(URLQueryItem(name: "cedar_ember", value: "1")))
+    }
+
+    @Test("limit resets and response tier land in accountStatus")
+    func resetsInAccountStatus() async throws {
+        let dir = makeTempDir()
+        MockURLProtocol.errorToThrow = nil
+        let json = try #require(String(data: FixtureLoader.load("claude-usage-with-resets"), encoding: .utf8))
+        mockHTTP200(json: json)
+        let connector = makeConnector(dir: dir) { "fake-token" }
+        let entries = try await connector.fetchUsages()
+
+        let status = try #require(entries.first?.accountStatus)
+        #expect(status.plan == "team")
+        #expect(status.resetCredits?.available == 1)
+        #expect(status.resetCredits?.nextExpiry == "2026-10-22T16:00:00Z")
+    }
+
     @Test("nil account returns account_unknown error entry")
     func unknownAccount() async throws {
         let dir = makeTempDir()

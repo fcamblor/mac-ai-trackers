@@ -1006,4 +1006,46 @@ extension CodexConnectorFetchTests {
         #expect(CodexConnector.windowLabel(for: 300, prefix: "Spark") == "Spark (5h)")
         #expect(CodexConnector.windowLabel(for: 10080, prefix: "Spark") == "Spark Weekly (7d)")
     }
+
+    private func mockRouted(usage: String, resetStatus: Int, resets: String) {
+        CodexMockURLProtocol.errorToThrow = nil
+        CodexMockURLProtocol.handler = { request in
+            let isResets = request.url?.path.hasSuffix("rate-limit-reset-credits") == true
+            let resp = HTTPURLResponse(
+                url: request.url!, statusCode: isResets ? resetStatus : 200, httpVersion: nil, headerFields: [:]
+            )!
+            return (Data((isResets ? resets : usage).utf8), resp)
+        }
+    }
+
+    private static let usageWithResets = """
+    {"email": "user@openai.com",
+     "rate_limit": {"primary_window": {"used_percent": 10, "limit_window_seconds": 18000, "reset_at": 1745000000}},
+     "rate_limit_reset_credits": {"available_count": 2, "applicable_available_count": 0}}
+    """
+
+    @Test("reset credits: available grants carry their expiry from the details endpoint")
+    func resetCreditDetails() async throws {
+        mockRouted(usage: Self.usageWithResets, resetStatus: 200, resets: """
+        {"credits": [
+          {"id": "c1", "status": "available", "expires_at": "2026-07-17T00:00:00Z", "title": "Full reset (Weekly + 5 hr)"},
+          {"id": "c2", "status": "available", "expires_at": 1790000000, "title": "5 hr reset"},
+          {"id": "c3", "status": "redeemed", "expires_at": "2026-06-01T00:00:00Z"}
+        ]}
+        """)
+        let entries = try await makeConnector(dir: try makeTempDir()).fetchUsages()
+        let resets = try #require(entries.first?.accountStatus?.resetCredits)
+        #expect(resets.available == 2)
+        #expect(resets.grants.map(\.kind) == [.full, .session])
+        #expect(resets.grants.first?.expiresAt?.date != nil)
+        #expect(resets.nextExpiry?.date == ISO8601DateFormatter().date(from: "2026-07-17T00:00:00Z"))
+    }
+
+    @Test("reset credits: details endpoint failure keeps the counts")
+    func resetCreditDetailsFailure() async throws {
+        mockRouted(usage: Self.usageWithResets, resetStatus: 500, resets: "oops")
+        let entries = try await makeConnector(dir: try makeTempDir()).fetchUsages()
+        #expect(entries.first?.lastError == nil)
+        #expect(entries.first?.accountStatus?.resetCredits == ResetCredits(available: 2, applicable: 0))
+    }
 }

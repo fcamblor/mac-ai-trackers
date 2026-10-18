@@ -72,10 +72,24 @@ public struct PlanType: RawRepresentable, Codable, Equatable, Hashable, Sendable
         "business": "Business",
         "enterprise": "Enterprise",
         "edu": "Edu",
+        "max": "Max",
+        "max_5x": "Max 5x",
+        "max_20x": "Max 20x",
+        "team_standard": "Team Standard",
+        "team_premium": "Team Premium",
+        "individual": "Individual",
+        "free_limited_copilot": "Free",
+        "business_copilot": "Business",
+        "enterprise_copilot": "Enterprise",
+        "copilot_pro": "Pro",
+        "copilot_pro_plus": "Pro+",
+        "copilot_business": "Business",
+        "copilot_enterprise": "Enterprise",
     ]
 
     public var displayName: String {
-        Self.knownDisplayNames[rawValue.lowercased()] ?? rawValue.capitalized
+        Self.knownDisplayNames[rawValue.lowercased()]
+            ?? rawValue.replacingOccurrences(of: "_", with: " ").capitalized
     }
 
     public init(from decoder: Decoder) throws {
@@ -180,10 +194,92 @@ public struct ResetCredits: Codable, Equatable, Sendable {
     public let available: Int
     /// Subset of `available` that would have an effect right now.
     public let applicable: Int
+    /// Per-grant detail (expiry, kind). Empty when the vendor only reports counts.
+    public let grants: [ResetGrant]
 
-    public init(available: Int, applicable: Int) {
+    public init(available: Int, applicable: Int, grants: [ResetGrant] = []) {
         self.available = available
         self.applicable = applicable
+        self.grants = grants
+    }
+
+    /// Earliest expiry among grants that still have resets left — the date
+    /// after which at least one free reset is lost.
+    public var nextExpiry: ISODate? {
+        grants
+            .filter { $0.remaining > 0 }
+            .compactMap { grant in grant.expiresAt.flatMap { date in date.date.map { (date, $0) } } }
+            .min { $0.1 < $1.1 }?
+            .0
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case available, applicable, grants
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        available = try container.decode(Int.self, forKey: .available)
+        applicable = try container.decode(Int.self, forKey: .applicable)
+        grants = try container.decodeIfPresent([ResetGrant].self, forKey: .grants) ?? []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(available, forKey: .available)
+        try container.encode(applicable, forKey: .applicable)
+        if !grants.isEmpty {
+            try container.encode(grants, forKey: .grants)
+        }
+    }
+}
+
+/// What a reset clears. Open-ended: vendors add reset flavours over time.
+public struct ResetGrantKind: RawRepresentable, Codable, Equatable, Hashable, Sendable {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    /// Clears both the session and the weekly windows.
+    public static let full = ResetGrantKind(rawValue: "full")
+    /// Clears the session (5h) window only.
+    public static let session = ResetGrantKind(rawValue: "session")
+
+    public var displayName: String {
+        switch self {
+        case .full: "Full reset"
+        case .session: "5-hour reset"
+        default: rawValue.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+extension ResetGrantKind: ExpressibleByStringLiteral {
+    public init(stringLiteral value: String) { rawValue = value }
+}
+
+public struct ResetGrant: Codable, Equatable, Sendable {
+    public let kind: ResetGrantKind
+    public let label: String?
+    public let remaining: Int
+    /// After this date the unused resets of the grant are lost; nil when they never expire.
+    public let expiresAt: ISODate?
+    public let usableNow: Bool
+
+    public init(kind: ResetGrantKind, label: String?, remaining: Int, expiresAt: ISODate?, usableNow: Bool) {
+        self.kind = kind
+        self.label = label
+        self.remaining = remaining
+        self.expiresAt = expiresAt
+        self.usableNow = usableNow
     }
 }
 

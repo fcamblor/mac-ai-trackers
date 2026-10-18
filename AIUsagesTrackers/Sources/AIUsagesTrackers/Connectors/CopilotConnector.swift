@@ -197,7 +197,8 @@ public actor CopilotConnector: UsageConnector {
                 isActive: isActive,
                 lastAcquiredOn: ISODate(date: Date()),
                 lastError: nil,
-                metrics: parsed.metrics
+                metrics: parsed.metrics,
+                accountStatus: parsed.plan.map { AccountStatus(plan: $0) }
             )
         } catch {
             logger.log(.error, "Copilot response parse failed for login=\(credentials.login): \(error)")
@@ -226,6 +227,19 @@ public actor CopilotConnector: UsageConnector {
     private struct ParsedAPIResponse {
         let metrics: [UsageMetric]
         let login: String?
+        let plan: PlanType?
+    }
+
+    /// `access_type_sku` names the actual product (`free_limited_copilot`,
+    /// `copilot_pro`…); `copilot_plan` (`individual`, `business`) is the
+    /// coarser fallback.
+    static func plan(from json: [String: Any]) -> PlanType? {
+        for key in ["access_type_sku", "copilot_plan"] {
+            if let raw = (json[key] as? String)?.trimmingCharacters(in: .whitespaces), !raw.isEmpty {
+                return PlanType(rawValue: raw)
+            }
+        }
+        return nil
     }
 
     private func parseAPIResponse(_ data: Data) throws -> ParsedAPIResponse {
@@ -268,7 +282,7 @@ public actor CopilotConnector: UsageConnector {
             throw CopilotConnectorError.unexpectedAPIFormat(receivedKeys: Array(json.keys))
         }
 
-        return ParsedAPIResponse(metrics: metrics, login: login)
+        return ParsedAPIResponse(metrics: metrics, login: login, plan: Self.plan(from: json))
     }
 
     private func makeSnapshotMetric(name: String, snapshot: Any?, resetAt: ISODate?) -> UsageMetric? {

@@ -30,6 +30,8 @@ public actor CodexConnector: UsageConnector {
 
     // Known-valid literal — force-unwrap is safe here
     private static let apiURL = URL(string: "https://chatgpt.com/backend-api/wham/usage")! // known-valid literal
+    // Known-valid literal — force-unwrap is safe here
+    private static let resetCreditsURL = URL(string: "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits")! // known-valid literal
 
     // Actor-isolated: safe without nonisolated(unsafe) since all access is on the actor
     private let isoFormatter: ISO8601DateFormatter = {
@@ -132,7 +134,11 @@ public actor CodexConnector: UsageConnector {
         logger.log(.debug, "Codex API payload: \(Self.maskedPayload(data))")
 
         do {
-            let (metrics, emailFromResponse, accountStatus) = try parseAPIResponse(data, httpResponse: http)
+            let (metrics, emailFromResponse, parsedStatus) = try parseAPIResponse(data, httpResponse: http)
+            var accountStatus = parsedStatus
+            if let counts = parsedStatus.resetCredits, counts.available > 0 {
+                accountStatus.resetCredits = await fetchResetCreditDetails(counts: counts, credentials: credentials)
+            }
             guard let (account, source) = resolvePersistedAccount(
                 responseEmail: emailFromResponse,
                 credentials: credentials
@@ -241,6 +247,72 @@ public actor CodexConnector: UsageConnector {
     }
 
     static let creditsBalanceMetricName = "Credits balance"
+
+    // MARK: - Reset credit details
+
+    /// Expiry dates only live on a dedicated endpoint. Fetched only when the
+    /// usage payload reports resets, so accounts without any pay no extra call.
+    /// Any failure keeps the counts from the usage payload — the expiry is a
+    /// nice-to-have, never a reason to fail the tick.
+    private func fetchResetCreditDetails(counts: ResetCredits, credentials: CodexCredentials) async -> ResetCredits {
+        var request = URLRequest(url: Self.resetCreditsURL)
+        request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(credentials.accountId.rawValue, forHTTPHeaderField: "ChatGPT-Account-Id")
+        request.setValue("OpenUsage", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = CodexConstants.requestTimeoutSeconds
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            logger.log(.warning, "Codex reset credits request failed — keeping counts only: \(error)")
+            return counts
+        }
+        let httpCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard httpCode == 200 else {
+            logger.log(.warning, "Codex reset credits returned HTTP \(httpCode) — keeping counts only")
+            return counts
+        }
+        let json: [String: Any]
+        do {
+            json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+        } catch {
+            logger.log(.warning, "Codex reset credits payload is not JSON — keeping counts only: \(error)")
+            return counts
+        }
+        let grants = (json["credits"] as? [[String: Any]] ?? [])
+            .filter { ($0["status"] as? String)?.lowercased() == "available" }
+            .map { credit in
+                ResetGrant(
+                    kind: Self.resetKind(credit["reset_type"] as? String, title: credit["title"] as? String),
+                    label: (credit["title"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                    remaining: 1,
+                    expiresAt: parseExpiry(credit["expires_at"]),
+                    usableNow: counts.applicable > 0
+                )
+            }
+        logger.log(.debug, "Codex reset credits: \(grants.count) available grant(s)")
+        return ResetCredits(available: counts.available, applicable: counts.applicable, grants: grants)
+    }
+
+    /// Titles read "Full reset (Weekly + 5 hr)"; anything not mentioning the
+    /// weekly window is treated as a session-only reset.
+    private static func resetKind(_ resetType: String?, title: String?) -> ResetGrantKind {
+        let text = (title ?? "").lowercased()
+        if text.contains("full") || text.contains("weekly") || title == nil { return .full }
+        if text.contains("5") { return .session }
+        return ResetGrantKind(rawValue: resetType ?? "full")
+    }
+
+    /// `expires_at` is ISO 8601 in the web API and epoch seconds in some clients.
+    private func parseExpiry(_ value: Any?) -> ISODate? {
+        if let seconds = value as? Double, seconds > 0 {
+            return ISODate(date: Date(timeIntervalSince1970: seconds))
+        }
+        if let raw = value as? String { return parseVendorTimestamp(raw) }
+        return nil
+    }
 
     // MARK: - Account status
 

@@ -16,6 +16,16 @@ public struct ClaudeUsageResponseParser: Sendable {
     public static let sessionWindowMinutes = DurationMinutes(rawValue: 300)
     public static let weeklyWindowMinutes = DurationMinutes(rawValue: 10080)
 
+    /// The usage endpoint only includes the (codenamed) limit-resets block
+    /// when asked for it — the claude.ai Usage page sends the same flag.
+    public static let resetsQueryItem = URLQueryItem(name: "cedar_ember", value: "1")
+    public static let usageURL: URL = {
+        // Known-valid literal — force-unwrap is safe here
+        var components = URLComponents(string: "https://api.anthropic.com/api/oauth/usage")! // known-valid literal
+        components.queryItems = [resetsQueryItem]
+        return components.url! // known-valid literal
+    }()
+
     public struct Snapshot: Sendable, Equatable {
         public let sessionPercent: Int?
         public let sessionResetAt: ISODate?
@@ -25,6 +35,10 @@ public struct ClaudeUsageResponseParser: Sendable {
         public let opusWeekly: ModelWeekly?
         public let breakdownRows: [BreakdownRow]
         public let extraUsage: ExtraUsage?
+        public var resetCredits: ResetCredits? = nil
+        /// `cedar_ember.event_props.tier` (`claude_team`…) — a plan hint
+        /// available even when the credentials carry no subscription type.
+        public var responseTier: String? = nil
     }
 
     public struct ModelWeekly: Sendable, Equatable {
@@ -94,8 +108,97 @@ public struct ClaudeUsageResponseParser: Sendable {
             sonnetWeekly: sonnet.map { ModelWeekly(percent: $0.percent, resetAt: $0.resetAt.map(Self.normalizeISO8601)) },
             opusWeekly: opus.map { ModelWeekly(percent: $0.percent, resetAt: $0.resetAt.map(Self.normalizeISO8601)) },
             breakdownRows: breakdown,
-            extraUsage: extraUsage
+            extraUsage: extraUsage,
+            resetCredits: Self.extractResetCredits(from: json),
+            responseTier: ((json["cedar_ember"] as? [String: Any])?["event_props"] as? [String: Any])?["tier"] as? String
         )
+    }
+
+    /// Account-level status for the entry. Plan hints from the credentials
+    /// win over the response tier because they carry the Max multiplier.
+    public func accountStatus(
+        from snapshot: Snapshot,
+        subscriptionType: String?,
+        rateLimitTier: String?
+    ) -> AccountStatus? {
+        let plan = Self.plan(
+            subscriptionType: subscriptionType,
+            rateLimitTier: rateLimitTier,
+            responseTier: snapshot.responseTier
+        )
+        guard plan != nil || snapshot.resetCredits != nil else { return nil }
+        return AccountStatus(plan: plan, resetCredits: snapshot.resetCredits)
+    }
+
+    /// Maps Claude's plan hints onto a `PlanType` slug.
+    /// - `subscriptionType`: `pro` / `max` / `team` / `enterprise` (credentials)
+    /// - `rateLimitTier`: `default_claude_max_20x`, `default_claude_team_premium`…
+    /// - `responseTier`: `claude_team`, `claude_max`… (usage response)
+    static func plan(subscriptionType: String?, rateLimitTier: String?, responseTier: String?) -> PlanType? {
+        let base = nonEmpty(subscriptionType)?.lowercased()
+            ?? nonEmpty(responseTier)?.lowercased().replacingOccurrences(of: "claude_", with: "")
+        let tier = nonEmpty(rateLimitTier)?.lowercased() ?? ""
+        guard let base else {
+            return tierOnlyPlan(tier)
+        }
+        switch base {
+        case "max":
+            if tier.contains("20x") { return "max_20x" }
+            if tier.contains("5x") { return "max_5x" }
+            return "max"
+        case "team":
+            // Team seats don't name their tier: a Premium seat carries a Max
+            // rate-limit tier (`default_claude_max_5x` observed), a Standard one
+            // the plain `default_claude_team`.
+            if tier.contains("premium") || tier.contains("_max_") { return "team_premium" }
+            if tier.contains("standard") || tier == "default_claude_team" { return "team_standard" }
+            return "team"
+        default:
+            return PlanType(rawValue: base)
+        }
+    }
+
+    private static func tierOnlyPlan(_ tier: String) -> PlanType? {
+        guard tier.hasPrefix("default_claude_") else { return nil }
+        let slug = String(tier.dropFirst("default_claude_".count))
+        return slug.isEmpty ? nil : PlanType(rawValue: slug)
+    }
+
+    private static func nonEmpty(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespaces), !trimmed.isEmpty else { return nil }
+        return trimmed
+    }
+
+    private static func extractResetCredits(from json: [String: Any]) -> ResetCredits? {
+        guard let block = json["cedar_ember"] as? [String: Any],
+              let rawGrants = block["grants"] as? [[String: Any]] else {
+            return nil
+        }
+        let grants: [ResetGrant] = rawGrants.compactMap { grant in
+            guard let remaining = (grant["resets_left"] as? Double).map({ Int($0) }) else { return nil }
+            let paused = grant["paused"] as? Bool ?? false
+            return ResetGrant(
+                kind: grantKind(grant["type"] as? String),
+                label: nonEmpty(grant["label"] as? String),
+                remaining: remaining,
+                expiresAt: (grant["ends_at"] as? String).map(normalizeISO8601),
+                usableNow: !paused && (grant["usable_now"] as? Bool ?? false)
+            )
+        }
+        guard !grants.isEmpty else { return nil }
+        return ResetCredits(
+            available: grants.reduce(0) { $0 + $1.remaining },
+            applicable: grants.filter(\.usableNow).reduce(0) { $0 + $1.remaining },
+            grants: grants
+        )
+    }
+
+    private static func grantKind(_ raw: String?) -> ResetGrantKind {
+        switch raw?.lowercased() {
+        case nil, "full": .full
+        case "five_hour", "session", "5h": .session
+        case let other?: ResetGrantKind(rawValue: other)
+        }
     }
 
     /// Builds the ordered metric list from a snapshot. A window is emitted

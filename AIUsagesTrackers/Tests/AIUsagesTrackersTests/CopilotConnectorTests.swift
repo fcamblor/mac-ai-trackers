@@ -534,4 +534,23 @@ struct CopilotConnectorFetchTests {
         }
         #expect(percent.rawValue == 47)
     }
+
+    @Test("plan comes from access_type_sku, falling back to copilot_plan")
+    func planFromPayload() async throws {
+        let dir = try makeTempDir()
+        let connector = makeConnector(dir: dir)
+        mockHTTP(status: 200, json: """
+        {
+          "copilot_plan": "individual",
+          "access_type_sku": "free_limited_copilot",
+          "quota_reset_date": "2026-06-01",
+          "quota_snapshots": {"chat": {"percent_remaining": 95, "unlimited": false}}
+        }
+        """)
+        let entry = try #require(try await connector.fetchUsages().first)
+        #expect(entry.accountStatus?.plan == "free_limited_copilot")
+        #expect(entry.accountStatus?.plan?.displayName == "Free")
+        #expect(CopilotConnector.plan(from: ["copilot_plan": "business"]) == "business")
+        #expect(CopilotConnector.plan(from: [:]) == nil)
+    }
 }

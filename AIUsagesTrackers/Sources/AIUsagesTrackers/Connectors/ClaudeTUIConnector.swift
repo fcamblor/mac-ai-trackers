@@ -91,11 +91,14 @@ public actor ClaudeTUIConnector: UsageConnector {
         logger.log(.info, "Fetching usages for account=\(earlyAccount)")
 
         let token: String
+        var planHints: (subscriptionType: String?, rateLimitTier: String?) = (nil, nil)
         do {
             if let provider = tokenProvider {
                 token = try await provider()
             } else {
-                token = try await credentialLocator.locate().accessToken
+                let credentials = try await credentialLocator.locate()
+                token = credentials.accessToken
+                planHints = (credentials.subscriptionType, credentials.rateLimitTier)
             }
         } catch ClaudeAuthError.tokenExpired(_, let expiredAt) {
             // Stale token detected locally — skip the HTTP call entirely. Spamming
@@ -119,10 +122,7 @@ public actor ClaudeTUIConnector: UsageConnector {
         // fetched, the response must be attributed to whoever was active when the request went out.
         let account = resolveActiveAccount() ?? earlyAccount
 
-        guard let url = URL(string: "https://api.anthropic.com/api/oauth/usage") else {
-            return [errorEntry(account: account, type: "api_error")]
-        }
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: ClaudeUsageResponseParser.usageURL)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         // Required by the OAuth usage endpoint — beta flag must match the rollout date
         request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
@@ -190,7 +190,12 @@ public actor ClaudeTUIConnector: UsageConnector {
                 isActive: true,
                 lastAcquiredOn: ISODate(date: Date()),
                 lastError: nil,
-                metrics: metrics
+                metrics: metrics,
+                accountStatus: parser.accountStatus(
+                    from: usage,
+                    subscriptionType: planHints.subscriptionType,
+                    rateLimitTier: planHints.rateLimitTier
+                )
             )]
         } catch {
             logger.log(.error, "Response parse failed: \(error)")

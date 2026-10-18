@@ -22,30 +22,71 @@ struct PlanCapsule: View {
     }
 }
 
+/// Plan capsule + reset counter shown at the trailing edge of a card header.
+/// Renders nothing for an account without status.
+struct AccountStatusHeaderAccessories: View {
+    let status: AccountStatus?
+
+    var body: some View {
+        if let resetCredits = status?.resetCredits, resetCredits.available > 0 {
+            ResetCreditsBadge(resetCredits: resetCredits)
+        }
+        if let plan = status?.plan {
+            PlanCapsule(plan: plan)
+        }
+    }
+}
+
 /// Count of redeemable "usage limit reset" tokens. Muted while none would
-/// have an effect, so it reads as inventory rather than a call to action.
+/// have an effect, so it reads as inventory rather than a call to action —
+/// unless a reset is about to expire unused, which turns it orange.
 struct ResetCreditsBadge: View {
     let resetCredits: ResetCredits
 
-    private var isApplicable: Bool { resetCredits.applicable > 0 }
+    /// Close enough to the expiry that the user should plan to use the reset.
+    private static let expiryWarningInterval: TimeInterval = 3 * 86_400
 
     var body: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            content(now: context.date)
+        }
+    }
+
+    private func content(now: Date) -> some View {
         HStack(spacing: 2) {
             Image(systemName: "arrow.counterclockwise")
                 .font(.system(size: 8, weight: .semibold))
             Text("\(resetCredits.available)")
                 .font(.system(size: 9, weight: .medium).monospacedDigit())
         }
-        .foregroundStyle(isApplicable ? Color.primary : Color.secondary.opacity(0.7))
-        .help(helpText)
+        .foregroundStyle(color(now: now))
+        .help(helpText(now: now))
     }
 
-    private var helpText: String {
+    private func expiresSoon(now: Date) -> Bool {
+        guard let expiry = resetCredits.nextExpiry?.date else { return false }
+        return expiry > now && expiry.timeIntervalSince(now) <= Self.expiryWarningInterval
+    }
+
+    private func color(now: Date) -> Color {
+        if expiresSoon(now: now) { return .orange }
+        return resetCredits.applicable > 0 ? .primary : Color.secondary.opacity(0.7)
+    }
+
+    private func helpText(now: Date) -> String {
         let noun = resetCredits.available == 1 ? "usage limit reset" : "usage limit resets"
-        if isApplicable {
-            return "\(resetCredits.available) \(noun) — \(resetCredits.applicable) usable now"
+        var lines = [resetCredits.applicable > 0
+            ? "\(resetCredits.available) \(noun) — \(resetCredits.applicable) usable now"
+            : "\(resetCredits.available) \(noun) — none usable right now"]
+        for grant in resetCredits.grants where grant.remaining > 0 {
+            let count = grant.remaining > 1 ? "\(grant.remaining)× " : ""
+            let expiry = grant.expiresAt.map { "expires \(formatResetDate($0, now: now))" } ?? "does not expire"
+            lines.append("• \(count)\(grant.kind.displayName) · \(expiry)")
+            if let label = grant.label, label != grant.kind.displayName {
+                lines.append("   \(label)")
+            }
         }
-        return "\(resetCredits.available) \(noun) — none usable right now"
+        return lines.joined(separator: "\n")
     }
 }
 

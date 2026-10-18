@@ -15,6 +15,13 @@ _verified: 2026-05-07_
 | Method | URL | Headers | Timeout | Response Content-Type |
 |--------|-----|---------|---------|-----------------------|
 | GET    | `https://chatgpt.com/backend-api/wham/usage` | `Authorization: Bearer <oauth>`, `ChatGPT-Account-Id: <account_id>`, `User-Agent: OpenUsage` | 5s | `application/json` |
+| GET    | `https://chatgpt.com/backend-api/wham/rate-limit-reset-credits` | same | 5s | `application/json` |
+
+The reset-credits endpoint is called only when `wham/usage` reports
+`rate_limit_reset_credits.available_count > 0`. It lists
+`credits[] { status, expires_at, title, reset_type }`; `available` entries
+become `accountStatus.resetCredits.grants` (with expiry). Any failure keeps
+the counts from `wham/usage` and never fails the tick.
 
 The `User-Agent: OpenUsage` value reproduces the header used by the
 upstream `openusage` reverse-engineering effort and avoids bot filtering.
@@ -294,3 +301,6 @@ stays silent until the parser succeeds.
   off the Next.js RSC payload of `https://status.openai.com/` with a
   24h lazy cadence; the Status preferences tab manages subscriptions
   and exposes a manual "Refresh now" button.
+- 2026-10-18 — account status (plan, block, unavailable models, resets with
+  expiry, credits); window names follow the window duration; credit balance
+  parsed from its string form.
