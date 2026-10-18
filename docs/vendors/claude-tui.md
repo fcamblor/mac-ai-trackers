@@ -202,7 +202,7 @@ Mapped onto the entry's `accountStatus`, shared with Claude Desktop:
 | `accountStatus` field | Source | Notes |
 |-----------------------|--------|-------|
 | `resetCredits` | `cedar_ember.grants[]` — only present when the request carries `?cedar_ember=1` (the claude.ai Usage page sends the same flag) | per grant: `type` (`full` / session), `resets_left`, `ends_at` (expiry), `usable_now && !paused`, `label`; no grants → omitted. The key is a codename and may change |
-| `plan` | `claudeAiOauth.subscriptionType` + `claudeAiOauth.rateLimitTier` (Keychain entry already read for the token), falling back to `cedar_ember.event_props.tier` | `max` + `…_20x` / `…_5x` tier → `max_20x` / `max_5x`; `team` + a Max tier (`default_claude_max_5x`, observed on a confirmed Team Premium seat) → `team_premium`, `team` + `default_claude_team` → `team_standard`; the Standard side is inferred from third-party fixtures, not documented by Anthropic |
+| `plan` | `claudeAiOauth.subscriptionType` + `claudeAiOauth.rateLimitTier` (Keychain entry already read for the token), falling back to `cedar_ember.event_props.tier` | `max` + `…_20x` / `…_5x` tier → `max_20x` / `max_5x`; `team` + a Max tier (`default_claude_max_5x`, observed on a confirmed Team Premium seat) → `team_premium`, `team` + `default_raven` (observed on a confirmed Team Standard seat) or `default_claude_team` → `team_standard`; any other Team tier stays `team`. `oauth/profile` names the seat explicitly (`organization.seat_tier`: `team_standard`, `team_tier_1` for Premium) but is not called, to avoid an extra request per tick |
 
 **Limit-reset grants are not exposed to OAuth tokens.** With a Claude Code
 OAuth bearer, `cedar_ember` comes back with `"eligible": false,
@@ -283,8 +283,9 @@ incident `shortlink` becomes the clickable href in the UI.
   tester verification.
 - Enterprise / Team plans — usage shape unverified. A Team Premium seat
   reports `subscriptionType: team` + `rateLimitTier: default_claude_max_5x`
-  (also `organization.seat_tier: team_tier_1` in `oauth/profile`, meaning
-  unclear); a Team Standard seat has not been observed.
+  (`organization.seat_tier: team_tier_1` in `oauth/profile`); a Team
+  Standard seat reports `rateLimitTier: default_raven`
+  (`seat_tier: team_standard`).
 - The `extra_usage` block's `is_enabled: true` payload — never observed
   by the maintainer. Pending tester verification.
 

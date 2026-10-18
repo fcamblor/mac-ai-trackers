@@ -68,6 +68,7 @@ struct ClaudePlanAndResetsTests {
         #expect(P.plan(subscriptionType: "team", rateLimitTier: "default_claude_team_premium", responseTier: nil) == "team_premium")
         #expect(P.plan(subscriptionType: "team", rateLimitTier: "default_claude_max_5x", responseTier: nil) == "team_premium")
         #expect(P.plan(subscriptionType: "team", rateLimitTier: "default_claude_team", responseTier: nil) == "team_standard")
+        #expect(P.plan(subscriptionType: "team", rateLimitTier: "default_raven", responseTier: nil) == "team_standard")
         #expect(P.plan(subscriptionType: "team", rateLimitTier: nil, responseTier: nil) == "team")
         #expect(P.plan(subscriptionType: "pro", rateLimitTier: nil, responseTier: "claude_team") == "pro")
         #expect(P.plan(subscriptionType: nil, rateLimitTier: nil, responseTier: "claude_enterprise") == "enterprise")

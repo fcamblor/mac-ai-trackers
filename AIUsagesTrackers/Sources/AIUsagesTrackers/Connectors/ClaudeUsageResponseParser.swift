@@ -149,9 +149,12 @@ public struct ClaudeUsageResponseParser: Sendable {
         case "team":
             // Team seats don't name their tier: a Premium seat carries a Max
             // rate-limit tier (`default_claude_max_5x` observed), a Standard one
-            // the plain `default_claude_team`.
+            // the codenamed `default_raven` (observed, confirmed by
+            // `seat_tier: team_standard`) or the plain `default_claude_team`.
             if tier.contains("premium") || tier.contains("_max_") { return "team_premium" }
-            if tier.contains("standard") || tier == "default_claude_team" { return "team_standard" }
+            if tier.contains("standard") || tier == "default_raven" || tier == "default_claude_team" {
+                return "team_standard"
+            }
             return "team"
         default:
             return PlanType(rawValue: base)
