@@ -98,8 +98,8 @@ public struct KeychainDuplicatesScanner: Sendable {
     private let apiKeyServiceName: String
 
     public init(
-        credentialsServiceName: String = ClaudeCredentialLocator.defaultKeychainService,
-        apiKeyServiceName: String = ClaudeCredentialLocator.apiKeyKeychainService
+        credentialsServiceName: String = ClaudeTUICredentialLocator.defaultKeychainService,
+        apiKeyServiceName: String = ClaudeTUICredentialLocator.apiKeyKeychainService
     ) {
         self.credentialsServiceName = credentialsServiceName
         self.apiKeyServiceName = apiKeyServiceName

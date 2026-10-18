@@ -56,8 +56,8 @@ private struct RoutingProcessRunner: ProcessRunning {
 
 // MARK: - Account resolution tests
 
-@Suite("ClaudeCodeConnector — account resolution")
-struct ClaudeCodeConnectorAccountTests {
+@Suite("ClaudeTUIConnector — account resolution")
+struct ClaudeTUIConnectorAccountTests {
     private func makeTempDir() -> String {
         let dir = NSTemporaryDirectory() + "ai-tracker-claude-\(UUID().uuidString)"
         try! FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
@@ -72,14 +72,14 @@ struct ClaudeCodeConnectorAccountTests {
         try! json.write(toFile: configPath, atomically: true, encoding: .utf8)
 
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
-        let connector = ClaudeCodeConnector(claudeConfigPath: configPath, logger: logger)
+        let connector = ClaudeTUIConnector(claudeConfigPath: configPath, logger: logger)
         #expect(connector.resolveActiveAccount() == "user@example.com")
     }
 
     @Test("returns nil when file is missing")
     func resolveMissing() {
         let logger = FileLogger(filePath: "/tmp/ai-tracker-test-\(UUID()).log", minLevel: .debug)
-        let connector = ClaudeCodeConnector(claudeConfigPath: "/nonexistent/path", logger: logger)
+        let connector = ClaudeTUIConnector(claudeConfigPath: "/nonexistent/path", logger: logger)
         #expect(connector.resolveActiveAccount() == nil)
     }
 
@@ -90,7 +90,7 @@ struct ClaudeCodeConnectorAccountTests {
         try! "{}".write(toFile: configPath, atomically: true, encoding: .utf8)
 
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
-        let connector = ClaudeCodeConnector(claudeConfigPath: configPath, logger: logger)
+        let connector = ClaudeTUIConnector(claudeConfigPath: configPath, logger: logger)
         #expect(connector.resolveActiveAccount() == nil)
     }
 
@@ -101,27 +101,27 @@ struct ClaudeCodeConnectorAccountTests {
         try! "not json".write(toFile: configPath, atomically: true, encoding: .utf8)
 
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
-        let connector = ClaudeCodeConnector(claudeConfigPath: configPath, logger: logger)
+        let connector = ClaudeTUIConnector(claudeConfigPath: configPath, logger: logger)
         #expect(connector.resolveActiveAccount() == nil)
     }
 }
 
 // MARK: - fetchUsages tests
 
-@Suite("ClaudeCodeConnector — fetchUsages", .serialized)
-struct ClaudeCodeConnectorFetchTests {
+@Suite("ClaudeTUIConnector — fetchUsages", .serialized)
+struct ClaudeTUIConnectorFetchTests {
     private func makeTempDir() -> String {
         let dir = NSTemporaryDirectory() + "ai-tracker-claude-fetch-\(UUID().uuidString)"
         try! FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         return dir
     }
 
-    private func makeConnector(dir: String, tokenProvider: @escaping @Sendable () async throws -> String) -> ClaudeCodeConnector {
+    private func makeConnector(dir: String, tokenProvider: @escaping @Sendable () async throws -> String) -> ClaudeTUIConnector {
         let configPath = "\(dir)/claude.json"
         let json = #"{"oauthAccount":{"emailAddress":"user@example.com"}}"#
         try! json.write(toFile: configPath, atomically: true, encoding: .utf8)
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
-        return ClaudeCodeConnector(
+        return ClaudeTUIConnector(
             claudeConfigPath: configPath,
             logger: logger,
             session: mockSession(),
@@ -194,18 +194,18 @@ struct ClaudeCodeConnectorFetchTests {
             .write(toFile: configPath, atomically: true, encoding: .utf8)
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let runner = RoutingProcessRunner(resultsByService: [
-            ClaudeCredentialLocator.defaultKeychainService: ProcessExecutionResult(
+            ClaudeTUICredentialLocator.defaultKeychainService: ProcessExecutionResult(
                 stdout: Data(), terminationStatus: 44, timedOut: false
             ),
-            ClaudeCredentialLocator.apiKeyKeychainService: ProcessExecutionResult(
+            ClaudeTUICredentialLocator.apiKeyKeychainService: ProcessExecutionResult(
                 stdout: Data("sk-ant-api03-test-key\n".utf8), terminationStatus: 0, timedOut: false
             ),
         ])
-        let connector = ClaudeCodeConnector(
+        let connector = ClaudeTUIConnector(
             claudeConfigPath: configPath,
             logger: logger,
             session: mockSession(),
-            credentialLocator: ClaudeCredentialLocator(processRunner: runner, logger: logger)
+            credentialLocator: ClaudeTUICredentialLocator(processRunner: runner, logger: logger)
         )
 
         let entries = try await connector.fetchUsages()
@@ -330,7 +330,7 @@ struct ClaudeCodeConnectorFetchTests {
         // same instance is not possible — instead we keep using the seeded
         // connector but mock the HTTP layer to behave as if the token had just
         // expired in transit (locator path is exercised separately in
-        // ClaudeCredentialLocatorTests).
+        // ClaudeTUICredentialLocatorTests).
         //
         // Here we cover the connector-side mapping by routing through a fresh
         // connector that throws tokenExpired immediately. Metrics start empty
@@ -339,7 +339,7 @@ struct ClaudeCodeConnectorFetchTests {
         let configPath = "\(dir)/claude.json"
         let logger = FileLogger(filePath: "\(dir)/test-expired.log", minLevel: .debug)
         let expiredAt = Date(timeIntervalSinceNow: -3600)
-        let expiredConnector = ClaudeCodeConnector(
+        let expiredConnector = ClaudeTUIConnector(
             claudeConfigPath: configPath,
             logger: logger,
             session: mockSession(),
@@ -491,7 +491,7 @@ struct ClaudeCodeConnectorFetchTests {
         let dir = makeTempDir()
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         // No claude.json → resolveActiveAccount returns nil
-        let connector = ClaudeCodeConnector(
+        let connector = ClaudeTUIConnector(
             claudeConfigPath: "\(dir)/missing.json",
             logger: logger,
             session: mockSession(),
@@ -775,7 +775,7 @@ struct ClaudeCodeConnectorFetchTests {
         let configPath = "\(dir)/claude.json"
         try #"{"oauthAccount":{"emailAddress":"user@example.com"}}"#
             .write(toFile: configPath, atomically: true, encoding: .utf8)
-        let connector = ClaudeCodeConnector(
+        let connector = ClaudeTUIConnector(
             claudeConfigPath: configPath,
             logger: logger,
             session: mockSession(),
@@ -892,7 +892,7 @@ struct ClaudeCodeConnectorFetchTests {
         let json = #"{"oauthAccount":{"emailAddress":"user@example.com"}}"#
         try json.write(toFile: configPath, atomically: true, encoding: .utf8)
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
-        let connector = ClaudeCodeConnector(
+        let connector = ClaudeTUIConnector(
             claudeConfigPath: configPath,
             logger: logger,
             session: mockSession(),

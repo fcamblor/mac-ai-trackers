@@ -1,6 +1,6 @@
 import Foundation
 
-public actor ClaudeActiveAccountMonitor: ActiveAccountMonitoring {
+public actor ClaudeTUIActiveAccountMonitor: ActiveAccountMonitoring {
     nonisolated public let vendor: Vendor = .claude
 
     // 15 s: short enough to react to account switches without hammering the disk.
@@ -22,7 +22,7 @@ public actor ClaudeActiveAccountMonitor: ActiveAccountMonitoring {
         claudeConfigPath: String? = nil,
         fileManager: UsagesFileManager,
         logger: FileLogger = Loggers.claude,
-        interval: Duration = ClaudeActiveAccountMonitor.defaultInterval,
+        interval: Duration = ClaudeTUIActiveAccountMonitor.defaultInterval,
         onActiveAccountChanged: (@Sendable (AccountEmail) async -> Void)? = nil
     ) {
         let home = FileManager.default.homeDirectoryForCurrentUser.path

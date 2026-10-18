@@ -2,8 +2,8 @@ import Foundation
 import Testing
 @testable import AIUsagesTrackersLib
 
-@Suite("ClaudeCredentialLocator")
-struct ClaudeCredentialLocatorTests {
+@Suite("ClaudeTUICredentialLocator")
+struct ClaudeTUICredentialLocatorTests {
     private struct MockProcessRunner: ProcessRunning {
         let result: ProcessExecutionResult
 
@@ -28,7 +28,7 @@ struct ClaudeCredentialLocatorTests {
     @Test("returns token when expiresAt is in the future")
     func validToken() async throws {
         let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
-        let locator = ClaudeCredentialLocator(
+        let locator = ClaudeTUICredentialLocator(
             processRunner: MockProcessRunner(result: keychainResult(json: #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":\#(futureMillis)}}"#)),
             logger: makeTempLogger(),
             clock: fixedClock
@@ -41,7 +41,7 @@ struct ClaudeCredentialLocatorTests {
     @Test("throws tokenExpired when expiresAt is in the past")
     func expiredToken() async throws {
         let pastMillis = Int((Self.fixedNow.timeIntervalSince1970 - 10) * 1000)
-        let locator = ClaudeCredentialLocator(
+        let locator = ClaudeTUICredentialLocator(
             processRunner: MockProcessRunner(result: keychainResult(json: #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":\#(pastMillis)}}"#)),
             logger: makeTempLogger(),
             clock: fixedClock
@@ -56,7 +56,7 @@ struct ClaudeCredentialLocatorTests {
     func expiringSoonTriggersSkew() async throws {
         // 30s in the future — under the 60s skew margin, so should be considered expired.
         let nearFutureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 30) * 1000)
-        let locator = ClaudeCredentialLocator(
+        let locator = ClaudeTUICredentialLocator(
             processRunner: MockProcessRunner(result: keychainResult(json: #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":\#(nearFutureMillis)}}"#)),
             logger: makeTempLogger(),
             clock: fixedClock
@@ -69,7 +69,7 @@ struct ClaudeCredentialLocatorTests {
 
     @Test("missing expiresAt skips local check and returns token")
     func missingExpiresAt() async throws {
-        let locator = ClaudeCredentialLocator(
+        let locator = ClaudeTUICredentialLocator(
             processRunner: MockProcessRunner(result: keychainResult(json: #"{"claudeAiOauth":{"accessToken":"tok-abc"}}"#)),
             logger: makeTempLogger(),
             clock: fixedClock
@@ -82,7 +82,7 @@ struct ClaudeCredentialLocatorTests {
     @Test("expiresAt as numeric string is accepted")
     func expiresAtAsString() async throws {
         let futureMillis = Int((Self.fixedNow.timeIntervalSince1970 + 3600) * 1000)
-        let locator = ClaudeCredentialLocator(
+        let locator = ClaudeTUICredentialLocator(
             processRunner: MockProcessRunner(result: keychainResult(json: #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":"\#(futureMillis)"}}"#)),
             logger: makeTempLogger(),
             clock: fixedClock
@@ -94,7 +94,7 @@ struct ClaudeCredentialLocatorTests {
 
     @Test("expiresAt as malformed value skips local check and returns token")
     func malformedExpiresAt() async throws {
-        let locator = ClaudeCredentialLocator(
+        let locator = ClaudeTUICredentialLocator(
             processRunner: MockProcessRunner(result: keychainResult(json: #"{"claudeAiOauth":{"accessToken":"tok-abc","expiresAt":"not-a-number"}}"#)),
             logger: makeTempLogger(),
             clock: fixedClock
@@ -106,7 +106,7 @@ struct ClaudeCredentialLocatorTests {
 
     @Test("non-zero security exit code surfaces keychainAccessDenied")
     func keychainDenied() async throws {
-        let locator = ClaudeCredentialLocator(
+        let locator = ClaudeTUICredentialLocator(
             processRunner: MockProcessRunner(result: ProcessExecutionResult(stdout: Data(), terminationStatus: 44, timedOut: false)),
             logger: makeTempLogger(),
             clock: fixedClock
@@ -119,7 +119,7 @@ struct ClaudeCredentialLocatorTests {
 
     @Test("empty stdout surfaces keychainEmpty")
     func keychainEmpty() async throws {
-        let locator = ClaudeCredentialLocator(
+        let locator = ClaudeTUICredentialLocator(
             processRunner: MockProcessRunner(result: ProcessExecutionResult(stdout: Data(), terminationStatus: 0, timedOut: false)),
             logger: makeTempLogger(),
             clock: fixedClock
@@ -184,7 +184,7 @@ struct ClaudeCredentialLocatorTests {
 
     @Test("parses acct attribute out of security CLI dump")
     func parseAcctAttribute() {
-        #expect(ClaudeCredentialLocator.parseAccountAttribute(from: Self.attributesDump) == "juherr")
+        #expect(ClaudeTUICredentialLocator.parseAccountAttribute(from: Self.attributesDump) == "juherr")
     }
 
     @Test("auto-pins acct of first read when no override is set")
@@ -197,7 +197,7 @@ struct ClaudeCredentialLocatorTests {
             ]
         )
         let pinned = LockBox<String?>(nil)
-        let locator = ClaudeCredentialLocator(
+        let locator = ClaudeTUICredentialLocator(
             processRunner: runner,
             logger: makeTempLogger(),
             clock: fixedClock,
@@ -220,7 +220,7 @@ struct ClaudeCredentialLocatorTests {
             ]
         )
         let pinned = LockBox<String?>(nil)
-        let locator = ClaudeCredentialLocator(
+        let locator = ClaudeTUICredentialLocator(
             processRunner: runner,
             logger: makeTempLogger(),
             clock: fixedClock,
@@ -250,7 +250,7 @@ struct ClaudeCredentialLocatorTests {
             ]
         )
         let pinned = LockBox<String?>("unknown")
-        let locator = ClaudeCredentialLocator(
+        let locator = ClaudeTUICredentialLocator(
             processRunner: runner,
             logger: makeTempLogger(),
             // Override starts as the stale pin "unknown", then the persistor
@@ -278,7 +278,7 @@ struct ClaudeCredentialLocatorTests {
             ]
         )
         let pinned = LockBox<String?>("unknown")
-        let locator = ClaudeCredentialLocator(
+        let locator = ClaudeTUICredentialLocator(
             processRunner: runner,
             logger: makeTempLogger(),
             clock: fixedClock,
@@ -301,7 +301,7 @@ struct ClaudeCredentialLocatorTests {
             ]
         )
         let pinned = LockBox<String?>("juherr")
-        let locator = ClaudeCredentialLocator(
+        let locator = ClaudeTUICredentialLocator(
             processRunner: runner,
             logger: makeTempLogger(),
             clock: fixedClock,
@@ -334,7 +334,7 @@ struct ClaudeCredentialLocatorTests {
             ]
         )
         let persistorCalls = LockBox<[String?]>([])
-        let locator = ClaudeCredentialLocator(
+        let locator = ClaudeTUICredentialLocator(
             processRunner: runner,
             logger: makeTempLogger(),
             clock: fixedClock,
@@ -363,7 +363,7 @@ struct ClaudeCredentialLocatorTests {
             ]
         )
         let pinned = LockBox<String?>(nil)
-        let locator = ClaudeCredentialLocator(
+        let locator = ClaudeTUICredentialLocator(
             processRunner: runner,
             logger: makeTempLogger(),
             clock: fixedClock,
@@ -386,22 +386,22 @@ struct ClaudeCredentialLocatorTests {
         attributes:
             "acct"<blob>=0x6A75686572720A  "juherr"
         """
-        #expect(ClaudeCredentialLocator.parseAccountAttribute(from: dump) == "juherr")
+        #expect(ClaudeTUICredentialLocator.parseAccountAttribute(from: dump) == "juherr")
     }
 
     @Test("maskIdentifier always masks at least one character for non-empty input")
     func maskIdentifierShapes() {
         // Length >= 5: keep first 2 and last 2, mask the middle.
-        #expect(ClaudeCredentialLocator.maskIdentifier("juherr") == "ju**rr")
-        #expect(ClaudeCredentialLocator.maskIdentifier("frederic.camblor@4sh.fr") == "fr*******************fr")
-        #expect(ClaudeCredentialLocator.maskIdentifier("abcde") == "ab*de")
+        #expect(ClaudeTUICredentialLocator.maskIdentifier("juherr") == "ju**rr")
+        #expect(ClaudeTUICredentialLocator.maskIdentifier("frederic.camblor@4sh.fr") == "fr*******************fr")
+        #expect(ClaudeTUICredentialLocator.maskIdentifier("abcde") == "ab*de")
         // Length 3–4: reveal only 1 char on each side so at least one char is masked.
-        #expect(ClaudeCredentialLocator.maskIdentifier("abcd") == "a**d")
-        #expect(ClaudeCredentialLocator.maskIdentifier("abc") == "a*c")
+        #expect(ClaudeTUICredentialLocator.maskIdentifier("abcd") == "a**d")
+        #expect(ClaudeTUICredentialLocator.maskIdentifier("abc") == "a*c")
         // Length <= 2: revealing any char would leak the whole identifier — mask everything.
-        #expect(ClaudeCredentialLocator.maskIdentifier("ab") == "**")
-        #expect(ClaudeCredentialLocator.maskIdentifier("a") == "*")
-        #expect(ClaudeCredentialLocator.maskIdentifier("") == "")
+        #expect(ClaudeTUICredentialLocator.maskIdentifier("ab") == "**")
+        #expect(ClaudeTUICredentialLocator.maskIdentifier("a") == "*")
+        #expect(ClaudeTUICredentialLocator.maskIdentifier("") == "")
     }
 }
 

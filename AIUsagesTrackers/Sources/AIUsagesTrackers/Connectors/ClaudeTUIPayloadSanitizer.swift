@@ -5,7 +5,7 @@ import Foundation
 /// default-deny is defensive against future schema changes — the
 /// `Sanitized fields` section in `docs/vendors/claude.md` is the
 /// authoritative list.
-public struct ClaudePayloadSanitizer: PayloadSanitizing {
+public struct ClaudeTUIPayloadSanitizer: PayloadSanitizing {
     private let headerSanitizer = BaseHeaderSanitizer()
     private let jsonSanitizer = JSONFieldSanitizer()
     private let emailSanitizer = EmailPatternSanitizer()

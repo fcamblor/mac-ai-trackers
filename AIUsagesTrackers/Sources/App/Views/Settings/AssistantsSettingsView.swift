@@ -519,7 +519,7 @@ private struct KeychainDiagnosticView: View {
     }
 
     private let scanner = KeychainDuplicatesScanner()
-    private let credentialsService = ClaudeCredentialLocator.defaultKeychainService
+    private let credentialsService = ClaudeTUICredentialLocator.defaultKeychainService
     private var preferences: any AppPreferences { AppDelegate.sharedPreferences }
 
     var body: some View {

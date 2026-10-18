@@ -2,7 +2,7 @@ import Foundation
 
 /// Fetches Claude usage for every account found across the local Claude Desktop
 /// profiles. Shares the OAuth usage endpoint and response parsing with
-/// `ClaudeCodeConnector` but sources its bearers from the Electron token cache
+/// `ClaudeTUIConnector` but sources its bearers from the Electron token cache
 /// instead of the `claude` CLI keychain entry, and emits one
 /// `VendorUsageEntry` per profile/account.
 ///
@@ -26,13 +26,13 @@ public actor ClaudeDesktopConnector: UsageConnector {
 
     /// Preserves per-account metrics across auth failures (keyed by resolved
     /// account identity) so an expired token does not wipe still-valid numbers —
-    /// mirrors `ClaudeCodeConnector.lastKnownMetrics`, per account.
+    /// mirrors `ClaudeTUIConnector.lastKnownMetrics`, per account.
     private var lastKnownMetricsByAccount: [String: [UsageMetric]] = [:]
     /// Caches the resolved account email per account UUID so the profile
     /// endpoint is hit at most once per account per process, not every poll.
     private var emailCacheByUuid: [String: AccountEmail] = [:]
 
-    /// See `ClaudeCredentialLocator.expirySkewSeconds`.
+    /// See `ClaudeTUICredentialLocator.expirySkewSeconds`.
     private static let expirySkewSeconds: TimeInterval = 60
 
     public init(

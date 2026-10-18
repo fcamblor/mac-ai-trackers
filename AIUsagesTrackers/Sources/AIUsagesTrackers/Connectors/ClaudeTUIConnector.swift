@@ -1,6 +1,6 @@
 import Foundation
 
-public actor ClaudeCodeConnector: UsageConnector {
+public actor ClaudeTUIConnector: UsageConnector {
     nonisolated public let vendor: Vendor = .claude
 
     private let claudeConfigPath: String
@@ -26,7 +26,7 @@ public actor ClaudeCodeConnector: UsageConnector {
         claudeConfigPath: String? = nil,
         logger: FileLogger = Loggers.claude,
         session: URLSession = .shared,
-        credentialLocator: any CredentialLocator<ClaudeCredentials> = ClaudeCredentialLocator(),
+        credentialLocator: any CredentialLocator<ClaudeCredentials> = ClaudeTUICredentialLocator(),
         tokenProvider: (@Sendable () async throws -> String)? = nil,
         accountProvider: (@Sendable () -> AccountEmail?)? = nil
     ) {
@@ -54,7 +54,7 @@ public actor ClaudeCodeConnector: UsageConnector {
             claudeConfigPath: claudeConfigPath,
             logger: logger,
             session: session,
-            credentialLocator: ClaudeCredentialLocator(
+            credentialLocator: ClaudeTUICredentialLocator(
                 keychainServiceName: keychainServiceName,
                 logger: logger
             ),

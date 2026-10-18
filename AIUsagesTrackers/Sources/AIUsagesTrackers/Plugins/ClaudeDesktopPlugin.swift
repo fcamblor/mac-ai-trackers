@@ -5,7 +5,7 @@ import Foundation
 /// The connector is constructed by `AppDelegate` (not here) because its
 /// `isEnabled` gate reads app preferences and its lifecycle is owned alongside
 /// the poller — the plugin only wires branding, logging, sanitization, and the
-/// documentation pointer, mirroring `ClaudeCodePlugin`.
+/// documentation pointer, mirroring `ClaudeTUIPlugin`.
 ///
 /// `status` is intentionally `nil`: Claude Desktop shares Anthropic's public
 /// status page with the `claude` vendor, whose `ClaudeStatusConnector` already

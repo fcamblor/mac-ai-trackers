@@ -11,7 +11,7 @@ enum VendorBrandingResolver {
             return bundle.branding
         }
         switch vendor {
-        case .claude:  return ClaudeCodePlugin.branding
+        case .claude:  return ClaudeTUIPlugin.branding
         case .codex:   return CodexPlugin.branding
         case .copilot: return CopilotCLIPlugin.branding
         default:       return nil

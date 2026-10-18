@@ -131,7 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // refresh as soon as the auto-pin fires.
         let preferences: any AppPreferences = Self.sharedPreferences
         let claudeKeychainAccountKey = AppPreferenceKeys.claudeKeychainAccount.rawValue
-        let claudeLocator = ClaudeCredentialLocator(
+        let claudeLocator = ClaudeTUICredentialLocator(
             accountOverride: {
                 let raw = UserDefaults.standard.string(forKey: claudeKeychainAccountKey)
                 guard let raw, !raw.isEmpty else { return nil }
@@ -143,7 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         )
-        let claudeConnector = ClaudeCodeConnector(credentialLocator: claudeLocator)
+        let claudeConnector = ClaudeTUIConnector(credentialLocator: claudeLocator)
         let claudeStatus = ClaudeStatusConnector()
         // Claude Desktop source — reads the Electron profiles' OAuth token cache.
         // Gated behind an explicit preference so no `Claude Safe Storage` Keychain
@@ -185,7 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             refreshState: refreshState,
             preferences: Self.sharedPreferences
         )
-        let claudeMonitor = ClaudeActiveAccountMonitor(
+        let claudeMonitor = ClaudeTUIActiveAccountMonitor(
             fileManager: fileManager,
             onActiveAccountChanged: { [weak poller] _ in
                 await poller?.pollOnce(force: true)
@@ -205,7 +205,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         )
         VendorRegistry.resetForTesting()
-        ClaudeCodePlugin.register(connector: claudeConnector, status: claudeStatus, monitor: claudeMonitor)
+        ClaudeTUIPlugin.register(connector: claudeConnector, status: claudeStatus, monitor: claudeMonitor)
         ClaudeDesktopPlugin.register(connector: claudeDesktopConnector)
         CodexPlugin.register(connector: codexConnector, status: codexStatus, monitor: codexMonitor)
         CopilotCLIPlugin.register(connector: copilotConnector, monitor: copilotMonitor)

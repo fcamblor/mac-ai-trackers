@@ -356,7 +356,7 @@ contract violation.
 ```swift
 public enum VendorRegistry {
     public static let bundles: [VendorBundle] = [
-        ClaudeCodePlugin.bundle,
+        ClaudeTUIPlugin.bundle,
         CodexPlugin.bundle,
     ]
 }

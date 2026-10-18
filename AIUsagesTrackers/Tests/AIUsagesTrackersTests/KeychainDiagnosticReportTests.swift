@@ -8,8 +8,8 @@ struct KeychainDiagnosticReportTests {
     func pinnableRequiresAccount() {
         let expiry = Date(timeIntervalSince1970: 1_715_000_000)
         let report = KeychainDiagnosticReport(
-            credentialsServiceName: ClaudeCredentialLocator.defaultKeychainService,
-            apiKeyServiceName: ClaudeCredentialLocator.apiKeyKeychainService,
+            credentialsServiceName: ClaudeTUICredentialLocator.defaultKeychainService,
+            apiKeyServiceName: ClaudeTUICredentialLocator.apiKeyKeychainService,
             entries: [
                 KeychainDiagnosticReport.Entry(account: nil, status: .expiredOAuthToken(expiresAt: expiry)),
                 KeychainDiagnosticReport.Entry(account: "", status: .validOAuthToken(expiresAt: nil)),
@@ -24,8 +24,8 @@ struct KeychainDiagnosticReportTests {
     func expiredOAuthWithAccountIsPinnable() {
         let expiry = Date(timeIntervalSince1970: 1_715_000_000)
         let report = KeychainDiagnosticReport(
-            credentialsServiceName: ClaudeCredentialLocator.defaultKeychainService,
-            apiKeyServiceName: ClaudeCredentialLocator.apiKeyKeychainService,
+            credentialsServiceName: ClaudeTUICredentialLocator.defaultKeychainService,
+            apiKeyServiceName: ClaudeTUICredentialLocator.apiKeyKeychainService,
             entries: [
                 KeychainDiagnosticReport.Entry(account: "juherr", status: .expiredOAuthToken(expiresAt: expiry)),
             ],

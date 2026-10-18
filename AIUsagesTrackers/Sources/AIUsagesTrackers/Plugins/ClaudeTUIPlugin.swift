@@ -6,7 +6,7 @@ import Foundation
 /// because the active-account monitor's callback typically references
 /// the poller, which has the connector list as a dependency — running
 /// those constructors here would create a cycle.
-public enum ClaudeCodePlugin {
+public enum ClaudeTUIPlugin {
     public static let branding = VendorBranding(
         vendor: .claude,
         displayName: "Claude TUI",
@@ -21,11 +21,11 @@ public enum ClaudeCodePlugin {
 
     @discardableResult
     public static func register(
-        connector: ClaudeCodeConnector,
+        connector: ClaudeTUIConnector,
         status: ClaudeStatusConnector? = nil,
-        monitor: ClaudeActiveAccountMonitor? = nil,
+        monitor: ClaudeTUIActiveAccountMonitor? = nil,
         logger: FileLogger = Loggers.claude,
-        sanitizer: ClaudePayloadSanitizer = ClaudePayloadSanitizer()
+        sanitizer: ClaudeTUIPayloadSanitizer = ClaudeTUIPayloadSanitizer()
     ) -> VendorBundle {
         let resolvedLogger = VerboseVendorMode.logger(for: .claude, default: logger)
         let proxy = LoggingProxy(logger: resolvedLogger, sanitizer: sanitizer)

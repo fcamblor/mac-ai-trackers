@@ -268,7 +268,7 @@ incident `shortlink` becomes the clickable href in the UI.
 - Anthropic Usage and Cost Admin API documentation
   (https://docs.anthropic.com/en/api/data-usage-cost-api) (retrieved
   2026-05-20).
-- Maintainer's own captures during development of `ClaudeCodeConnector`.
+- Maintainer's own captures during development of `ClaudeTUIConnector`.
 
 ## Change log
 
