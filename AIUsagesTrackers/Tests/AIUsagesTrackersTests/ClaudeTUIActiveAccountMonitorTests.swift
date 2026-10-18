@@ -47,8 +47,8 @@ struct ClaudeTUIActiveAccountMonitorTests {
         )
         let (monitor, fileManager) = makeMonitor(dir: dir, configPath: configPath)
         await fileManager.update(with: [
-            VendorUsageEntry(vendor: "claude", account: "user@example.com", isActive: false),
-            VendorUsageEntry(vendor: "claude", account: "other@example.com", isActive: true),
+            VendorUsageEntry(vendor: "claude-tui", account: "user@example.com", isActive: false),
+            VendorUsageEntry(vendor: "claude-tui", account: "other@example.com", isActive: true),
         ])
 
         await monitor.checkOnce()
@@ -65,7 +65,7 @@ struct ClaudeTUIActiveAccountMonitorTests {
         let configPath = writeConfig("{}", to: dir)
         let (monitor, fileManager) = makeMonitor(dir: dir, configPath: configPath)
         await fileManager.update(with: [
-            VendorUsageEntry(vendor: "claude", account: "user@example.com", isActive: true),
+            VendorUsageEntry(vendor: "claude-tui", account: "user@example.com", isActive: true),
         ])
 
         await monitor.checkOnce()
@@ -79,7 +79,7 @@ struct ClaudeTUIActiveAccountMonitorTests {
         let dir = makeTempDir()
         let (monitor, fileManager) = makeMonitor(dir: dir, configPath: "\(dir)/missing.json")
         await fileManager.update(with: [
-            VendorUsageEntry(vendor: "claude", account: "user@example.com", isActive: true),
+            VendorUsageEntry(vendor: "claude-tui", account: "user@example.com", isActive: true),
         ])
 
         await monitor.checkOnce()

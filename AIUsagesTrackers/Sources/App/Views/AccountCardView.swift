@@ -113,7 +113,7 @@ struct AccountGroupCardView: View {
 /// → "desktop"; any other vendor falls back to its raw name.
 func authSourceLabel(for vendor: Vendor) -> String {
     switch vendor {
-    case .claude: "tui"
+    case .claudeTUI: "tui"
     case .claudeDesktop: "desktop"
     default: vendor.rawValue
     }
@@ -267,7 +267,7 @@ struct EntryBodyView: View {
     /// Only Claude rows benefit from the diagnostic — the same error types on
     /// Codex/Copilot would route to the wrong panel.
     private func showsAssistantsCTA(for type: String) -> Bool {
-        guard entry.vendor == .claude else { return false }
+        guard entry.vendor == .claudeTUI else { return false }
         switch type {
         case "token_error", "credential_error", "api_key_usage_unsupported":
             return true
@@ -336,7 +336,7 @@ struct EntryBodyView: View {
 
     private func tokenExpiredDetail(for vendor: Vendor) -> String {
         switch vendor {
-        case .claude:
+        case .claudeTUI:
             "Your Claude TUI session has expired. Run \"/login\" in the `claude` CLI to re-authenticate — the next refresh will pick up the new token."
         case .claudeDesktop:
             "This Claude Desktop profile's session has expired. Open Claude Desktop for that profile to refresh — the next refresh will pick up the new token."

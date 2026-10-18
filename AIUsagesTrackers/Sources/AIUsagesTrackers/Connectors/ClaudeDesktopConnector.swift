@@ -87,19 +87,32 @@ public actor ClaudeDesktopConnector: UsageConnector {
         let activePaths = await processInspector.activeProfilePaths()
 
         var entries: [VendorUsageEntry] = []
-        for credential in credentials {
+        // Resolve live credentials first so expired profiles of the same UUID
+        // reuse the email cache instead of leaking a second, label-based account.
+        let ordered = credentials.sorted { !tokenLikelyExpired($0) && tokenLikelyExpired($1) }
+        for credential in ordered {
             entries.append(await fetchOne(credential: credential, activeProfilePaths: activePaths))
         }
-        return entries
+        // Persistence upserts by vendor + account. Returning duplicate identities
+        // would let the last profile's auth failure overwrite a successful fetch.
+        return entries.groupedForDisplay().compactMap { group in
+            guard var entry = group.representativeMember else { return nil }
+            entry.isActive = group.members.contains { $0.isActive }
+            return entry
+        }
     }
 
     // MARK: - Per-account fetch
 
-    private func fetchOne(credential: ClaudeDesktopCredential, activeProfilePaths: Set<String>) async -> VendorUsageEntry {
-        let isActive = activeProfilePaths.contains((credential.profileDirectoryPath as NSString).standardizingPath)
-        let tokenLikelyExpired = credential.expiresAt.map {
+    private func tokenLikelyExpired(_ credential: ClaudeDesktopCredential) -> Bool {
+        credential.expiresAt.map {
             clock().addingTimeInterval(Self.expirySkewSeconds) >= $0
         } ?? false
+    }
+
+    private func fetchOne(credential: ClaudeDesktopCredential, activeProfilePaths: Set<String>) async -> VendorUsageEntry {
+        let isActive = activeProfilePaths.contains((credential.profileDirectoryPath as NSString).standardizingPath)
+        let tokenLikelyExpired = tokenLikelyExpired(credential)
         let account = await resolveAccount(credential: credential, tokenLikelyExpired: tokenLikelyExpired)
         let preserved = lastKnownMetricsByAccount[account.rawValue] ?? []
 

@@ -95,7 +95,7 @@ public actor ClaudeTUICredentialLocator: CredentialLocator {
     public init(
         keychainServiceName: String = ClaudeTUICredentialLocator.defaultKeychainService,
         processRunner: ProcessRunning = FoundationProcessRunner(),
-        logger: FileLogger = Loggers.claude,
+        logger: FileLogger = Loggers.claudeTUI,
         clock: @escaping @Sendable () -> Date = { Date() },
         accountOverride: @escaping @Sendable () -> String? = { nil },
         accountPersistor: @escaping @Sendable (String?) -> Void = { _ in }

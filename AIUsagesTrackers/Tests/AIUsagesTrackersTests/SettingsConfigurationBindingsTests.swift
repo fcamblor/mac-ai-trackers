@@ -10,7 +10,7 @@ struct SettingsConfigurationBindingsTests {
     func menuBarChipBindingSurvivesTargetDeletion() {
         let first = MenuBarChipConfig(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000101")!,
-            vendor: .claude,
+            vendor: .claudeTUI,
             segments: [
                 MenuBarChipSegmentConfig(
                     account: .currentlyActive,
@@ -21,7 +21,7 @@ struct SettingsConfigurationBindingsTests {
         )
         let target = MenuBarChipConfig(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!,
-            vendor: .claude,
+            vendor: .claudeTUI,
             segments: [
                 MenuBarChipSegmentConfig(
                     account: .currentlyActive,
@@ -53,7 +53,7 @@ struct SettingsConfigurationBindingsTests {
         let segmentID = UUID(uuidString: "00000000-0000-0000-0000-000000000301")!
         let chip = MenuBarChipConfig(
             id: UUID(uuidString: "00000000-0000-0000-0000-000000000201")!,
-            vendor: .claude,
+            vendor: .claudeTUI,
             segments: [
                 MenuBarChipSegmentConfig(
                     id: segmentID,

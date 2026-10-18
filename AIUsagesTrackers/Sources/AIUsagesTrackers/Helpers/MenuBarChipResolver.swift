@@ -112,7 +112,7 @@ public enum MenuBarChipResolver {
             if let active = vendorEntries.first(where: { $0.vendor == vendor.familyCanonicalVendor && $0.isActive }) {
                 entry = active
                 resolveIssue = nil
-            } else if vendorEntries.count == 1 {
+            } else if vendorEntries.count == 1, vendorEntries[0].vendor == vendor.familyCanonicalVendor {
                 // No account is flagged active, but there is only one — treat it as implicitly active
                 // so the user sees their data without having to wait for the monitor to sync.
                 entry = vendorEntries[0]
@@ -123,7 +123,7 @@ public enum MenuBarChipResolver {
             }
         case .specific(let email):
             // Same email may exist under several family vendors; pick the
-            // representative (active → freshest → non-errored).
+            // representative (healthy → freshest → active).
             if let match = vendorEntries.filter({ $0.account == email }).representativeEntry() {
                 entry = match
                 resolveIssue = nil

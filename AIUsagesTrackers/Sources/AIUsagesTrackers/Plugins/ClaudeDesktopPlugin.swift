@@ -8,14 +8,14 @@ import Foundation
 /// documentation pointer, mirroring `ClaudeTUIPlugin`.
 ///
 /// `status` is intentionally `nil`: Claude Desktop shares Anthropic's public
-/// status page with the `claude` vendor, whose `ClaudeStatusConnector` already
+/// status page with the `claude-tui` vendor, whose `ClaudeStatusConnector` already
 /// surfaces those incidents. Duplicating them under a second vendor would double
 /// every outage row. See `docs/vendors/claude-desktop.md`.
 public enum ClaudeDesktopPlugin {
     public static let branding = VendorBranding(
         vendor: .claudeDesktop,
         displayName: "Claude Desktop",
-        // Same orange mark and tint as the `claude` vendor — they are the same
+        // Same orange mark and tint as the `claude-tui` vendor — they are the same
         // product family; the display name is what distinguishes the rows.
         tintHex: "DA7756",
         assetName: "claude-mark"

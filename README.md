@@ -189,11 +189,12 @@ It contains:
 - `usages.json.lock`: advisory lock file used to coordinate safe reads and writes.
 - `usage-history/YYYY/MM/YYYY-MM-DD.jsonl`: append-only daily usage-history snapshots, grouped by UTC date.
 - `app.log`: app lifecycle, polling, persistence, and UI-adjacent logs.
-- `claude-usages-connector.log`: Claude TUI connector and status-fetch logs.
+- `claude-tui-usages-connector.log`: Claude TUI connector and status-fetch logs.
 - `claude-desktop-usages-connector.log`: Claude Desktop connector logs.
 - `codex-usages-connector.log`: Codex connector and status-fetch logs.
 - `copilot-usages-connector.log`: GitHub Copilot CLI connector logs.
 - `*.log.1`: rotated log backups. Each managed log rotates after 5 MB.
+- `backuped-files/migration-to-0.8/`: snapshot of the preferences and cache files taken before the 0.7.x → 0.8 data migration. **Settings > Updates > Advanced** can restore it before downgrading to 0.7.x.
 
 Deleting the cache directory resets local usage snapshots, history, and logs. It does not remove assistant credentials or macOS user preferences.
 

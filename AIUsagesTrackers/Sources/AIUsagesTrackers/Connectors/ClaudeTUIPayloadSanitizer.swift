@@ -3,7 +3,7 @@ import Foundation
 /// Sanitizer for the Anthropic OAuth usage endpoint. The endpoint itself
 /// returns no tokens, emails, or account ids, so the field-name based
 /// default-deny is defensive against future schema changes — the
-/// `Sanitized fields` section in `docs/vendors/claude.md` is the
+/// `Sanitized fields` section in `docs/vendors/claude-tui.md` is the
 /// authoritative list.
 public struct ClaudeTUIPayloadSanitizer: PayloadSanitizing {
     private let headerSanitizer = BaseHeaderSanitizer()

@@ -25,7 +25,7 @@ struct UsageHistoryReaderTests {
     ) throws -> String {
         let snapshot = TickSnapshot(
             timestamp: ISODate(rawValue: timestamp),
-            accounts: [AccountSnapshot(vendor: "claude", account: account, metrics: metrics)]
+            accounts: [AccountSnapshot(vendor: "claude-tui", account: account, metrics: metrics)]
         )
         let data = try SnapshotRecorder.encode(snapshot)
         return String(decoding: data, as: UTF8.self)

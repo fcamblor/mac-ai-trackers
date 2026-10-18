@@ -133,6 +133,31 @@ struct ClaudeDesktopConnectorTests {
         #expect(idle?.isActive == false)
     }
 
+    @Test("profiles sharing an account emit one healthy entry and combine active state", arguments: [true, false])
+    func sharedAccountProfilesPreferSuccess(expiredFirst: Bool) async throws {
+        let fixture = FixtureLoader.load("claude-desktop-full-payload")
+        DesktopMockURLProtocol.handler = { request in
+            (fixture, HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        }
+        let expired = credential(label: "Expired", dir: "/tmp/Expired", expiresAt: Date(timeIntervalSinceNow: -3600))
+        let live = credential(label: "Live", dir: "/tmp/Live")
+        let connector = ClaudeDesktopConnector(
+            session: desktopMockSession(),
+            credentialLocator: StubDesktopLocator(credentials: expiredFirst ? [expired, live] : [live, expired]),
+            profileResolver: StubProfileResolver(email: "me@example.com"),
+            processInspector: StubProcessInspector(active: ["/tmp/Expired"]),
+            isEnabled: { true }
+        )
+        let entries = try await connector.fetchUsages()
+        #expect(entries.count == 1)
+        let entry = try #require(entries.first)
+        #expect(entry.account == "me@example.com")
+        #expect(entry.lastError == nil)
+        #expect(entry.lastAcquiredOn != nil)
+        #expect(!entry.metrics.isEmpty)
+        #expect(entry.isActive)
+    }
+
     @Test("expired token short-circuits with token_expired and no HTTP call")
     func expiredTokenSkipsHTTP() async throws {
         DesktopMockURLProtocol.handler = { _ in

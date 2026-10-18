@@ -8,15 +8,15 @@ import Foundation
 /// those constructors here would create a cycle.
 public enum ClaudeTUIPlugin {
     public static let branding = VendorBranding(
-        vendor: .claude,
+        vendor: .claudeTUI,
         displayName: "Claude TUI",
         tintHex: "DA7756",
         assetName: "claude-mark"
     )
 
     public static let documentation = VendorDocumentation(
-        vendor: .claude,
-        slug: "claude"
+        vendor: .claudeTUI,
+        slug: "claude-tui"
     )
 
     @discardableResult
@@ -24,13 +24,13 @@ public enum ClaudeTUIPlugin {
         connector: ClaudeTUIConnector,
         status: ClaudeStatusConnector? = nil,
         monitor: ClaudeTUIActiveAccountMonitor? = nil,
-        logger: FileLogger = Loggers.claude,
+        logger: FileLogger = Loggers.claudeTUI,
         sanitizer: ClaudeTUIPayloadSanitizer = ClaudeTUIPayloadSanitizer()
     ) -> VendorBundle {
-        let resolvedLogger = VerboseVendorMode.logger(for: .claude, default: logger)
+        let resolvedLogger = VerboseVendorMode.logger(for: .claudeTUI, default: logger)
         let proxy = LoggingProxy(logger: resolvedLogger, sanitizer: sanitizer)
         let bundle = VendorBundle(
-            vendor: .claude,
+            vendor: .claudeTUI,
             branding: branding,
             usage: connector,
             status: status,

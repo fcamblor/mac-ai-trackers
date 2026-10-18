@@ -9,7 +9,7 @@ import Foundation
 /// The parser is pure: it holds no credentials and performs no I/O. Unknown
 /// top-level keys are ignored by design — the endpoint grows experimental
 /// fields over time and only the windows documented in
-/// `docs/vendors/claude.md` are consumed.
+/// `docs/vendors/claude-tui.md` are consumed.
 public struct ClaudeUsageResponseParser: Sendable {
     /// Claude Pro/Max rate-limit policy — durations are fixed by Anthropic and
     /// not returned by the API.

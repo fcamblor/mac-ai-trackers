@@ -62,7 +62,7 @@ ONBOARDING_ISSUE_URL=https://github.com/fcamblor/ai-usages-tracker/issues/<n> \
   ./scripts/build-app-bundle.sh
 ```
 
-`<vendor-slug>` is the lowercase identifier (e.g. `claude`, `codex`,
+`<vendor-slug>` is the lowercase identifier (e.g. `claude-tui`, `claude-desktop`, `codex`,
 `copilot`) for the vendor under test. The three keys land in the produced
 bundle's Info.plist; without them, the in-app tester feedback banner is
 invisible by construction.

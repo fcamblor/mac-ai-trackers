@@ -36,11 +36,11 @@ public enum VerboseVendorMode {
     ) -> Vendor? {
         if let raw = environment[environmentVariableName],
            !raw.trimmingCharacters(in: .whitespaces).isEmpty {
-            return Vendor(rawValue: raw)
+            return Vendor(normalizing: raw)
         }
         if let raw = bundle?.object(forInfoDictionaryKey: infoPlistKey) as? String,
            !raw.trimmingCharacters(in: .whitespaces).isEmpty {
-            return Vendor(rawValue: raw)
+            return Vendor(normalizing: raw)
         }
         return nil
     }

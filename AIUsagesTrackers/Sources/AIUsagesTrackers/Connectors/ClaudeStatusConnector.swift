@@ -1,7 +1,7 @@
 import Foundation
 
 public actor ClaudeStatusConnector: StatusConnector {
-    nonisolated public let vendor: Vendor = .claude
+    nonisolated public let vendor: Vendor = .claudeTUI
 
     private let logger: FileLogger
     private let session: URLSession
@@ -13,7 +13,7 @@ public actor ClaudeStatusConnector: StatusConnector {
     public static let defaultEndpoint = "https://status.claude.com/api/v2/incidents/unresolved.json"
 
     public init(
-        logger: FileLogger = Loggers.claude,
+        logger: FileLogger = Loggers.claudeTUI,
         session: URLSession = .shared,
         endpointURLString: String = ClaudeStatusConnector.defaultEndpoint
     ) {

@@ -19,7 +19,7 @@ struct MenuBarLabelRendererTests {
         outageWarningText: String? = nil
     ) -> RenderedChip {
         RenderedChip(
-            vendor: .claude,
+            vendor: .claudeTUI,
             showVendorIcon: showVendorIcon,
             outageWarningText: outageWarningText,
             segments: [segment]
@@ -140,13 +140,13 @@ struct MenuBarLabelRendererTests {
     @Test("two segments produce a wider chip than one segment")
     func multipleSegmentsGrowWidth() {
         let single = RenderedChip(
-            vendor: .claude,
+            vendor: .claudeTUI,
             showVendorIcon: false,
             outageWarningText: nil,
             segments: [MenuBarSegment(text: "42%", tier: .comfortable)]
         )
         let double = RenderedChip(
-            vendor: .claude,
+            vendor: .claudeTUI,
             showVendorIcon: false,
             outageWarningText: nil,
             segments: [
@@ -175,13 +175,13 @@ struct MenuBarLabelRendererTests {
         // outageWarningText is non-nil — make sure the renderer doesn't
         // accidentally skip the header in that case.
         let chip = RenderedChip(
-            vendor: .claude,
+            vendor: .claudeTUI,
             showVendorIcon: false,
             outageWarningText: "⚠️",
             segments: [MenuBarSegment(text: "42%", tier: .comfortable)]
         )
         let chipNoWarning = RenderedChip(
-            vendor: .claude,
+            vendor: .claudeTUI,
             showVendorIcon: false,
             outageWarningText: nil,
             segments: [MenuBarSegment(text: "42%", tier: .comfortable)]
@@ -207,7 +207,7 @@ struct MenuBarLabelRendererTests {
         // .slate on dark ones. The rasterised bitmaps must differ between
         // those two cases (different pill colour + different text colour).
         let chip = RenderedChip(
-            vendor: .claude,
+            vendor: .claudeTUI,
             showVendorIcon: false,
             outageWarningText: "⚠️",
             segments: [MenuBarSegment(text: "42%", tier: nil)]

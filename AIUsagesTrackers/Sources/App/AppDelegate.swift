@@ -72,6 +72,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Lets the Updates settings tab reopen the "What's new" window.
     static var sharedShowWhatsNew: (() -> Void)?
 
+    /// Restores the pre-0.8 backup then quits; nil until launch completes.
+    /// Resolves to an error message when the restore failed (app keeps running).
+    static var sharedRestorePreMigrationBackup: (() async -> String?)?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
 
@@ -231,6 +235,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         trackStoreChanges(store: store)
         setupUpdateScheduler()
         Self.sharedShowWhatsNew = { [weak self] in self?.presentWhatsNew() }
+        Self.sharedRestorePreMigrationBackup = { [weak self] in
+            await self?.restorePreMigrationBackupAndTerminate()
+        }
         presentUpgradeChangelogIfPending()
 
         Task {
@@ -981,6 +988,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// terminate. Used both by the menu's Quit item and by the update flow's
     /// "Restart now" path — in the latter case, the finalize script polls our
     /// PID, so a clean exit unblocks the swap quicker.
+    /// Downgrade escape hatch: stops every writer so nothing re-migrates the
+    /// restored files, puts the pre-0.8 backup back, then quits so the user
+    /// can install 0.7.x. Returns an error message (and keeps running, with
+    /// the writers restarted) when the restore fails.
+    @MainActor
+    private func restorePreMigrationBackupAndTerminate() async -> String? {
+        let fileManager = await poller?.fileManager ?? UsagesFileManager.shared
+        await fileManager.setWritesSuspended(true)
+        await poller?.stop()
+        await snapshotScheduler?.stop()
+        do {
+            try PreMigrationBackup.migrationTo080().restore(defaults: .standard)
+        } catch {
+            Loggers.app.log(.error, "Pre-migration restore failed: \(error)")
+            await fileManager.setWritesSuspended(false)
+            await poller?.start()
+            await snapshotScheduler?.start()
+            return "\(error)"
+        }
+        Loggers.app.log(.info, "Pre-migration backup restored; quitting for downgrade")
+        await gracefulShutdownAndTerminate()
+        return nil
+    }
+
     @MainActor
     private func gracefulShutdownAndTerminate() async {
         let pollerRef = poller

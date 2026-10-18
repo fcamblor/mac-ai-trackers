@@ -82,7 +82,7 @@ struct ClaudeStatusConnectorTests {
         let outages = try await makeConnector(dir: dir).fetchOutages()
 
         #expect(outages.count == 1)
-        #expect(outages[0].vendor == .claude)
+        #expect(outages[0].vendor == .claudeTUI)
         #expect(outages[0].errorMessage == "Elevated errors on /v1/messages")
         #expect(outages[0].severity == .major)
         #expect(outages[0].since.rawValue == "2026-04-22T10:15:00.000Z")

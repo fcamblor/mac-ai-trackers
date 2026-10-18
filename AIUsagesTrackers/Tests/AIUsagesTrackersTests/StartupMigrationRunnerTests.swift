@@ -35,11 +35,11 @@ struct StartupMigrationRunnerTests {
         let manager = makeManager(dir: dir)
         let legacyFile = UsagesFile(usages: [
             VendorUsageEntry(
-                vendor: "claude",
+                vendor: "claude-tui",
                 account: "unknown",
                 lastError: UsageError(timestamp: "2026-04-17T10:00:00Z", type: "account_unknown")
             ),
-            VendorUsageEntry(vendor: "claude", account: "real@example.com", isActive: true),
+            VendorUsageEntry(vendor: "claude-tui", account: "real@example.com", isActive: true),
             VendorUsageEntry(vendor: "codex", account: "unknown"),
         ])
         let legacyData = try JSONEncoder().encode(legacyFile)
@@ -52,7 +52,7 @@ struct StartupMigrationRunnerTests {
 
         let usages = await manager.read()
         #expect(usages.usages.count == 2)
-        #expect(!usages.usages.contains { $0.vendor == .claude && $0.account == "unknown" })
+        #expect(!usages.usages.contains { $0.vendor == .claudeTUI && $0.account == "unknown" })
         #expect(usages.usages.contains { $0.account == "real@example.com" })
         #expect(usages.usages.contains { $0.vendor == .codex && $0.account == "unknown" })
 
@@ -72,7 +72,7 @@ struct StartupMigrationRunnerTests {
         await runner.run()
         let legacyFile = UsagesFile(usages: [
             VendorUsageEntry(
-                vendor: "claude",
+                vendor: "claude-tui",
                 account: "unknown",
                 lastError: UsageError(timestamp: "2026-04-17T10:00:00Z", type: "account_unknown")
             ),
@@ -105,7 +105,7 @@ struct StartupMigrationRunnerTests {
 
         let existing = UsagesFile(usages: [
             VendorUsageEntry(
-                vendor: "claude",
+                vendor: "claude-tui",
                 account: "unknown",
                 lastError: UsageError(timestamp: "2026-04-17T10:00:00Z", type: "account_unknown")
             ),

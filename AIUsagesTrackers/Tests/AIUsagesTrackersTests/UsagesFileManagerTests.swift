@@ -17,6 +17,38 @@ struct UsagesFileManagerTests {
         return UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
     }
 
+    @Test("late poll and monitor writes leave restored legacy bytes intact until resumed")
+    func suspendedWritesProtectDowngradeRestore() async throws {
+        let dir = makeTempDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let mgr = makeManager(dir: dir)
+        let entry = VendorUsageEntry(vendor: .claudeTUI, account: "a@b.com", isActive: false)
+        let encoded = try JSONEncoder().encode(UsagesFile(usages: [entry]))
+        let legacy = Data(String(decoding: encoded, as: UTF8.self)
+            .replacingOccurrences(of: "claude-tui", with: "claude").utf8)
+        let file = URL(fileURLWithPath: mgr.filePath)
+        try legacy.write(to: file, options: .atomic)
+        let suite = "downgrade-write-test-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let backup = PreMigrationBackup(directory: URL(fileURLWithPath: dir).appendingPathComponent("backup"), files: [file])
+        try backup.create(defaults: defaults)
+        await mgr.update(with: [entry])
+        #expect(try Data(contentsOf: file) != legacy)
+
+        await mgr.setWritesSuspended(true)
+        try backup.restore(defaults: defaults)
+        // These model a fetch completing after cancellation and a monitor that
+        // was already running when the user requested the restore.
+        await mgr.update(with: [VendorUsageEntry(vendor: .claudeDesktop, account: "new@b.com")])
+        await mgr.updateIsActive(vendor: .claudeTUI, activeAccount: "a@b.com")
+        #expect(try Data(contentsOf: file) == legacy)
+
+        await mgr.setWritesSuspended(false)
+        await mgr.update(with: [entry])
+        #expect(try Data(contentsOf: file) != legacy)
+    }
+
     @Test("read returns empty file when no file exists")
     func readMissing() async {
         let dir = makeTempDir()
@@ -29,7 +61,7 @@ struct UsagesFileManagerTests {
     func updateCreatesFile() async {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
-        let entry = VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true, metrics: [
+        let entry = VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", isActive: true, metrics: [
             .timeWindow(name: "session", resetAt: "2026-04-17T15:00:00+00:00",
                         windowDuration: 300, usagePercent: 50),
         ])
@@ -37,7 +69,7 @@ struct UsagesFileManagerTests {
 
         let result = await mgr.read()
         #expect(result.usages.count == 1)
-        #expect(result.usages[0].vendor == "claude")
+        #expect(result.usages[0].vendor == "claude-tui")
         #expect(result.usages[0].account == "a@b.com")
     }
 
@@ -46,13 +78,13 @@ struct UsagesFileManagerTests {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
 
-        let v1 = VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true, metrics: [
+        let v1 = VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", isActive: true, metrics: [
             .timeWindow(name: "session", resetAt: "2026-04-17T15:00:00+00:00",
                         windowDuration: 300, usagePercent: 30),
         ])
         await mgr.update(with: [v1])
 
-        let v2 = VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true, metrics: [
+        let v2 = VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", isActive: true, metrics: [
             .timeWindow(name: "session", resetAt: "2026-04-17T20:00:00+00:00",
                         windowDuration: 300, usagePercent: 70),
         ])
@@ -68,12 +100,12 @@ struct UsagesFileManagerTests {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
 
-        await mgr.update(with: [VendorUsageEntry(vendor: "claude", account: "a@b.com")])
+        await mgr.update(with: [VendorUsageEntry(vendor: "claude-tui", account: "a@b.com")])
         await mgr.update(with: [VendorUsageEntry(vendor: "codex", account: "c@d.com")])
 
         let result = await mgr.read()
         #expect(result.usages.count == 2)
-        #expect(result.usages.contains(where: { $0.vendor == "claude" }))
+        #expect(result.usages.contains(where: { $0.vendor == "claude-tui" }))
         #expect(result.usages.contains(where: { $0.vendor == "codex" }))
     }
 
@@ -82,9 +114,9 @@ struct UsagesFileManagerTests {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
         let existing = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com"),
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com"),
         ])
-        let incoming = [VendorUsageEntry(vendor: "claude", account: "other@b.com")]
+        let incoming = [VendorUsageEntry(vendor: "claude-tui", account: "other@b.com")]
         let merged = await mgr.merge(existing: existing, incoming: incoming)
         #expect(merged.usages.count == 2)
     }
@@ -96,13 +128,13 @@ struct UsagesFileManagerTests {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
         let errorEntry = VendorUsageEntry(
-            vendor: "claude", account: "a@b.com",
+            vendor: "claude-tui", account: "a@b.com",
             lastError: UsageError(timestamp: "2026-04-17T10:00:00+00:00", type: "api_error")
         )
         await mgr.update(with: [errorEntry])
 
         let successEntry = VendorUsageEntry(
-            vendor: "claude", account: "a@b.com", isActive: true,
+            vendor: "claude-tui", account: "a@b.com", isActive: true,
             lastAcquiredOn: "2026-04-17T11:00:00+00:00",
             metrics: [.timeWindow(name: "session", resetAt: "2026-04-17T16:00:00+00:00",
                                   windowDuration: 300, usagePercent: 10)]
@@ -119,7 +151,7 @@ struct UsagesFileManagerTests {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
         let placeholderError = VendorUsageEntry(
-            vendor: "claude", account: "unknown",
+            vendor: "claude-tui", account: "unknown",
             lastError: UsageError(timestamp: "2026-04-17T10:00:00+00:00", type: "account_unknown")
         )
         await mgr.update(with: [placeholderError])
@@ -133,13 +165,13 @@ struct UsagesFileManagerTests {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
         let placeholderError = VendorUsageEntry(
-            vendor: "claude", account: "unknown",
+            vendor: "claude-tui", account: "unknown",
             lastError: UsageError(timestamp: "2026-04-17T10:00:00+00:00", type: "account_unknown")
         )
         let existing = UsagesFile(usages: [placeholderError])
 
         let successEntry = VendorUsageEntry(
-            vendor: "claude", account: "real@b.com", isActive: true,
+            vendor: "claude-tui", account: "real@b.com", isActive: true,
             lastAcquiredOn: "2026-04-17T11:00:00+00:00",
             metrics: [.timeWindow(name: "session", resetAt: "2026-04-17T16:00:00+00:00",
                                   windowDuration: 300, usagePercent: 20)]
@@ -156,7 +188,7 @@ struct UsagesFileManagerTests {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
         let claudeError = VendorUsageEntry(
-            vendor: "claude", account: "a@b.com",
+            vendor: "claude-tui", account: "a@b.com",
             lastError: UsageError(timestamp: "2026-04-17T10:00:00+00:00", type: "api_error")
         )
         let codexError = VendorUsageEntry(
@@ -166,7 +198,7 @@ struct UsagesFileManagerTests {
         await mgr.update(with: [claudeError, codexError])
 
         let claudeSuccess = VendorUsageEntry(
-            vendor: "claude", account: "a@b.com", isActive: true,
+            vendor: "claude-tui", account: "a@b.com", isActive: true,
             lastAcquiredOn: "2026-04-17T11:00:00+00:00",
             metrics: []
         )
@@ -189,13 +221,13 @@ struct UsagesFileManagerTests {
                         windowDuration: 300, usagePercent: 42),
         ]
         await mgr.update(with: [VendorUsageEntry(
-            vendor: "claude", account: "a@b.com", isActive: false,
+            vendor: "claude-tui", account: "a@b.com", isActive: false,
             lastAcquiredOn: "2026-04-17T09:00:00+00:00",
             metrics: oldMetrics
         )])
         // Simulate a failed fetch for A (metrics are preserved by the merge, but lastError is set)
         await mgr.update(with: [VendorUsageEntry(
-            vendor: "claude", account: "a@b.com", isActive: false,
+            vendor: "claude-tui", account: "a@b.com", isActive: false,
             lastError: UsageError(timestamp: "2026-04-17T10:00:00+00:00", type: "api_error"),
             metrics: []
         )])
@@ -206,7 +238,7 @@ struct UsagesFileManagerTests {
                         windowDuration: 300, usagePercent: 10),
         ]
         await mgr.update(with: [VendorUsageEntry(
-            vendor: "claude", account: "b@b.com", isActive: true,
+            vendor: "claude-tui", account: "b@b.com", isActive: true,
             lastAcquiredOn: "2026-04-17T11:00:00+00:00",
             metrics: bMetrics
         )])
@@ -225,7 +257,7 @@ struct UsagesFileManagerTests {
 
         // Account A had a prior successful fetch (lastError nil, lastAcquiredOn set)
         let accountASuccess = VendorUsageEntry(
-            vendor: "claude", account: "a@b.com", isActive: false,
+            vendor: "claude-tui", account: "a@b.com", isActive: false,
             lastAcquiredOn: "2026-04-17T09:00:00+00:00",
             metrics: []
         )
@@ -233,7 +265,7 @@ struct UsagesFileManagerTests {
 
         // Account B has an error; account A's entry (which has no error) must be preserved
         let accountBError = VendorUsageEntry(
-            vendor: "claude", account: "b@b.com",
+            vendor: "claude-tui", account: "b@b.com",
             lastError: UsageError(timestamp: "2026-04-17T11:00:00+00:00", type: "api_error")
         )
         await mgr.update(with: [accountBError])
@@ -257,14 +289,14 @@ struct UsagesFileManagerTests {
                         windowDuration: 10080, usagePercent: 20),
         ]
         await mgr.update(with: [VendorUsageEntry(
-            vendor: "claude", account: "a@b.com", isActive: true,
+            vendor: "claude-tui", account: "a@b.com", isActive: true,
             lastAcquiredOn: "2026-04-17T14:00:00+00:00",
             metrics: existingMetrics
         )])
 
         // Simulate a 429 after restart: connector's lastKnownMetrics is empty
         let errorEntry = VendorUsageEntry(
-            vendor: "claude", account: "a@b.com", isActive: true,
+            vendor: "claude-tui", account: "a@b.com", isActive: true,
             lastError: UsageError(timestamp: "2026-04-17T15:00:00+00:00", type: "http_429"),
             metrics: []
         )
@@ -305,13 +337,13 @@ struct UsagesFileManagerTests {
         let mgr = makeManager(dir: dir)
         let acquiredOn: ISODate = "2026-04-17T14:00:00+00:00"
         await mgr.update(with: [VendorUsageEntry(
-            vendor: "claude", account: "a@b.com", isActive: true,
+            vendor: "claude-tui", account: "a@b.com", isActive: true,
             lastAcquiredOn: acquiredOn,
             metrics: []
         )])
 
         let errorEntry = VendorUsageEntry(
-            vendor: "claude", account: "a@b.com", isActive: true,
+            vendor: "claude-tui", account: "a@b.com", isActive: true,
             lastAcquiredOn: nil,
             lastError: UsageError(timestamp: "2026-04-17T15:00:00+00:00", type: "http_429"),
             metrics: []
@@ -332,7 +364,7 @@ struct UsagesFileManagerTests {
                         windowDuration: 300, usagePercent: 10),
         ]
         await mgr.update(with: [VendorUsageEntry(
-            vendor: "claude", account: "a@b.com", isActive: true,
+            vendor: "claude-tui", account: "a@b.com", isActive: true,
             lastAcquiredOn: "2026-04-17T11:00:00+00:00",
             metrics: oldMetrics
         )])
@@ -343,7 +375,7 @@ struct UsagesFileManagerTests {
                         windowDuration: 300, usagePercent: 55),
         ]
         let errorEntryWithMetrics = VendorUsageEntry(
-            vendor: "claude", account: "a@b.com", isActive: true,
+            vendor: "claude-tui", account: "a@b.com", isActive: true,
             lastError: UsageError(timestamp: "2026-04-17T16:00:00+00:00", type: "http_429"),
             metrics: freshMetrics
         )
@@ -367,7 +399,7 @@ struct UsagesFileManagerTests {
     func jsonIsPrettyPrinted() async {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
-        await mgr.update(with: [VendorUsageEntry(vendor: "claude", account: "a@b.com")])
+        await mgr.update(with: [VendorUsageEntry(vendor: "claude-tui", account: "a@b.com")])
         let raw = try! String(contentsOfFile: mgr.filePath, encoding: .utf8)
         #expect(raw.contains("\n"))
         #expect(raw.contains("\"usages\""))
@@ -380,11 +412,11 @@ struct UsagesFileManagerTests {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
         await mgr.update(with: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: false),
-            VendorUsageEntry(vendor: "claude", account: "c@d.com", isActive: false),
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", isActive: false),
+            VendorUsageEntry(vendor: "claude-tui", account: "c@d.com", isActive: false),
         ])
 
-        await mgr.updateIsActive(vendor: "claude", activeAccount: "a@b.com")
+        await mgr.updateIsActive(vendor: "claude-tui", activeAccount: "a@b.com")
 
         let result = await mgr.read()
         let byAccount = Dictionary(uniqueKeysWithValues: result.usages.map { ($0.account, $0.isActive) })
@@ -397,10 +429,10 @@ struct UsagesFileManagerTests {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
         await mgr.update(with: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true),
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", isActive: true),
         ])
 
-        await mgr.updateIsActive(vendor: "claude", activeAccount: nil)
+        await mgr.updateIsActive(vendor: "claude-tui", activeAccount: nil)
 
         let result = await mgr.read()
         #expect(result.usages[0].isActive == false)
@@ -411,14 +443,14 @@ struct UsagesFileManagerTests {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
         await mgr.update(with: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: false),
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", isActive: false),
             VendorUsageEntry(vendor: "codex", account: "a@b.com", isActive: true),
         ])
 
-        await mgr.updateIsActive(vendor: "claude", activeAccount: "a@b.com")
+        await mgr.updateIsActive(vendor: "claude-tui", activeAccount: "a@b.com")
 
         let result = await mgr.read()
-        let claudeEntry = result.usages.first { $0.vendor == "claude" }!
+        let claudeEntry = result.usages.first { $0.vendor == "claude-tui" }!
         let codexEntry  = result.usages.first { $0.vendor == "codex" }!
         #expect(claudeEntry.isActive == true)
         #expect(codexEntry.isActive == true)
@@ -428,7 +460,7 @@ struct UsagesFileManagerTests {
     func updateIsActiveNoOpOnEmptyFile() async {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
-        await mgr.updateIsActive(vendor: "claude", activeAccount: "a@b.com")
+        await mgr.updateIsActive(vendor: "claude-tui", activeAccount: "a@b.com")
         let result = await mgr.read()
         #expect(result.usages.isEmpty)
     }
@@ -444,10 +476,10 @@ struct UsagesFileManagerTests {
         let initialJSON = """
         {
           "usages": [
-            {"vendor": "claude", "account": "a@b.com", "isActive": true, "metrics": []}
+            {"vendor": "claude-tui", "account": "a@b.com", "isActive": true, "metrics": []}
           ],
           "outages": [
-            {"vendor": "claude", "errorMessage": "API issues", "severity": "major", "since": "2026-04-15T14:53:00Z"}
+            {"vendor": "claude-tui", "errorMessage": "API issues", "severity": "major", "since": "2026-04-15T14:53:00Z"}
           ]
         }
         """.data(using: .utf8)!
@@ -455,7 +487,7 @@ struct UsagesFileManagerTests {
 
         // Connector provides fresh account data without outages
         let entry = VendorUsageEntry(
-            vendor: "claude", account: "a@b.com", isActive: true,
+            vendor: "claude-tui", account: "a@b.com", isActive: true,
             lastAcquiredOn: "2026-04-19T12:00:00Z",
             metrics: [.timeWindow(name: "session", resetAt: "2026-04-19T15:00:00Z",
                                   windowDuration: 300, usagePercent: 50)]
@@ -466,7 +498,7 @@ struct UsagesFileManagerTests {
         #expect(result.usages.count == 1)
         #expect(result.usages[0].metrics.count == 1)
         // Outages survive the merge
-        let outages = result.outagesByVendor[.claude]
+        let outages = result.outagesByVendor[.claudeTUI]
         #expect(outages?.count == 1)
         #expect(outages?[0].errorMessage == "API issues")
     }
@@ -477,7 +509,7 @@ struct UsagesFileManagerTests {
         let mgr = makeManager(dir: dir)
 
         await mgr.update(with: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true),
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", isActive: true),
         ])
         let result = await mgr.read()
         #expect(result.outagesByVendor.isEmpty)
@@ -489,7 +521,7 @@ struct UsagesFileManagerTests {
         let mgr = makeManager(dir: dir)
 
         await mgr.update(with: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com"),
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com"),
         ])
 
         let raw = try Data(contentsOf: URL(fileURLWithPath: mgr.filePath))
@@ -506,22 +538,22 @@ struct UsagesFileManagerTests {
         // Outage is active
         let withOutage = """
         {
-          "usages": [{"vendor":"claude","account":"a@b.com","isActive":true,"metrics":[]}],
-          "outages": [{"vendor":"claude","errorMessage":"X","severity":"major","since":"2026-04-15T14:53:00Z"}]
+          "usages": [{"vendor":"claude-tui","account":"a@b.com","isActive":true,"metrics":[]}],
+          "outages": [{"vendor":"claude-tui","errorMessage":"X","severity":"major","since":"2026-04-15T14:53:00Z"}]
         }
         """.data(using: .utf8)!
         try withOutage.write(to: URL(fileURLWithPath: mgr.filePath), options: .atomic)
 
         // Upstream resolves: rewrites file without outages key
         let resolved = """
-        {"usages":[{"vendor":"claude","account":"a@b.com","isActive":true,"metrics":[]}]}
+        {"usages":[{"vendor":"claude-tui","account":"a@b.com","isActive":true,"metrics":[]}]}
         """.data(using: .utf8)!
         try resolved.write(to: URL(fileURLWithPath: mgr.filePath), options: .atomic)
 
         // A connector now refreshes usage — merge should read the resolved file
         // and not resurrect the prior outage.
         await mgr.update(with: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", isActive: true),
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", isActive: true),
         ])
 
         let result = await mgr.read()
@@ -536,21 +568,21 @@ struct UsagesFileManagerTests {
         try data.write(to: URL(fileURLWithPath: mgr.filePath), options: .atomic)
     }
 
-    @Test("update with [.claude: [outage]] replaces claude outages and preserves others")
+    @Test("update with [.claudeTUI: [outage]] replaces claude outages and preserves others")
     func outageReplacementReplacesClaudePreservesOthers() async throws {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
         let old = [
-            Outage(vendor: "claude", errorMessage: "old", severity: .major, since: "2026-04-01T00:00:00Z"),
+            Outage(vendor: "claude-tui", errorMessage: "old", severity: .major, since: "2026-04-01T00:00:00Z"),
             Outage(vendor: "gemini", errorMessage: "g-outage", severity: .minor, since: "2026-04-02T00:00:00Z"),
         ]
         try writeFileWithOutages(mgr: mgr, outages: old)
 
-        let fresh = Outage(vendor: "claude", errorMessage: "new", severity: .critical, since: "2026-04-22T00:00:00Z")
-        await mgr.update(with: [], outagesByVendor: [.claude: [fresh]])
+        let fresh = Outage(vendor: "claude-tui", errorMessage: "new", severity: .critical, since: "2026-04-22T00:00:00Z")
+        await mgr.update(with: [], outagesByVendor: [.claudeTUI: [fresh]])
 
         let result = await mgr.read()
-        let claudeOutages = result.outages.filter { $0.vendor == .claude }
+        let claudeOutages = result.outages.filter { $0.vendor == .claudeTUI }
         let geminiOutages = result.outages.filter { $0.vendor == "gemini" }
         #expect(claudeOutages.count == 1)
         #expect(claudeOutages[0].errorMessage == "new")
@@ -558,20 +590,20 @@ struct UsagesFileManagerTests {
         #expect(geminiOutages[0].errorMessage == "g-outage")
     }
 
-    @Test("update with [.claude: []] removes claude outages and preserves others")
+    @Test("update with [.claudeTUI: []] removes claude outages and preserves others")
     func outageReplacementEmptyListRemovesVendor() async throws {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
         let old = [
-            Outage(vendor: "claude", errorMessage: "old", severity: .major, since: "2026-04-01T00:00:00Z"),
+            Outage(vendor: "claude-tui", errorMessage: "old", severity: .major, since: "2026-04-01T00:00:00Z"),
             Outage(vendor: "gemini", errorMessage: "g-outage", severity: .minor, since: "2026-04-02T00:00:00Z"),
         ]
         try writeFileWithOutages(mgr: mgr, outages: old)
 
-        await mgr.update(with: [], outagesByVendor: [.claude: []])
+        await mgr.update(with: [], outagesByVendor: [.claudeTUI: []])
 
         let result = await mgr.read()
-        #expect(result.outages.filter { $0.vendor == .claude }.isEmpty)
+        #expect(result.outages.filter { $0.vendor == .claudeTUI }.isEmpty)
         #expect(result.outages.filter { $0.vendor == "gemini" }.count == 1)
     }
 
@@ -580,7 +612,7 @@ struct UsagesFileManagerTests {
         let dir = makeTempDir()
         let mgr = makeManager(dir: dir)
         let old = [
-            Outage(vendor: "claude", errorMessage: "old", severity: .major, since: "2026-04-01T00:00:00Z"),
+            Outage(vendor: "claude-tui", errorMessage: "old", severity: .major, since: "2026-04-01T00:00:00Z"),
             Outage(vendor: "gemini", errorMessage: "g-outage", severity: .minor, since: "2026-04-02T00:00:00Z"),
         ]
         try writeFileWithOutages(mgr: mgr, outages: old)

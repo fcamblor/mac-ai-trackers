@@ -205,7 +205,7 @@ struct OutageCodableTests {
     @Test("full outage round-trips through JSON")
     func fullRoundTrip() throws {
         let outage = Outage(
-            vendor: "claude",
+            vendor: "claude-tui",
             errorMessage: "Elevated errors on Claude.ai, API, Claude Code",
             severity: .major,
             since: "2026-04-15T14:53:00Z",
@@ -219,10 +219,10 @@ struct OutageCodableTests {
     @Test("outage without href decodes successfully and renders as non-clickable")
     func minimalDecode() throws {
         let json = """
-        {"vendor":"claude","errorMessage":"T","severity":"minor","since":"2026-04-15T14:53:00Z"}
+        {"vendor":"claude-tui","errorMessage":"T","severity":"minor","since":"2026-04-15T14:53:00Z"}
         """.data(using: .utf8)!
         let decoded = try decoder.decode(Outage.self, from: json)
-        #expect(decoded.vendor == .claude)
+        #expect(decoded.vendor == .claudeTUI)
         #expect(decoded.errorMessage == "T")
         #expect(decoded.severity == .minor)
         #expect(decoded.since == ISODate(rawValue: "2026-04-15T14:53:00Z"))
@@ -232,7 +232,7 @@ struct OutageCodableTests {
     @Test("unknown severity decodes without throwing")
     func unknownSeverity() throws {
         let json = """
-        {"vendor":"claude","errorMessage":"T","severity":"partial_outage","since":"2026-04-15T14:53:00Z"}
+        {"vendor":"claude-tui","errorMessage":"T","severity":"partial_outage","since":"2026-04-15T14:53:00Z"}
         """.data(using: .utf8)!
         let decoded = try decoder.decode(Outage.self, from: json)
         #expect(decoded.severity == OutageSeverity(rawValue: "partial_outage"))
@@ -241,7 +241,7 @@ struct OutageCodableTests {
     @Test("missing required field throws")
     func missingRequiredField() {
         let json = """
-        {"vendor":"claude","severity":"major"}
+        {"vendor":"claude-tui","severity":"major"}
         """.data(using: .utf8)!
         #expect(throws: (any Error).self) {
             try decoder.decode(Outage.self, from: json)
@@ -257,7 +257,7 @@ struct VendorUsageEntryTests {
     @Test("full entry round-trips")
     func fullRoundTrip() throws {
         let entry = VendorUsageEntry(
-            vendor: "claude",
+            vendor: "claude-tui",
             account: "user@example.com",
             isActive: true,
             lastAcquiredOn: "2026-04-17T10:00:00+00:00",
@@ -277,7 +277,7 @@ struct VendorUsageEntryTests {
     @Test("entry with error round-trips")
     func errorEntryRoundTrip() throws {
         let entry = VendorUsageEntry(
-            vendor: "claude",
+            vendor: "claude-tui",
             account: "user@example.com",
             isActive: true,
             lastError: UsageError(timestamp: "2026-04-17T10:00:00+00:00", type: "api_error"),
@@ -313,7 +313,7 @@ struct UsagesFileTests {
     @Test("file with multiple vendors round-trips")
     func multiVendorRoundTrip() throws {
         let file = UsagesFile(usages: [
-            VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
                 .timeWindow(name: "session", resetAt: "2026-04-17T15:00:00+00:00",
                             windowDuration: 300, usagePercent: 42),
             ]),
@@ -330,9 +330,9 @@ struct UsagesFileTests {
     @Test("file with outages round-trips")
     func fileWithOutagesRoundTrip() throws {
         let file = UsagesFile(
-            usages: [VendorUsageEntry(vendor: "claude", account: "a@b.com")],
+            usages: [VendorUsageEntry(vendor: "claude-tui", account: "a@b.com")],
             outages: [
-                Outage(vendor: "claude",
+                Outage(vendor: "claude-tui",
                        errorMessage: "API issues",
                        severity: .major,
                        since: "2026-04-15T14:53:00Z",
@@ -343,12 +343,12 @@ struct UsagesFileTests {
         let decoded = try decoder.decode(UsagesFile.self, from: data)
         #expect(decoded.outages.count == 1)
         #expect(decoded.outages[0].errorMessage == "API issues")
-        #expect(decoded.outagesByVendor[.claude]?.count == 1)
+        #expect(decoded.outagesByVendor[.claudeTUI]?.count == 1)
     }
 
     @Test("encoder omits outages key when array is empty")
     func encoderOmitsOutagesWhenEmpty() throws {
-        let file = UsagesFile(usages: [VendorUsageEntry(vendor: "claude", account: "a@b.com")])
+        let file = UsagesFile(usages: [VendorUsageEntry(vendor: "claude-tui", account: "a@b.com")])
         let data = try encoder.encode(file)
         let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         #expect(json["usages"] != nil)
@@ -358,7 +358,7 @@ struct UsagesFileTests {
     @Test("decoder tolerates missing outages key (legacy file)")
     func decoderToleratesMissingOutages() throws {
         let json = """
-        {"usages":[{"vendor":"claude","account":"a@b.com","isActive":true,"metrics":[]}]}
+        {"usages":[{"vendor":"claude-tui","account":"a@b.com","isActive":true,"metrics":[]}]}
         """.data(using: .utf8)!
         let file = try decoder.decode(UsagesFile.self, from: json)
         #expect(file.usages.count == 1)
@@ -369,11 +369,11 @@ struct UsagesFileTests {
     @Test("outagesByVendor groups by vendor and omits absent vendors")
     func outagesByVendorGrouping() {
         let file = UsagesFile(outages: [
-            Outage(vendor: "claude", errorMessage: "A", severity: .major, since: "2026-04-15T14:53:00Z"),
-            Outage(vendor: "claude", errorMessage: "B", severity: .minor, since: "2026-04-15T15:00:00Z"),
+            Outage(vendor: "claude-tui", errorMessage: "A", severity: .major, since: "2026-04-15T14:53:00Z"),
+            Outage(vendor: "claude-tui", errorMessage: "B", severity: .minor, since: "2026-04-15T15:00:00Z"),
             Outage(vendor: "codex",  errorMessage: "C", severity: .minor, since: "2026-04-15T16:00:00Z"),
         ])
-        #expect(file.outagesByVendor[.claude]?.count == 2)
+        #expect(file.outagesByVendor[.claudeTUI]?.count == 2)
         #expect(file.outagesByVendor[Vendor(rawValue: "codex")]?.count == 1)
         #expect(file.outagesByVendor.count == 2)
     }

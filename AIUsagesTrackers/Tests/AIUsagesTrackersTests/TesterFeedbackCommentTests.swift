@@ -9,7 +9,7 @@ struct TesterFeedbackCommentTests {
     private func makeContext() throws -> TesterFeedbackContext {
         // swiftlint:disable:next force_unwrapping
         let url = URL(string: "https://github.com/owner/repo/issues/42")!
-        return TesterFeedbackContext(vendor: .claude, buildCommit: validCommit, issueURL: url)
+        return TesterFeedbackContext(vendor: .claudeTUI, buildCommit: validCommit, issueURL: url)
     }
 
     @Test("renders the sentinel as the very first line")

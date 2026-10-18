@@ -128,6 +128,7 @@ enum WhatsNewCatalog {
     - Claude accounts you had ignored stay hidden for their Claude Desktop source too.
     - Your custom account order is preserved; Claude Desktop sources sit with their Claude TUI account.
     - Existing menu bar chips and charts keep working unchanged.
+    - A copy of your pre-0.8 data was saved. Should you need to go back to 0.7.x, restore it first from *Settings › Updates › Advanced*.
 
     Frédéric
     """

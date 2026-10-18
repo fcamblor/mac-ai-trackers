@@ -54,7 +54,7 @@ public struct TesterFeedbackContext: Sendable, Equatable {
             return nil
         }
         return TesterFeedbackContext(
-            vendor: Vendor(rawValue: vendorRaw),
+            vendor: Vendor(normalizing: vendorRaw),
             buildCommit: commitRaw,
             issueURL: url
         )

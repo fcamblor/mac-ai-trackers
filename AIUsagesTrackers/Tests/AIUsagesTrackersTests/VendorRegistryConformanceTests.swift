@@ -52,7 +52,7 @@ struct VendorRegistryConformanceTests {
     func registryHasAllVendors() {
         populateRegistry()
         let vendors = VendorRegistry.bundles.map(\.vendor.rawValue).sorted()
-        #expect(vendors == ["claude", "claude-desktop", "codex", "copilot"])
+        #expect(vendors == ["claude-desktop", "claude-tui", "codex", "copilot"])
     }
 
     @Test("each branding asset resolves to a PDF file under App/Resources/VendorBranding/")

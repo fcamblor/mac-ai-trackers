@@ -36,7 +36,7 @@ struct SnapshotSchedulerTests {
         let dir = Self.makeTempDir()
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
-        let seed = VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+        let seed = VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
             .timeWindow(name: "session", resetAt: nil, windowDuration: 300, usagePercent: 42),
         ])
         await fm.update(with: [seed])
@@ -102,7 +102,7 @@ struct SnapshotSchedulerTests {
         let dir = Self.makeTempDir()
         let logger = FileLogger(filePath: "\(dir)/test.log", minLevel: .debug)
         let fm = UsagesFileManager(filePath: "\(dir)/usages.json", logger: logger)
-        let seed = VendorUsageEntry(vendor: "claude", account: "a@b.com", metrics: [
+        let seed = VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", metrics: [
             .timeWindow(name: "session", resetAt: nil, windowDuration: 300, usagePercent: 42),
         ])
         await fm.update(with: [seed])

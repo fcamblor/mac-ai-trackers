@@ -145,7 +145,7 @@ struct UserDefaultsAppPreferencesTests {
         let prefs = UserDefaultsAppPreferences(defaults: defaults)
         let chips = [
             MenuBarChipConfig(
-                vendor: .claude,
+                vendor: .claudeTUI,
                 segments: [
                     MenuBarChipSegmentConfig(
                         account: .currentlyActive,
@@ -167,7 +167,7 @@ struct UserDefaultsAppPreferencesTests {
 
         let writer = UserDefaultsAppPreferences(defaults: defaults)
         let chip = MenuBarChipConfig(
-            vendor: .claude,
+            vendor: .claudeTUI,
             segments: [
                 MenuBarChipSegmentConfig(
                     account: .specific("a@b.com"),
@@ -216,7 +216,7 @@ struct UserDefaultsAppPreferencesTests {
                 title: "Custom",
                 selection: .custom([
                     ChartSeriesConfig(
-                        vendor: .claude,
+                        vendor: .claudeTUI,
                         account: .specific("a@b.com"),
                         metricName: "Cost",
                         style: ChartSeriesStyle(color: .orange, lineStyle: .dashed)

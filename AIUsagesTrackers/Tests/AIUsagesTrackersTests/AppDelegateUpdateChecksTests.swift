@@ -28,7 +28,7 @@ struct AppDelegateUpdateChecksTests {
     func testerDebugBuildDisablesUpdateChecks() {
         let bundle = stubBundle(values: [
             "CFBundleShortVersionString": "0.1.0",
-            TesterFeedbackContext.vendorPlistKey: "claude",
+            TesterFeedbackContext.vendorPlistKey: "claude-tui",
             TesterFeedbackContext.buildCommitPlistKey: String(repeating: "a", count: 40),
             TesterFeedbackContext.issueURLPlistKey: "https://github.com/owner/repo/issues/42",
         ])

@@ -5,7 +5,7 @@ import Testing
 private let referenceDate: Date = ISO8601DateFormatter().date(from: "2026-04-17T12:47:00Z")!
 
 private func timeWindowEntry(
-    vendor: Vendor = .claude,
+    vendor: Vendor = .claudeTUI,
     account: AccountEmail = "user@example.com",
     isActive: Bool = true,
     metricName: String = "5h sessions (all models)",
@@ -32,7 +32,7 @@ private func payAsYouGoEntry(
     currency: String = "USD"
 ) -> VendorUsageEntry {
     VendorUsageEntry(
-        vendor: .claude,
+        vendor: .claudeTUI,
         account: account,
         isActive: true,
         metrics: [.payAsYouGo(name: metricName, currentAmount: amount, currency: currency)]
@@ -41,7 +41,7 @@ private func payAsYouGoEntry(
 
 /// Builds a single-segment chip matching the legacy resolver tests' shape.
 private func singleSegmentChip(
-    vendor: Vendor = .claude,
+    vendor: Vendor = .claudeTUI,
     account: AccountSelection = .currentlyActive,
     metricName: String = "5h sessions (all models)",
     display: SegmentDisplay = .timeWindow(TimeWindowDisplay(letter: "S")),
@@ -79,7 +79,7 @@ struct ResolverClaudeFamilyTests {
     @Test("a Claude chip resolves a specific account from a claude-desktop entry")
     func specificResolvesAcrossFamily() {
         let result = firstResolved(
-            chip: singleSegmentChip(vendor: .claude, account: .specific("me@example.com")),
+            chip: singleSegmentChip(vendor: .claudeTUI, account: .specific("me@example.com")),
             entries: [timeWindowEntry(vendor: .claudeDesktop, account: "me@example.com", isActive: true)]
         )
         #expect(result.rendered != nil)
@@ -89,26 +89,36 @@ struct ResolverClaudeFamilyTests {
     @Test("currentlyActive anchors to the active TUI account, not desktop")
     func currentlyActiveAnchorsToTui() {
         let result = firstResolved(
-            chip: singleSegmentChip(vendor: .claude, account: .currentlyActive),
+            chip: singleSegmentChip(vendor: .claudeTUI, account: .currentlyActive),
             entries: [
-                timeWindowEntry(vendor: .claude, account: "me@example.com", isActive: true, usagePercent: 77),
+                timeWindowEntry(vendor: .claudeTUI, account: "me@example.com", isActive: true, usagePercent: 77),
                 timeWindowEntry(vendor: .claudeDesktop, account: "me@example.com", isActive: true, usagePercent: 10),
             ]
         )
         #expect(result.rendered?.text.contains("77%") == true)
     }
 
+    @Test("a lone Desktop source cannot satisfy currently active TUI selection", arguments: [true, false])
+    func loneDesktopCannotBeImplicitlyActive(isActive: Bool) {
+        let result = firstResolved(
+            chip: singleSegmentChip(),
+            entries: [timeWindowEntry(vendor: .claudeDesktop, isActive: isActive)]
+        )
+        #expect(result.rendered == nil)
+        #expect(result.issue == .noActiveAccount(vendor: .claudeTUI))
+    }
+
     @Test("currentlyActive reports noActiveAccount when only desktop is active")
     func currentlyActiveDesktopOnlyIsNotActive() {
         let result = firstResolved(
-            chip: singleSegmentChip(vendor: .claude, account: .currentlyActive),
+            chip: singleSegmentChip(vendor: .claudeTUI, account: .currentlyActive),
             entries: [
-                timeWindowEntry(vendor: .claude, account: "me@example.com", isActive: false, usagePercent: 10),
+                timeWindowEntry(vendor: .claudeTUI, account: "me@example.com", isActive: false, usagePercent: 10),
                 timeWindowEntry(vendor: .claudeDesktop, account: "me@example.com", isActive: true, usagePercent: 77),
             ]
         )
         #expect(result.rendered == nil)
-        #expect(result.issue == .noActiveAccount(vendor: .claude))
+        #expect(result.issue == .noActiveAccount(vendor: .claudeTUI))
     }
 }
 
@@ -143,7 +153,7 @@ struct ResolverCurrentlyActiveTests {
             ]
         )
         #expect(result.rendered == nil)
-        #expect(result.issue == .noActiveAccount(vendor: .claude))
+        #expect(result.issue == .noActiveAccount(vendor: .claudeTUI))
     }
 
     @Test("no entry for the configured vendor → noActiveAccount")
@@ -151,7 +161,7 @@ struct ResolverCurrentlyActiveTests {
         let otherVendor = Vendor(rawValue: "openai")
         let entries = [timeWindowEntry(vendor: otherVendor, isActive: true)]
         let result = firstResolved(chip: singleSegmentChip(), entries: entries)
-        #expect(result.issue == .noActiveAccount(vendor: .claude))
+        #expect(result.issue == .noActiveAccount(vendor: .claudeTUI))
     }
 }
 
@@ -174,7 +184,7 @@ struct ResolverSpecificTests {
             entries: [timeWindowEntry()]
         )
         #expect(result.rendered == nil)
-        #expect(result.issue == .accountNotFound(vendor: .claude, email: missing))
+        #expect(result.issue == .accountNotFound(vendor: .claudeTUI, email: missing))
     }
 }
 
@@ -397,10 +407,10 @@ struct ResolverUnknownWindowTests {
 struct ResolverMultiVendorTests {
     @Test("an entry from another vendor is not picked up by the chip's resolver")
     func ignoresEntriesFromOtherVendors() {
-        let claudeChip = singleSegmentChip(vendor: .claude)
+        let claudeChip = singleSegmentChip(vendor: .claudeTUI)
         let codexEntry = timeWindowEntry(vendor: .codex, isActive: true)
         let result = firstResolved(chip: claudeChip, entries: [codexEntry])
-        #expect(result.issue == .noActiveAccount(vendor: .claude))
+        #expect(result.issue == .noActiveAccount(vendor: .claudeTUI))
         #expect(result.rendered == nil)
     }
 
@@ -411,7 +421,7 @@ struct ResolverMultiVendorTests {
             metricName: "Session (5h)",
             display: .timeWindow(TimeWindowDisplay(letter: "S"))
         )
-        let claudeEntry = timeWindowEntry(vendor: .claude, isActive: true)
+        let claudeEntry = timeWindowEntry(vendor: .claudeTUI, isActive: true)
         let codexEntry = VendorUsageEntry(
             vendor: .codex,
             account: "user@openai.com",
@@ -447,7 +457,7 @@ struct ResolverOutageTests {
     @Test("hasActiveOutage true when vendor has outages and chip opts in")
     func vendorOutageOptIn() {
         let chip = MenuBarChipConfig(
-            vendor: .claude,
+            vendor: .claudeTUI,
             showOutageWarning: true,
             outageWarningText: "🚨",
             segments: [
@@ -459,8 +469,8 @@ struct ResolverOutageTests {
             ]
         )
         let outages: [Vendor: [Outage]] = [
-            .claude: [Outage(
-                vendor: .claude,
+            .claudeTUI: [Outage(
+                vendor: .claudeTUI,
                 errorMessage: "Investigating",
                 severity: .major,
                 since: ISODate(rawValue: "2026-04-17T10:00:00Z")
@@ -479,7 +489,7 @@ struct ResolverOutageTests {
     @Test("outageWarningText nil when chip opts out, even with active outage")
     func optedOut() {
         let chip = MenuBarChipConfig(
-            vendor: .claude,
+            vendor: .claudeTUI,
             showOutageWarning: false,
             segments: [
                 MenuBarChipSegmentConfig(
@@ -490,8 +500,8 @@ struct ResolverOutageTests {
             ]
         )
         let outages: [Vendor: [Outage]] = [
-            .claude: [Outage(
-                vendor: .claude,
+            .claudeTUI: [Outage(
+                vendor: .claudeTUI,
                 errorMessage: "Investigating",
                 severity: .major,
                 since: ISODate(rawValue: "2026-04-17T10:00:00Z")

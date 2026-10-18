@@ -477,7 +477,7 @@ private struct AccountGroupVendorIcons: View {
     let members: [VendorUsageEntry]
 
     private var familyVendor: Vendor {
-        members.first?.vendor.familyCanonicalVendor ?? .claude
+        members.first?.vendor.familyCanonicalVendor ?? .claudeTUI
     }
 
     private var sources: [(vendor: Vendor, isActive: Bool)] {

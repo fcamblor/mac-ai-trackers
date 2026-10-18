@@ -6,12 +6,14 @@ import Foundation
 /// Versions:
 /// * `1` — every release up to and including 0.7.x (implicit: those builds
 ///   never wrote `storageSchemaVersion`).
-/// * `2` — 0.8.0: Claude Desktop joins the `claude` account family. Settings
-///   that identify an account by `vendor:account` must now cover both Claude
-///   sources, otherwise an account the user hid or reordered as `claude:x`
-///   reappears / jumps around as soon as its `claude-desktop:x` twin shows up.
-///   Menu bar chips and chart series need no rewrite: 0.7.x could only store
-///   `claude`, which is already the family-canonical vendor.
+/// * `2` — 0.8.0: the Claude CLI vendor is renamed `claude` → `claude-tui`
+///   and Claude Desktop joins the `claude` account family. Persisted settings
+///   are re-saved with the new vendor value (decoding already maps the legacy
+///   one, see `Vendor.legacyRawValueAliases`), and settings that identify an
+///   account by `vendor:account` are extended to the Desktop twin, otherwise
+///   an account the user hid or reordered reappears / jumps around as soon as
+///   its `claude-desktop:x` twin shows up. A `PreMigrationBackup` is taken
+///   first so the user can downgrade to 0.7.x.
 ///
 /// Must run BEFORE any seeder: the seeders write the "initialized" markers we
 /// use to tell a pre-0.8 install apart from a brand-new one, and a fresh
@@ -46,6 +48,7 @@ public enum StorageSchemaMigration {
     public static func migrateIfNeeded(
         preferences: any AppPreferences,
         defaults: UserDefaults = .standard,
+        backup: PreMigrationBackup = .migrationTo080(),
         logger: FileLogger = Loggers.app
     ) -> Outcome {
         let versionKey = AppPreferenceKeys.storageSchemaVersion.rawValue
@@ -63,6 +66,15 @@ public enum StorageSchemaMigration {
         guard storedVersion < currentVersion else { return .upToDate }
 
         if storedVersion < 2 {
+            do {
+                try backup.create(defaults: defaults)
+                logger.log(.info, "StorageSchemaMigration: pre-migration backup written to \(backup.directory.path)")
+            } catch {
+                // Not fatal: the migrated app must still start. Only the
+                // downgrade escape hatch is lost, so make it loud.
+                logger.log(.error, "StorageSchemaMigration: pre-migration backup failed, downgrade restore unavailable: \(error)")
+            }
+            renameClaudeVendor(preferences: preferences, defaults: defaults, logger: logger)
             migrateToClaudeAccountFamily(preferences: preferences)
         }
         defaults.set(currentVersion, forKey: versionKey)
@@ -83,9 +95,33 @@ public enum StorageSchemaMigration {
 
     // MARK: - v1 → v2
 
+    /// Decoding already turns legacy `claude` into `claude-tui`; writing the
+    /// decoded values back persists the new raw value. `accountsOrder` holds
+    /// plain `vendor:account` strings, so it is rewritten explicitly.
+    private static func renameClaudeVendor(preferences: any AppPreferences, defaults: UserDefaults, logger: FileLogger) {
+        // The getters fall back to `[]` on a decode failure; writing that back
+        // would wipe the user's setting, so an empty result over stored bytes
+        // is left untouched (decoding keeps mapping the legacy value anyway).
+        func resave<T>(_ key: AppPreferenceKeys, _ value: [T], _ write: ([T]) -> Void) {
+            if value.isEmpty, defaults.object(forKey: key.rawValue) != nil {
+                logger.log(.warning, "StorageSchemaMigration: \(key.rawValue) decoded as empty, left as-is")
+                return
+            }
+            write(value)
+        }
+        resave(.menuBarChips, preferences.menuBarChips) { preferences.menuBarChips = $0 }
+        resave(.chartConfigurations, preferences.chartConfigurations) { preferences.chartConfigurations = $0 }
+        resave(.ignoredAccounts, preferences.ignoredAccounts) { preferences.ignoredAccounts = $0 }
+        preferences.accountsOrder = preferences.accountsOrder.map { id in
+            guard let separator = id.firstIndex(of: ":") else { return id }
+            let vendor = Vendor(normalizing: String(id[..<separator]))
+            return vendor.rawValue + id[separator...]
+        }
+    }
+
     private static func migrateToClaudeAccountFamily(preferences: any AppPreferences) {
         var ignored = preferences.ignoredAccounts
-        for entry in preferences.ignoredAccounts where entry.vendor == .claude {
+        for entry in preferences.ignoredAccounts where entry.vendor == .claudeTUI {
             let twin = IgnoredAccount(vendor: .claudeDesktop, account: entry.account)
             if !ignored.contains(twin) { ignored.append(twin) }
         }
@@ -95,7 +131,7 @@ public enum StorageSchemaMigration {
 
         let order = preferences.accountsOrder
         let existing = Set(order)
-        let claudePrefix = "\(Vendor.claude.rawValue):"
+        let claudePrefix = "\(Vendor.claudeTUI.rawValue):"
         var migratedOrder: [String] = []
         for id in order {
             migratedOrder.append(id)

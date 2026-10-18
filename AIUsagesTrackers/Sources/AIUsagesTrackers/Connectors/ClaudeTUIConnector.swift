@@ -1,7 +1,7 @@
 import Foundation
 
 public actor ClaudeTUIConnector: UsageConnector {
-    nonisolated public let vendor: Vendor = .claude
+    nonisolated public let vendor: Vendor = .claudeTUI
 
     private let claudeConfigPath: String
     private let logger: FileLogger
@@ -15,7 +15,7 @@ public actor ClaudeTUIConnector: UsageConnector {
     /// surfaced an auth failure. While true, subsequent HTTP 429s are
     /// attributed to `token_expired` instead of `http_429` so the auth
     /// diagnostic is not masked by the chronic 401→429 cascade Anthropic
-    /// produces against a stale bearer (see docs/vendors/claude.md
+    /// produces against a stale bearer (see docs/vendors/claude-tui.md
     /// Stale-token failure mode). Cleared on any HTTP 200.
     private var lastAuthFailureSeen: Bool = false
 
@@ -24,7 +24,7 @@ public actor ClaudeTUIConnector: UsageConnector {
 
     public init(
         claudeConfigPath: String? = nil,
-        logger: FileLogger = Loggers.claude,
+        logger: FileLogger = Loggers.claudeTUI,
         session: URLSession = .shared,
         credentialLocator: any CredentialLocator<ClaudeCredentials> = ClaudeTUICredentialLocator(),
         tokenProvider: (@Sendable () async throws -> String)? = nil,
@@ -44,7 +44,7 @@ public actor ClaudeTUIConnector: UsageConnector {
     /// freshly-built locator so the rest of the connector stays uniform.
     public init(
         claudeConfigPath: String? = nil,
-        logger: FileLogger = Loggers.claude,
+        logger: FileLogger = Loggers.claudeTUI,
         session: URLSession = .shared,
         keychainServiceName: String,
         tokenProvider: (@Sendable () async throws -> String)? = nil,
@@ -100,7 +100,7 @@ public actor ClaudeTUIConnector: UsageConnector {
         } catch ClaudeAuthError.tokenExpired(_, let expiredAt) {
             // Stale token detected locally — skip the HTTP call entirely. Spamming
             // /api/oauth/usage with an expired bearer is what triggers Anthropic's
-            // chronic 429 (see docs/vendors/claude.md Stale-token failure mode).
+            // chronic 429 (see docs/vendors/claude-tui.md Stale-token failure mode).
             // Metrics are preserved: token expiry invalidates our ability to refresh,
             // not the data itself — values whose window has not yet rolled stay
             // accurate until their resetAt; the UI handles the rest via isUnknown.

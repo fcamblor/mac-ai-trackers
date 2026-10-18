@@ -8,10 +8,10 @@
   wins.
 
   This vendor shares the OAuth usage endpoint and response parsing with
-  the `claude` vendor (see `docs/vendors/claude.md`). Only the credential
+  the `claude-tui` vendor (see `docs/vendors/claude-tui.md`). Only the credential
   source and the multi-account/multi-profile behaviour are specific to
   Claude Desktop; endpoint/metric/time semantics are documented in full in
-  `claude.md` and only summarised here.
+  `claude-tui.md` and only summarised here.
 -->
 
 ## Endpoints
@@ -23,7 +23,7 @@ _verified: 2026-10-17_
 | GET    | `https://api.anthropic.com/api/oauth/usage` | `Authorization: Bearer <oauth>`, `anthropic-beta: oauth-2025-04-20` | 5s | `application/json` |
 | GET    | `https://api.anthropic.com/api/oauth/profile` | `Authorization: Bearer <oauth>`, `anthropic-beta: oauth-2025-04-20` | 5s | `application/json` |
 
-The usage endpoint is identical to the `claude` vendor; its response
+The usage endpoint is identical to the `claude-tui` vendor; its response
 additionally carries a `seven_day_breakdown` block (per-product shares)
 that both connectors now consume — see Metric semantics.
 
@@ -74,7 +74,7 @@ contains the `user:inference` scope — a profile also stores a narrower
 ### Bootstrap / no-prompt rule (§9)
 
 The `Claude Safe Storage` Keychain entry is **distinct** from the
-`Claude Code-credentials` entry the `claude` vendor reads, and the user has
+`Claude Code-credentials` entry the `claude-tui` vendor reads, and the user has
 not pre-approved its ACL for the steady-state poll. Reading it with
 `security … -w` therefore raises a macOS authorisation prompt the first
 time.
@@ -107,7 +107,7 @@ Claude Desktop profiles do not store an account email in cleartext —
 token-cache keys embed the same `acct:<accountUuid>|…`. To make a Desktop
 profile and a Claude Code login recognisable as the same account, the
 connector resolves the **real account email** from `GET /api/oauth/profile`
-and uses it as the account identity. This aligns with the `claude` vendor,
+and uses it as the account identity. This aligns with the `claude-tui` vendor,
 which already identifies accounts by `oauthAccount.emailAddress`: the same
 person's Claude Code and Claude Desktop entries then share an `AccountEmail`
 (distinct rows, since they are distinct vendors) and the UI can group them.
@@ -149,7 +149,7 @@ _verified: 2026-10-17_
 
 ### Pro plan (verified)
 
-Same response shape as the `claude` vendor's Pro capture, plus the
+Same response shape as the `claude-tui` vendor's Pro capture, plus the
 `seven_day_breakdown` block:
 
 ```jsonc
@@ -181,7 +181,7 @@ Observed on a Team-plan profile run via a custom `--user-data-dir`.
 _verified: 2026-10-17_
 
 Windows (`five_hour`, `seven_day`, `seven_day_sonnet`, `seven_day_opus`) and
-`extra_usage` map exactly as documented in `docs/vendors/claude.md`.
+`extra_usage` map exactly as documented in `docs/vendors/claude-tui.md`.
 
 Additionally, each `seven_day_breakdown.rows[]` entry is emitted as:
 
@@ -194,7 +194,7 @@ same rows when the endpoint returns them.
 
 ## Time semantics
 
-Identical to `docs/vendors/claude.md`: ISO 8601 datetimes with sub-second
+Identical to `docs/vendors/claude-tui.md`: ISO 8601 datetimes with sub-second
 precision, normalised to whole-second ISO 8601 at the connector boundary.
 
 ## Error catalog
@@ -221,7 +221,7 @@ accounts from `usages.json` (see `.claude/rules/usages-retention.md`).
 _verified: 2026-10-17_
 
 **No dedicated status page.** Claude Desktop is served by the same Anthropic
-platform as the `claude` vendor, whose `ClaudeStatusConnector` already
+platform as the `claude-tui` vendor, whose `ClaudeStatusConnector` already
 surfaces `https://status.claude.com` incidents. This vendor intentionally
 omits the status slot (`status: nil`) to avoid duplicating every outage row
 under a second vendor.
@@ -260,4 +260,4 @@ under a second vendor.
   usage — into a single card with a `tui` / `desktop` chip per auth source,
   each chip coloured by that source's own active state. Grouping is keyed on
   account *family* + email, so a Codex/Copilot login sharing an email is never
-  merged with Claude. Same orange mark/tint as the `claude` vendor.
+  merged with Claude. Same orange mark/tint as the `claude-tui` vendor.
