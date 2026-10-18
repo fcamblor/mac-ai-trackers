@@ -124,6 +124,21 @@ enum WhatsNewCatalog {
     - ⚠️ **Behaviour change:** once Claude Desktop tracking is enabled, every Desktop profile keeps its usage up to date on its own, so which account is "active" matters much less than before. Consider replacing **"Currently active"** with a **specific account** in your menu bar chips and charts.
     - Menu bar chip and chart pickers list a single **Claude** vendor covering both sources.
 
+    ## Codex: richer account status
+    - When Codex refuses requests, the card says so with a **"Usage limit reached · resumes at HH:MM"** banner instead of a bare 100 % gauge, and the matching menu bar chip shows **⏸ HH:MM**. An admin **spending cap** gets its own banner.
+    - The card header shows your **plan** (Plus, Pro, Pro Lite, Team…) and how many **usage limit resets** you have left - hover it to see when each one expires.
+    - **Unavailable models** are listed with the time they come back, and whether buying credits would unlock them.
+    - Accounts with credits show the **remaining balance** and an estimate of the **messages left**, locally and in the cloud.
+    - Fixed: on Pro and Pro Lite plans, the weekly limit was labelled **"Session (5h)"**. ⚠️ If a menu bar chip or chart pointed at that metric, re-select **"Weekly (7d)"**. Likewise, **"Credits used"** became **"Credits balance"** and now shows the real remaining balance.
+
+    ## Plans for every assistant
+    - **Claude** and **Copilot** cards show your plan too (Pro, Max 5x, Max 20x, Team Standard / Premium, Enterprise / Free, Pro, Business…).
+    - The Codex reset counter turns **orange** when a reset expires within 3 days, so you don't lose it unused.
+
+    ## Choose the metrics shown in the popover
+    - Hide rows you don't need, per assistant, in *Settings › Coding Assistants › Popover metrics* - for example Claude's **Weekly share** rows, or Codex's **Credits balance** / **Messages left**.
+    - Hidden metrics keep working in menu bar chips and charts.
+
     ## Your settings were migrated
     - Claude accounts you had ignored stay hidden for their Claude Desktop source too.
     - Your custom account order is preserved; Claude Desktop sources sit with their Claude TUI account.
