@@ -93,6 +93,7 @@ private struct IgnoredAccountsSection: View {
 /// prompt the connector needs (see `docs/vendors/claude-desktop.md`).
 private struct ClaudeDesktopSection: View {
     private var prefs: UserDefaultsAppPreferences { AppDelegate.sharedPreferences }
+    @State private var isShowingProfileHelp = false
 
     var body: some View {
         Toggle(isOn: Binding(
@@ -127,8 +128,18 @@ private struct ClaudeDesktopSection: View {
             }
         }
 
-        Button("Add profile folder…") {
-            addProfileFolder()
+        HStack {
+            Button("Add profile folder…") {
+                addProfileFolder()
+            }
+            Spacer()
+            Button("How to run several Claude Desktop accounts…") {
+                isShowingProfileHelp = true
+            }
+            .buttonStyle(.link)
+        }
+        .sheet(isPresented: $isShowingProfileHelp) {
+            ClaudeDesktopProfileHelpSheet { isShowingProfileHelp = false }
         }
     }
 

@@ -34,20 +34,6 @@ struct UpgradeChangelogView: View {
     Frédéric
     """
 
-    static let profileHelpMarkdown = """
-    ## Add a custom Claude Desktop profile
-    1. Create an empty folder wherever you like:
-    ```
-    mkdir -p "$HOME/path/to/claude-profiles/personal"
-    ```
-    2. Open Claude Desktop with this folder as its user data directory:
-    ```
-    open -n -a ~/Applications/Claude.app --args --user-data-dir="$HOME/path/to/claude-profiles/personal"
-    ```
-    3. When signing in through the browser, make sure **no other Claude Desktop window** is open besides this profile's one, so the sign-in redirect opens - and authenticates - this profile.
-    4. Declare `$HOME/path/to/claude-profiles/personal` with **Add profile folder…** in *Settings › Coding Assistants*.
-    """
-
     @State private var isShowingProfileHelp = false
 
     var body: some View {
@@ -91,19 +77,7 @@ struct UpgradeChangelogView: View {
         .padding(16)
         .frame(width: Self.width)
         .sheet(isPresented: $isShowingProfileHelp) {
-            VStack(alignment: .leading, spacing: 12) {
-                ReleaseNotesMarkdownView(markdown: Self.profileHelpMarkdown)
-                    .textSelection(.enabled)
-                HStack {
-                    Spacer()
-                    Button("Close") { isShowingProfileHelp = false }
-                        .keyboardShortcut(.defaultAction)
-                }
-            }
-            .padding(16)
-            .frame(width: Self.width - Self.profileHelpInset)
+            ClaudeDesktopProfileHelpSheet { isShowingProfileHelp = false }
         }
     }
-
-    private static let profileHelpInset: CGFloat = 40
 }
