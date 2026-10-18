@@ -234,7 +234,7 @@ public actor CodexConnector: UsageConnector {
         if hasCredits, let balance = Self.decimal(credits?["balance"]), balance >= 0 {
             metrics.append(.payAsYouGo(name: Self.creditsBalanceMetricName, currentAmount: balance, currency: "credits"))
         } else if let headerValue = httpResponse.value(forHTTPHeaderField: "x-codex-credits-balance"),
-                  let balance = Double(headerValue), balance >= 0 {
+                  let balance = Self.decimal(headerValue), balance >= 0 {
             metrics.append(.payAsYouGo(name: Self.creditsBalanceMetricName, currentAmount: balance, currency: "credits"))
         }
 
@@ -399,15 +399,31 @@ public actor CodexConnector: UsageConnector {
     }
 
     private static func integer(_ value: Any?) -> Int? {
-        if let number = value as? Double { return Int(number) }
-        if let string = value as? String { return Int(string) }
-        return nil
+        let parsed: Int?
+        if let number = value as? Double {
+            parsed = Int(exactly: number)
+        } else if let string = value as? String {
+            parsed = Int(string)
+        } else {
+            parsed = nil
+        }
+        // These optional counts must never crash a successful usage poll or
+        // turn malformed negative/fractional values into real inventory.
+        return parsed.flatMap { $0 >= 0 ? $0 : nil }
     }
 
     private static func decimal(_ value: Any?) -> Double? {
-        if let number = value as? Double { return number }
-        if let string = value as? String { return Double(string) }
-        return nil
+        let parsed: Double?
+        if let number = value as? Double {
+            parsed = number
+        } else if let string = value as? String {
+            parsed = Double(string)
+        } else {
+            parsed = nil
+        }
+        // JSONEncoder cannot persist infinite balances; keep valid metrics
+        // instead of letting one optional credit value prevent the file update.
+        return parsed.flatMap { $0.isFinite ? $0 : nil }
     }
 
     /// Maps a window duration onto the stable metric names menu bar chips key on.

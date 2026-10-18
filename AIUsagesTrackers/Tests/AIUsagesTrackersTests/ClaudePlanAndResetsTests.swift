@@ -35,6 +35,30 @@ struct ClaudePlanAndResetsTests {
         #expect(absent.resetCredits == nil)
     }
 
+    @Test("invalid optional grant counts keep the usable grants and usage", arguments: ["1e100", "-1", "1.5"])
+    func invalidGrantCounts(raw: String) throws {
+        let snapshot = try parser.parse(Data("""
+        {"five_hour":{"utilization":12},"cedar_ember":{"grants":[
+          {"resets_left":\(raw),"usable_now":true},
+          {"resets_left":1,"usable_now":true}]}}
+        """.utf8))
+        #expect(snapshot.sessionPercent == 12)
+        #expect(snapshot.resetCredits?.available == 1)
+        #expect(snapshot.resetCredits?.applicable == 1)
+        #expect(snapshot.resetCredits?.grants.count == 1)
+    }
+
+    @Test("overflowing grant totals do not crash or discard usage")
+    func overflowingGrantTotal() throws {
+        let snapshot = try parser.parse(Data("""
+        {"five_hour":{"utilization":12},"cedar_ember":{"grants":[
+          {"resets_left":5e18,"usable_now":true},
+          {"resets_left":5e18,"usable_now":true}]}}
+        """.utf8))
+        #expect(snapshot.sessionPercent == 12)
+        #expect(snapshot.resetCredits == nil)
+    }
+
     @Test("plan resolution: credentials first, Max multiplier and Team tier from rateLimitTier")
     func planResolution() {
         typealias P = ClaudeUsageResponseParser

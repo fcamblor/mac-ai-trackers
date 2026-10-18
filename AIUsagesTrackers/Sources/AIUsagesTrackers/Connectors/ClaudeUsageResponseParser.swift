@@ -175,7 +175,8 @@ public struct ClaudeUsageResponseParser: Sendable {
             return nil
         }
         let grants: [ResetGrant] = rawGrants.compactMap { grant in
-            guard let remaining = (grant["resets_left"] as? Double).map({ Int($0) }) else { return nil }
+            guard let rawRemaining = grant["resets_left"] as? Double,
+                  let remaining = Int(exactly: rawRemaining), remaining >= 0 else { return nil }
             let paused = grant["paused"] as? Bool ?? false
             return ResetGrant(
                 kind: grantKind(grant["type"] as? String),
@@ -186,9 +187,19 @@ public struct ClaudeUsageResponseParser: Sendable {
             )
         }
         guard !grants.isEmpty else { return nil }
+        var available = 0
+        var applicable = 0
+        for grant in grants {
+            let total = available.addingReportingOverflow(grant.remaining)
+            // Reset grants are optional metadata. Ignore an unrepresentable
+            // inventory rather than crashing both Claude connectors.
+            guard !total.overflow else { return nil }
+            available = total.partialValue
+            if grant.usableNow { applicable += grant.remaining }
+        }
         return ResetCredits(
-            available: grants.reduce(0) { $0 + $1.remaining },
-            applicable: grants.filter(\.usableNow).reduce(0) { $0 + $1.remaining },
+            available: available,
+            applicable: applicable,
             grants: grants
         )
     }

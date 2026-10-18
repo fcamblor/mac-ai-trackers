@@ -1007,6 +1007,36 @@ extension CodexConnectorFetchTests {
         #expect(CodexConnector.windowLabel(for: 10080, prefix: "Spark") == "Spark Weekly (7d)")
     }
 
+    @Test("invalid optional counts do not discard valid usage", arguments: ["1e100", "-1", "1.5"])
+    func invalidStatusCounts(raw: String) async throws {
+        let entry = try await fetchSingleEntry("""
+        {"email":"user@openai.com",
+         "rate_limit":{"primary_window":{"used_percent":12,"limit_window_seconds":18000}},
+         "rate_limit_reset_credits":{"available_count":\(raw),"applicable_available_count":0},
+         "credits":{"approx_local_messages":[0,\(raw)]}}
+        """)
+        #expect(entry.lastError == nil)
+        #expect(metricNames(entry) == ["Session (5h)"])
+        #expect(entry.accountStatus?.resetCredits == nil)
+        #expect(entry.accountStatus?.credits == nil)
+        _ = try JSONEncoder().encode(entry)
+    }
+
+    @Test("nonfinite credit balances leave usage persistable", arguments: [false, true])
+    func nonfiniteBalance(fromHeader: Bool) async throws {
+        let json = """
+        {"email":"user@openai.com",
+         "rate_limit":{"primary_window":{"used_percent":12,"limit_window_seconds":18000}},
+         "credits":{"has_credits":true,"balance":"Infinity"}}
+        """
+        mockHTTP200(json: json, headers: fromHeader ? ["x-codex-credits-balance": "Infinity"] : [:])
+        let entries = try await makeConnector(dir: try makeTempDir()).fetchUsages()
+        let entry = try #require(entries.first)
+        #expect(entry.lastError == nil)
+        #expect(metricNames(entry) == ["Session (5h)"])
+        _ = try JSONEncoder().encode(entry)
+    }
+
     private func mockRouted(usage: String, resetStatus: Int, resets: String) {
         CodexMockURLProtocol.errorToThrow = nil
         CodexMockURLProtocol.handler = { request in
