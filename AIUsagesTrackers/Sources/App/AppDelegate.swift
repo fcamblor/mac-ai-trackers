@@ -38,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// is a production build) and the renderer must use real tiers.
     private var pacingCycleTier: ConsumptionTier?
     private var pacingCycleTask: Task<Void, Never>?
+    private var upgradeChangelogWindow: NSWindow?
 
     /// Shared preferences store — exposed as static so the SwiftUI Settings scene
     /// (constructed before applicationDidFinishLaunching) can access it.
@@ -99,6 +100,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         Loggers.setPreferences(Self.sharedPreferences)
 
+        // Must precede every seeder: it tells a pre-0.8 upgrade apart from a
+        // fresh install by the "initialized" markers those seeders write.
+        StorageSchemaMigration.migrateIfNeeded(preferences: Self.sharedPreferences)
         ChartConfigurationsSeeder.seedIfNeeded(preferences: Self.sharedPreferences)
         // OutageWarningMigration MUST run before MenuBarChipsMigration: it
         // rewrites the legacy per-segment outage fields (still stored under
@@ -223,6 +227,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupStatusItem(store: store, refreshState: refreshState, historyReader: historyReader)
         trackStoreChanges(store: store)
         setupUpdateScheduler()
+        presentUpgradeChangelogIfPending()
 
         Task {
             await StartupMigrationRunner(fileManager: fileManager).run()
@@ -481,6 +486,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // No-op in release: keep the field nil so the renderer uses real tiers.
         pacingCycleTier = nil
         #endif
+    }
+
+    // MARK: - Upgrade changelog
+
+    private func presentUpgradeChangelogIfPending() {
+        guard upgradeChangelogWindow == nil,
+              let version = StorageSchemaMigration.pendingChangelog() else { return }
+        let window = NSWindow(
+            contentRect: .zero,
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "What's new"
+        window.isReleasedWhenClosed = false
+        window.contentViewController = NSHostingController(rootView: UpgradeChangelogView(
+            version: version,
+            onOpenAssistantsSettings: { [weak self] in
+                self?.upgradeChangelogWindow?.close()
+                self?.openSettings(targetTab: .codingAssistants)
+            },
+            onDismiss: { [weak self] in
+                self?.upgradeChangelogWindow?.close()
+            }
+        ))
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleUpgradeChangelogWillClose(_:)),
+            name: NSWindow.willCloseNotification,
+            object: window
+        )
+        upgradeChangelogWindow = window
+        // .accessory apps cannot make a window key without a temporary
+        // .regular policy (same constraint as the Settings window).
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    @objc private func handleUpgradeChangelogWillClose(_ notification: Notification) {
+        // Any way of closing (button, red close, settings shortcut) counts as
+        // read: the changelog must never come back after the user saw it.
+        StorageSchemaMigration.acknowledgeChangelog()
+        NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: notification.object)
+        upgradeChangelogWindow = nil
+        DispatchQueue.main.async {
+            // Settings may have been opened from the changelog and still needs
+            // the .regular policy; it restores .accessory itself on close.
+            guard Self.findSettingsWindow()?.isVisible != true else { return }
+            NSApp.setActivationPolicy(.accessory)
+        }
     }
 
     // MARK: - Settings

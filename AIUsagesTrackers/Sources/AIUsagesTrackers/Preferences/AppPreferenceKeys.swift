@@ -58,4 +58,10 @@ public enum AppPreferenceKeys: String {
     /// Desktop against via `--user-data-dir=<path>`, in addition to the two
     /// standard profile directories the installer always creates.
     case claudeDesktopProfilePaths = "ai-tracker.claudeDesktopProfilePaths"
+    /// Integer schema version of the persisted preferences, written by
+    /// `StorageSchemaMigration`. Absent on every build up to 0.7.x.
+    case storageSchemaVersion = "ai-tracker.storageSchemaVersion"
+    /// Release version (e.g. `"0.8.0"`) whose upgrade changelog must be shown
+    /// once; set only when a legacy install was migrated, cleared on dismissal.
+    case pendingUpgradeChangelog = "ai-tracker.pendingUpgradeChangelog"
 }
