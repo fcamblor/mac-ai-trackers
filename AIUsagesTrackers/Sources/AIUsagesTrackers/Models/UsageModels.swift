@@ -54,6 +54,9 @@ public struct VendorUsageEntry: Codable, Equatable, Sendable, Identifiable {
     public var lastAcquiredOn: ISODate?
     public var lastError: UsageError?
     public var metrics: [UsageMetric]
+    /// Account-level state beyond the metrics (plan, block, credits…); nil for
+    /// vendors that don't report it.
+    public var accountStatus: AccountStatus?
 
     public init(
         vendor: Vendor,
@@ -61,7 +64,8 @@ public struct VendorUsageEntry: Codable, Equatable, Sendable, Identifiable {
         isActive: Bool = false,
         lastAcquiredOn: ISODate? = nil,
         lastError: UsageError? = nil,
-        metrics: [UsageMetric] = []
+        metrics: [UsageMetric] = [],
+        accountStatus: AccountStatus? = nil
     ) {
         self.vendor = vendor
         self.account = account
@@ -69,6 +73,7 @@ public struct VendorUsageEntry: Codable, Equatable, Sendable, Identifiable {
         self.lastAcquiredOn = lastAcquiredOn
         self.lastError = lastError
         self.metrics = metrics
+        self.accountStatus = accountStatus
     }
 }
 

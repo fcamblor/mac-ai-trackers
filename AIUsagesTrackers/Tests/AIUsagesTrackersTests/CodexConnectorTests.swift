@@ -192,17 +192,17 @@ struct CodexConnectorFetchTests {
         #expect(names.contains("Session (5h)"))
         #expect(names.contains("Weekly (7d)"))
         #expect(names.contains("Code Review (7d)"))
-        #expect(names.contains("Credits used"))
+        #expect(names.contains("Credits balance"))
 
         let creditsMetric = entries[0].metrics.first {
-            if case .payAsYouGo(let n, _, _) = $0 { return n == "Credits used" }
+            if case .payAsYouGo(let n, _, _) = $0 { return n == "Credits balance" }
             return false
         }
         if case .payAsYouGo(_, let amount, let currency) = creditsMetric {
-            #expect(amount == 250.0)  // 1000 - 750
+            #expect(amount == 750.0)
             #expect(currency == "credits")
         } else {
-            Issue.record("Expected payAsYouGo Credits used metric")
+            Issue.record("Expected payAsYouGo Credits balance metric")
         }
     }
 
@@ -529,13 +529,13 @@ struct CodexConnectorFetchTests {
         #expect(entries[0].metrics.count == 3)
 
         let creditsMetric = entries[0].metrics.first {
-            if case .payAsYouGo(let n, _, _) = $0 { return n == "Credits used" }
+            if case .payAsYouGo(let n, _, _) = $0 { return n == "Credits balance" }
             return false
         }
         if case .payAsYouGo(_, let amount, _) = creditsMetric {
-            #expect(amount == 800.0)  // 1000 - 200
+            #expect(amount == 200.0)
         } else {
-            Issue.record("Expected payAsYouGo Credits used from header")
+            Issue.record("Expected payAsYouGo Credits balance from header")
         }
     }
 
@@ -792,5 +792,171 @@ struct CodexConnectorFetchTests {
         #expect(!masked.contains("user@openai.com"))
         #expect(!masked.contains("secret-token"))
         #expect(!masked.contains("secret-key"))
+    }
+}
+
+// MARK: - Account status
+
+// Extension of the serialized suite: the URL mock is shared static state, so
+// these must not run concurrently with the other fetch tests.
+extension CodexConnectorFetchTests {
+    /// Real Pro payload captured while blocked (public fixture, redacted).
+    private static let proBlockedJSON = """
+    {
+      "email": "owner@example.invalid",
+      "plan_type": "pro",
+      "rate_limit": {
+        "allowed": false,
+        "limit_reached": true,
+        "primary_window": {"used_percent": 100, "limit_window_seconds": 604800, "reset_after_seconds": 456976, "reset_at": 1791050824},
+        "secondary_window": null
+      },
+      "code_review_rate_limit": null,
+      "additional_rate_limits": null,
+      "model_usage": {
+        "gpt-6-astra": {"available": false, "available_at": "2026-10-03T18:07:04.513720Z", "credits_would_enable": true}
+      },
+      "credits": {"has_credits": false, "unlimited": false, "overage_limit_reached": false, "balance": "0"},
+      "spend_control": {"reached": false, "individual_limit": null},
+      "rate_limit_reached_type": {"type": "rate_limit_reached", "details": "default"},
+      "promo": null
+    }
+    """
+
+    private func fetchSingleEntry(_ json: String) async throws -> VendorUsageEntry {
+        let dir = try makeTempDir()
+        mockHTTP200(json: json)
+        let entries = try await makeConnector(dir: dir).fetchUsages()
+        return try #require(entries.first)
+    }
+
+    @Test("Pro blocked payload: weekly label on primary window, block, unavailable model")
+    func proBlocked() async throws {
+        let entry = try await fetchSingleEntry(Self.proBlockedJSON)
+
+        guard case let .timeWindow(name, _, duration, percent) = entry.metrics.first else {
+            Issue.record("Expected a time window metric"); return
+        }
+        #expect(name == "Weekly (7d)")
+        #expect(duration == 10080)
+        #expect(percent == 100)
+
+        let status = try #require(entry.accountStatus)
+        #expect(status.plan == "pro")
+        #expect(status.block == AccountBlock(
+            reason: .rateLimit,
+            resumesAt: ISODate(date: Date(timeIntervalSince1970: 1791050824))
+        ))
+        #expect(status.unavailableModels.count == 1)
+        let model = try #require(status.unavailableModels.first)
+        #expect(model.model == "gpt-6-astra")
+        #expect(model.creditsWouldEnable)
+        #expect(model.availableAt?.date != nil)
+        #expect(status.credits == nil)
+    }
+
+    @Test("nominal Plus payload: plan + resets only, no block / models / credits")
+    func plusNominal() async throws {
+        let entry = try await fetchSingleEntry("""
+        {
+          "email": "user@openai.com",
+          "plan_type": "plus",
+          "rate_limit": {
+            "allowed": true, "limit_reached": false,
+            "primary_window": {"used_percent": 0, "limit_window_seconds": 18000, "reset_after_seconds": 14931, "reset_at": 1792297715},
+            "secondary_window": {"used_percent": 0, "limit_window_seconds": 604800, "reset_after_seconds": 601731, "reset_at": 1792884515}
+          },
+          "model_usage": {"gpt-6-astra": {"available": true, "available_at": null, "credits_would_enable": false}},
+          "credits": {"has_credits": false, "unlimited": false, "overage_limit_reached": false, "balance": "0",
+                      "approx_local_messages": [0, 0], "approx_cloud_messages": [0, 0]},
+          "spend_control": {"reached": false, "individual_limit": null},
+          "rate_limit_reached_type": null,
+          "rate_limit_reset_credits": {"available_count": 3, "applicable_available_count": 0}
+        }
+        """)
+        let names = entry.metrics.compactMap { metric -> String? in
+            if case .timeWindow(let n, _, _, _) = metric { return n }
+            return nil
+        }
+        #expect(names == ["Session (5h)", "Weekly (7d)"])
+        #expect(entry.accountStatus == AccountStatus(
+            plan: "plus",
+            resetCredits: ResetCredits(available: 3, applicable: 0)
+        ))
+    }
+
+    @Test("string balance is parsed and approx message ranges are kept")
+    func creditsWithStringBalance() async throws {
+        let entry = try await fetchSingleEntry("""
+        {
+          "email": "user@openai.com",
+          "plan_type": "prolite",
+          "rate_limit": {"primary_window": {"used_percent": 56, "limit_window_seconds": 604800, "reset_after_seconds": 261856, "reset_at": 1790015277}, "secondary_window": null},
+          "credits": {"has_credits": true, "unlimited": false, "balance": "260.9493799584",
+                      "approx_local_messages": [65, 339], "approx_cloud_messages": [10, 65]}
+        }
+        """)
+        let balance = entry.metrics.compactMap { metric -> Double? in
+            if case let .payAsYouGo(name, amount, _) = metric, name == "Credits balance" { return amount }
+            return nil
+        }.first
+        #expect(balance == 260.9493799584)
+        #expect(entry.accountStatus?.credits == CreditsSummary(
+            unlimited: false,
+            overageLimitReached: false,
+            approxLocalMessages: MessageRange(lower: 65, upper: 339),
+            approxCloudMessages: MessageRange(lower: 10, upper: 65)
+        ))
+        #expect(entry.accountStatus?.plan?.displayName == "Pro Lite")
+    }
+
+    @Test("spend control reached → spendControl block without resume date")
+    func spendControlBlock() async throws {
+        let entry = try await fetchSingleEntry("""
+        {
+          "email": "user@openai.com",
+          "rate_limit": {"allowed": false, "limit_reached": false,
+                         "primary_window": {"used_percent": 12, "limit_window_seconds": 18000, "reset_at": 1745000000}},
+          "spend_control": {"reached": true, "individual_limit": 50}
+        }
+        """)
+        #expect(entry.accountStatus?.block == AccountBlock(reason: .spendControl, resumesAt: nil))
+    }
+
+    @Test("both windows exhausted → resume at the later reset")
+    func blockResumesAtLatestExhaustedWindow() async throws {
+        let entry = try await fetchSingleEntry("""
+        {
+          "email": "user@openai.com",
+          "rate_limit": {"allowed": false, "limit_reached": true,
+            "primary_window": {"used_percent": 100, "limit_window_seconds": 18000, "reset_after_seconds": 100, "reset_at": 1745000000},
+            "secondary_window": {"used_percent": 100, "limit_window_seconds": 604800, "reset_after_seconds": 100, "reset_at": 1745500000}}
+        }
+        """)
+        #expect(entry.accountStatus?.block?.resumesAt == ISODate(date: Date(timeIntervalSince1970: 1745500000)))
+    }
+
+    @Test("unlimited and overage-reached credits are surfaced even without ranges")
+    func creditsStates() async throws {
+        let entry = try await fetchSingleEntry("""
+        {
+          "email": "user@openai.com",
+          "rate_limit": {"primary_window": {"used_percent": 1, "limit_window_seconds": 18000, "reset_at": 1745000000}},
+          "credits": {"has_credits": false, "unlimited": true, "overage_limit_reached": true}
+        }
+        """)
+        #expect(entry.accountStatus?.credits?.unlimited == true)
+        #expect(entry.accountStatus?.credits?.overageLimitReached == true)
+    }
+
+    @Test("windowLabel maps durations onto stable metric names")
+    func windowLabels() {
+        #expect(CodexConnector.windowLabel(for: 300) == "Session (5h)")
+        #expect(CodexConnector.windowLabel(for: 10080) == "Weekly (7d)")
+        #expect(CodexConnector.windowLabel(for: 1440) == "(1d)")
+        #expect(CodexConnector.windowLabel(for: 180) == "(3h)")
+        #expect(CodexConnector.windowLabel(for: 45) == "(45m)")
+        #expect(CodexConnector.windowLabel(for: 300, prefix: "Spark") == "Spark (5h)")
+        #expect(CodexConnector.windowLabel(for: 10080, prefix: "Spark") == "Spark Weekly (7d)")
     }
 }

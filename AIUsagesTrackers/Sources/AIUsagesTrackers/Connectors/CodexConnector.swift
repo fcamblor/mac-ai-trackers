@@ -22,8 +22,11 @@ public actor CodexConnector: UsageConnector {
     // Fixed window durations (Codex policy mirrors Claude's windows)
     private static let sessionWindowMinutes = DurationMinutes(rawValue: 300)
     private static let weeklyWindowMinutes = DurationMinutes(rawValue: 10080)
-    // Codex credit pool size per the current plan definition
-    private static let creditPoolTotal: Double = 1000
+    private static let secondsPerMinute = 60
+    private static let minutesPerHour = 60
+    private static let minutesPerDay = 1440
+    // A window is exhausted when the API reports it fully consumed.
+    private static let exhaustedWindowPercent: Double = 100
 
     // Known-valid literal — force-unwrap is safe here
     private static let apiURL = URL(string: "https://chatgpt.com/backend-api/wham/usage")! // known-valid literal
@@ -129,7 +132,7 @@ public actor CodexConnector: UsageConnector {
         logger.log(.debug, "Codex API payload: \(Self.maskedPayload(data))")
 
         do {
-            let (metrics, emailFromResponse) = try parseAPIResponse(data, httpResponse: http)
+            let (metrics, emailFromResponse, accountStatus) = try parseAPIResponse(data, httpResponse: http)
             guard let (account, source) = resolvePersistedAccount(
                 responseEmail: emailFromResponse,
                 credentials: credentials
@@ -151,7 +154,8 @@ public actor CodexConnector: UsageConnector {
                 isActive: true,
                 lastAcquiredOn: ISODate(date: Date()),
                 lastError: nil,
-                metrics: metrics
+                metrics: metrics,
+                accountStatus: accountStatus
             )]
         } catch {
             // Parse failures are transient (the API responded HTTP 200, just with an
@@ -169,7 +173,10 @@ public actor CodexConnector: UsageConnector {
 
     // MARK: - Response parsing
 
-    private func parseAPIResponse(_ data: Data, httpResponse: HTTPURLResponse) throws -> ([UsageMetric], AccountEmail?) {
+    private func parseAPIResponse(
+        _ data: Data,
+        httpResponse: HTTPURLResponse
+    ) throws -> ([UsageMetric], AccountEmail?, AccountStatus) {
         let jsonObject = try JSONSerialization.jsonObject(with: data)
         guard let json = jsonObject as? [String: Any] else {
             throw CodexConnectorError.unexpectedAPIFormat(receivedKeys: [])
@@ -182,11 +189,13 @@ public actor CodexConnector: UsageConnector {
         let rateLimit = json["rate_limit"] as? [String: Any]
         if let window = rateLimit?["primary_window"] as? [String: Any],
            let w = extractWindow(from: window, fallbackDuration: Self.sessionWindowMinutes) {
-            metrics.append(.timeWindow(name: "Session (5h)", resetAt: w.resetAt, windowDuration: w.duration, usagePercent: w.percent))
+            // Pro / Pro Lite put the weekly window in `primary_window` (with a
+            // null secondary), so the label must follow the duration, not the slot.
+            metrics.append(.timeWindow(name: Self.windowLabel(for: w.duration), resetAt: w.resetAt, windowDuration: w.duration, usagePercent: w.percent))
         }
         if let window = rateLimit?["secondary_window"] as? [String: Any],
            let w = extractWindow(from: window, fallbackDuration: Self.weeklyWindowMinutes) {
-            metrics.append(.timeWindow(name: "Weekly (7d)", resetAt: w.resetAt, windowDuration: w.duration, usagePercent: w.percent))
+            metrics.append(.timeWindow(name: Self.windowLabel(for: w.duration), resetAt: w.resetAt, windowDuration: w.duration, usagePercent: w.percent))
         }
 
         // Code review rate limit (optional — absent on plans without code review)
@@ -203,23 +212,24 @@ public actor CodexConnector: UsageConnector {
             let limitRateLimit = limitEntry["rate_limit"] as? [String: Any]
             if let window = limitRateLimit?["primary_window"] as? [String: Any],
                let w = extractWindow(from: window, fallbackDuration: Self.sessionWindowMinutes) {
-                metrics.append(.timeWindow(name: "\(limitName) (5h)", resetAt: w.resetAt, windowDuration: w.duration, usagePercent: w.percent))
+                metrics.append(.timeWindow(name: Self.windowLabel(for: w.duration, prefix: limitName), resetAt: w.resetAt, windowDuration: w.duration, usagePercent: w.percent))
             }
             if let window = limitRateLimit?["secondary_window"] as? [String: Any],
                let w = extractWindow(from: window, fallbackDuration: Self.weeklyWindowMinutes) {
-                metrics.append(.timeWindow(name: "\(limitName) Weekly (7d)", resetAt: w.resetAt, windowDuration: w.duration, usagePercent: w.percent))
+                metrics.append(.timeWindow(name: Self.windowLabel(for: w.duration, prefix: limitName), resetAt: w.resetAt, windowDuration: w.duration, usagePercent: w.percent))
             }
         }
 
         // Credits: body-first, header as fallback
         let credits = json["credits"] as? [String: Any]
         let hasCredits = credits?["has_credits"] as? Bool ?? false
-        if hasCredits, let balance = credits?["balance"] as? Double, balance >= 0 {
-            // balance is the remaining allowance; clamp to avoid negative values if total exceeds the assumed pool
-            metrics.append(.payAsYouGo(name: "Credits used", currentAmount: max(0, Self.creditPoolTotal - balance), currency: "credits"))
+        // `balance` is the remaining allowance and ships as a decimal string
+        // ("260.9493799584"); accept a number too in case the API normalises it.
+        if hasCredits, let balance = Self.decimal(credits?["balance"]), balance >= 0 {
+            metrics.append(.payAsYouGo(name: Self.creditsBalanceMetricName, currentAmount: balance, currency: "credits"))
         } else if let headerValue = httpResponse.value(forHTTPHeaderField: "x-codex-credits-balance"),
                   let balance = Double(headerValue), balance >= 0 {
-            metrics.append(.payAsYouGo(name: "Credits used", currentAmount: max(0, Self.creditPoolTotal - balance), currency: "credits"))
+            metrics.append(.payAsYouGo(name: Self.creditsBalanceMetricName, currentAmount: balance, currency: "credits"))
         }
 
         if metrics.isEmpty {
@@ -227,7 +237,124 @@ public actor CodexConnector: UsageConnector {
             throw CodexConnectorError.unexpectedAPIFormat(receivedKeys: Array(json.keys))
         }
 
-        return (metrics, email)
+        return (metrics, email, parseAccountStatus(json))
+    }
+
+    static let creditsBalanceMetricName = "Credits balance"
+
+    // MARK: - Account status
+
+    private func parseAccountStatus(_ json: [String: Any]) -> AccountStatus {
+        let plan = (json["plan_type"] as? String)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .flatMap { $0.isEmpty ? nil : PlanType(rawValue: $0) }
+
+        let unavailableModels: [ModelAvailability] = (json["model_usage"] as? [String: Any] ?? [:])
+            .compactMap { slug, value in
+                guard let info = value as? [String: Any],
+                      info["available"] as? Bool == false else { return nil }
+                return ModelAvailability(
+                    model: ModelSlug(rawValue: slug),
+                    availableAt: (info["available_at"] as? String).flatMap(parseVendorTimestamp),
+                    creditsWouldEnable: info["credits_would_enable"] as? Bool ?? false
+                )
+            }
+            .sorted { $0.model.rawValue < $1.model.rawValue }
+
+        let resetCredits = (json["rate_limit_reset_credits"] as? [String: Any]).flatMap { block -> ResetCredits? in
+            guard let available = Self.integer(block["available_count"]) else { return nil }
+            return ResetCredits(
+                available: available,
+                applicable: Self.integer(block["applicable_available_count"]) ?? 0
+            )
+        }
+
+        return AccountStatus(
+            plan: plan,
+            block: parseBlock(json),
+            unavailableModels: unavailableModels,
+            resetCredits: resetCredits,
+            credits: parseCreditsSummary(json["credits"] as? [String: Any])
+        )
+    }
+
+    private func parseBlock(_ json: [String: Any]) -> AccountBlock? {
+        if let spendControl = json["spend_control"] as? [String: Any],
+           spendControl["reached"] as? Bool == true {
+            return AccountBlock(reason: .spendControl, resumesAt: nil)
+        }
+        let rateLimit = json["rate_limit"] as? [String: Any]
+        let limitReached = rateLimit?["limit_reached"] as? Bool == true
+        let disallowed = rateLimit?["allowed"] as? Bool == false
+        guard limitReached || disallowed else { return nil }
+
+        // Several windows can be exhausted at once (5h and weekly); requests
+        // resume only once the last of them resets.
+        let exhaustedResets = ["primary_window", "secondary_window"]
+            .compactMap { rateLimit?[$0] as? [String: Any] }
+            .filter { ($0["used_percent"] as? Double ?? 0) >= Self.exhaustedWindowPercent }
+            .compactMap { ($0["reset_at"] as? Double).flatMap { $0 > 0 ? $0 : nil } }
+        let resumesAt = exhaustedResets.max().map { ISODate(date: Date(timeIntervalSince1970: $0)) }
+        return AccountBlock(reason: .rateLimit, resumesAt: resumesAt)
+    }
+
+    private func parseCreditsSummary(_ credits: [String: Any]?) -> CreditsSummary? {
+        guard let credits else { return nil }
+        let summary = CreditsSummary(
+            unlimited: credits["unlimited"] as? Bool ?? false,
+            overageLimitReached: credits["overage_limit_reached"] as? Bool ?? false,
+            approxLocalMessages: Self.messageRange(credits["approx_local_messages"]),
+            approxCloudMessages: Self.messageRange(credits["approx_cloud_messages"])
+        )
+        // A zeroed estimate on an account without credits is the nominal Plus
+        // shape — persisting it would only make the UI render an empty row.
+        let hasRange = !(summary.approxLocalMessages?.isZero ?? true) || !(summary.approxCloudMessages?.isZero ?? true)
+        guard summary.unlimited || summary.overageLimitReached || hasRange else { return nil }
+        return summary
+    }
+
+    /// `model_usage[].available_at` carries fractional seconds, which the
+    /// plain `ISODate` parser rejects.
+    private func parseVendorTimestamp(_ raw: String) -> ISODate? {
+        if let date = isoFormatter.date(from: raw) { return ISODate(date: date) }
+        return ISODate.parsing(raw)
+    }
+
+    private static func messageRange(_ value: Any?) -> MessageRange? {
+        guard let pair = value as? [Any], pair.count == 2,
+              let lower = integer(pair[0]), let upper = integer(pair[1]) else { return nil }
+        return MessageRange(lower: lower, upper: upper)
+    }
+
+    private static func integer(_ value: Any?) -> Int? {
+        if let number = value as? Double { return Int(number) }
+        if let string = value as? String { return Int(string) }
+        return nil
+    }
+
+    private static func decimal(_ value: Any?) -> Double? {
+        if let number = value as? Double { return number }
+        if let string = value as? String { return Double(string) }
+        return nil
+    }
+
+    /// Maps a window duration onto the stable metric names menu bar chips key on.
+    static func windowLabel(for duration: DurationMinutes, prefix: String? = nil) -> String {
+        let minutes = duration.rawValue
+        let suffix: String
+        if minutes == weeklyWindowMinutes.rawValue {
+            suffix = "Weekly (7d)"
+        } else if minutes >= minutesPerDay, minutes % minutesPerDay == 0 {
+            suffix = "(\(minutes / minutesPerDay)d)"
+        } else if minutes >= minutesPerHour, minutes % minutesPerHour == 0 {
+            suffix = minutes == sessionWindowMinutes.rawValue ? "Session (5h)" : "(\(minutes / minutesPerHour)h)"
+        } else {
+            suffix = "(\(minutes)m)"
+        }
+        guard let prefix else { return suffix }
+        // Prefixed per-model limits historically read "<name> (5h)", not "<name> Session (5h)".
+        let prefixedSuffix = suffix == "Session (5h)" ? "(5h)" : suffix
+        return "\(prefix) \(prefixedSuffix)"
     }
 
     // MARK: - Window extraction
@@ -271,7 +398,7 @@ public actor CodexConnector: UsageConnector {
         }
         let duration: DurationMinutes
         if let secs = limitWindowSeconds {
-            duration = DurationMinutes(rawValue: Int(secs) / 60)
+            duration = DurationMinutes(rawValue: Int(secs) / Self.secondsPerMinute)
         } else {
             duration = fallbackDuration
         }

@@ -71,11 +71,29 @@ public func formatResetDate(_ resetAt: ISODate, now: Date) -> String {
     return ResetDateFormatting.dateTimeFormatter.string(from: resetDate)
 }
 
+/// Compact resume time for space-constrained surfaces (menu bar):
+/// - same day → "HH:mm"
+/// - otherwise → "MMM d HH:mm"
+/// Returns "--" when `resumeAt` cannot be parsed.
+public func formatResumeTime(_ resumeAt: ISODate, now: Date) -> String {
+    guard let date = resumeAt.date else { return "--" }
+    if Calendar.current.isDate(date, inSameDayAs: now) {
+        return ResetDateFormatting.timeFormatter.string(from: date)
+    }
+    return ResetDateFormatting.compactDateTimeFormatter.string(from: date)
+}
+
 // Singletons are safe: only called from @MainActor SwiftUI views
 private enum ResetDateFormatting {
     static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
+        return f
+    }()
+
+    static let compactDateTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d HH:mm"
         return f
     }()
 

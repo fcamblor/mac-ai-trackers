@@ -179,6 +179,9 @@ public actor UsagesFileManager {
                     if merged.metrics.isEmpty {
                         merged.metrics = usages[idx].metrics
                     }
+                    if merged.accountStatus == nil {
+                        merged.accountStatus = usages[idx].accountStatus
+                    }
                     if merged.lastAcquiredOn == nil {
                         merged.lastAcquiredOn = usages[idx].lastAcquiredOn
                     }

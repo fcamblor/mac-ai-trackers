@@ -30,6 +30,14 @@ struct AccountCardView: View {
 
                 Spacer()
 
+                if let resetCredits = entry.accountStatus?.resetCredits, resetCredits.available > 0 {
+                    ResetCreditsBadge(resetCredits: resetCredits)
+                }
+
+                if let plan = entry.accountStatus?.plan {
+                    PlanCapsule(plan: plan)
+                }
+
                 if entry.isActive {
                     ActiveCapsule()
                 }
@@ -190,8 +198,19 @@ struct EntryBodyView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // The block outranks everything else on the card: it is the one
+            // state where the gauges below stop answering "can I use it now?".
+            if let block = entry.accountStatus?.block {
+                AccountBlockBanner(block: block, resetCredits: entry.accountStatus?.resetCredits)
+            }
             ForEach(Array(entry.metrics.enumerated()), id: \.offset) { _, metric in
                 metricRow(for: metric)
+            }
+            if let credits = entry.accountStatus?.credits {
+                CreditsSummaryRow(credits: credits)
+            }
+            if let models = entry.accountStatus?.unavailableModels, !models.isEmpty {
+                UnavailableModelsRow(models: models)
             }
             if let lastError = entry.lastError {
                 errorRow(for: lastError)

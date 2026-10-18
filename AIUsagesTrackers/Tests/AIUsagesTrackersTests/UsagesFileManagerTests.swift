@@ -355,6 +355,26 @@ struct UsagesFileManagerTests {
         #expect(result.usages[0].lastError?.type == "http_429")
     }
 
+    @Test("merge preserves accountStatus when error entry carries none")
+    func mergePreservesAccountStatusOnError() async {
+        let dir = makeTempDir()
+        let mgr = makeManager(dir: dir)
+        let status = AccountStatus(plan: "pro", resetCredits: ResetCredits(available: 2, applicable: 1))
+        await mgr.update(with: [VendorUsageEntry(
+            vendor: "codex", account: "a@b.com", isActive: true,
+            lastAcquiredOn: "2026-04-17T14:00:00+00:00",
+            accountStatus: status
+        )])
+
+        await mgr.update(with: [VendorUsageEntry(
+            vendor: "codex", account: "a@b.com", isActive: true,
+            lastError: UsageError(timestamp: "2026-04-17T15:00:00+00:00", type: "api_error")
+        )])
+
+        let result = await mgr.read()
+        #expect(result.usages[0].accountStatus == status)
+    }
+
     @Test("merge uses incoming metrics from error entry when connector provides them (lastKnownMetrics populated)")
     func mergeUsesIncomingMetricsFromErrorWhenPresent() async {
         let dir = makeTempDir()

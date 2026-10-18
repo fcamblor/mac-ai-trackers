@@ -517,3 +517,59 @@ struct ResolverOutageTests {
         #expect(resolution.outageWarningText == nil)
     }
 }
+
+@Suite("MenuBarChipResolver — blocked account")
+struct ResolverBlockedAccountTests {
+    private static func segment(
+        usagePercent: Int,
+        block: AccountBlock?,
+        display: TimeWindowDisplay = TimeWindowDisplay(letter: "W")
+    ) -> MenuBarSegment? {
+        let entry = VendorUsageEntry(
+            vendor: .codex,
+            account: "user@openai.com",
+            isActive: true,
+            metrics: [.timeWindow(
+                name: "Weekly (7d)",
+                resetAt: "2026-04-17T15:00:00Z",
+                windowDuration: 10080,
+                usagePercent: UsagePercent(rawValue: usagePercent)
+            )],
+            accountStatus: AccountStatus(block: block)
+        )
+        let chip = singleSegmentChip(vendor: .codex, metricName: "Weekly (7d)", display: .timeWindow(display))
+        return firstResolved(chip: chip, entries: [entry]).rendered
+    }
+
+    @Test("exhausted window shows pause glyph + resume time instead of percent")
+    func exhaustedWindowShowsResumeTime() {
+        let resumesAt: ISODate = "2026-04-17T15:00:00Z"
+        let result = Self.segment(usagePercent: 100, block: AccountBlock(reason: .rateLimit, resumesAt: resumesAt))
+        #expect(result?.text == "W ⏸ \(formatResumeTime(resumesAt, now: referenceDate))")
+    }
+
+    @Test("rate limit leaves non-exhausted windows untouched")
+    func otherWindowsUnchanged() {
+        let result = Self.segment(usagePercent: 40, block: AccountBlock(reason: .rateLimit, resumesAt: "2026-04-17T15:00:00Z"))
+        #expect(result?.text.contains("⏸") == false)
+        #expect(result?.text.contains("40%") == true)
+    }
+
+    @Test("spend control blocks every window with a bare pause glyph")
+    func spendControlBlocksAll() {
+        let result = Self.segment(usagePercent: 12, block: AccountBlock(reason: .spendControl, resumesAt: nil))
+        #expect(result?.text == "W ⏸")
+    }
+
+    @Test("resume time in the past falls back to the bare glyph")
+    func pastResumeFallsBack() {
+        let result = Self.segment(usagePercent: 100, block: AccountBlock(reason: .rateLimit, resumesAt: "2026-04-17T10:00:00Z"))
+        #expect(result?.text == "W ⏸")
+    }
+
+    @Test("no block → usual percent rendering at 100%")
+    func noBlockKeepsPercent() {
+        let result = Self.segment(usagePercent: 100, block: nil)
+        #expect(result?.text.hasPrefix("W 100%") == true)
+    }
+}
