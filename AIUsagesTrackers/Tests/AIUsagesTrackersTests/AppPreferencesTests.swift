@@ -138,7 +138,8 @@ struct UserDefaultsAppPreferencesTests {
 
         defaults.set("gigantic", forKey: AppPreferenceKeys.popoverWidth.rawValue)
         #expect(UserDefaultsAppPreferences(defaults: defaults).popoverWidth == .standard)
-        #expect(PopoverWidth.large.points == PopoverWidth.standard.points * 1.5)
+        #expect(PopoverWidth.large.points == PopoverWidth.standard.points * PopoverWidth.largeMultiplier)
+        #expect(PopoverWidth.standard.points == 384)
     }
 
     @Test("menuBarPacingColorCycleEnabled round-trips")

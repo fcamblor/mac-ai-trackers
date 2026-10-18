@@ -9,9 +9,9 @@ public enum PopoverWidth: String, CaseIterable, Sendable {
     public static let `default`: PopoverWidth = .standard
 
     /// Width the popover cards were designed for.
-    public static let standardPoints: Double = 320
+    public static let standardPoints: Double = 384
     /// Large gives long metric names and side-by-side figures room to breathe.
-    public static let largeMultiplier: Double = 1.5
+    public static let largeMultiplier: Double = 1.25
 
     public var points: Double {
         switch self {

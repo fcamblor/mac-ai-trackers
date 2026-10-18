@@ -45,7 +45,7 @@ struct GeneralSettingsView: View {
                     Text("Large").tag(PopoverWidth.large)
                 }
                 .pickerStyle(.segmented)
-                Text("Large is 1.5× wider — handy for long metric names or many accounts.")
+                Text("Large is \(PopoverWidth.largeMultiplier.formatted())× wider — handy for long metric names or many accounts.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
