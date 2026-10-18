@@ -1,0 +1,23 @@
+{
+  "plan_type": "pro",
+  "rate_limit": {
+    "allowed": false,
+    "limit_reached": true,
+    "primary_window": {
+      "used_percent": 100,
+      "limit_window_seconds": 18000,
+      "reset_after_seconds": 900,
+      "reset_at": 1789000900
+    },
+    "secondary_window": null
+  },
+  "additional_rate_limits": [
+    {
+      "limit_name": "Broken",
+      "rate_limit": "not-an-object"
+    }
+  ],
+  "rate_limit_reached_type": {
+    "type": "rate_limit_reached"
+  }
+}

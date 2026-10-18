@@ -1,0 +1,42 @@
+{
+  "plan_type": "prolite",
+  "rate_limit": {
+    "allowed": true,
+    "limit_reached": false,
+    "primary_window": {
+      "used_percent": 56,
+      "limit_window_seconds": 604800,
+      "reset_after_seconds": 261856,
+      "reset_at": 1790015277
+    },
+    "secondary_window": null
+  },
+  "credits": {
+    "has_credits": true,
+    "unlimited": false,
+    "balance": "260.9493799584",
+    "approx_local_messages": [
+      65,
+      339
+    ],
+    "approx_cloud_messages": [
+      10,
+      65
+    ]
+  },
+  "model_usage": {
+    "gpt-6-astra": {
+      "available": true,
+      "available_at": null,
+      "credits_would_enable": false
+    }
+  },
+  "spend_control": {
+    "reached": false,
+    "individual_limit": null
+  },
+  "rate_limit_reset_credits": {
+    "available_count": 0,
+    "applicable_available_count": 0
+  }
+}

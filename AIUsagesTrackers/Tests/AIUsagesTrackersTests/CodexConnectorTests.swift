@@ -800,29 +800,6 @@ struct CodexConnectorFetchTests {
 // Extension of the serialized suite: the URL mock is shared static state, so
 // these must not run concurrently with the other fetch tests.
 extension CodexConnectorFetchTests {
-    /// Real Pro payload captured while blocked (public fixture, redacted).
-    private static let proBlockedJSON = """
-    {
-      "email": "owner@example.invalid",
-      "plan_type": "pro",
-      "rate_limit": {
-        "allowed": false,
-        "limit_reached": true,
-        "primary_window": {"used_percent": 100, "limit_window_seconds": 604800, "reset_after_seconds": 456976, "reset_at": 1791050824},
-        "secondary_window": null
-      },
-      "code_review_rate_limit": null,
-      "additional_rate_limits": null,
-      "model_usage": {
-        "gpt-6-astra": {"available": false, "available_at": "2026-10-03T18:07:04.513720Z", "credits_would_enable": true}
-      },
-      "credits": {"has_credits": false, "unlimited": false, "overage_limit_reached": false, "balance": "0"},
-      "spend_control": {"reached": false, "individual_limit": null},
-      "rate_limit_reached_type": {"type": "rate_limit_reached", "details": "default"},
-      "promo": null
-    }
-    """
-
     private func fetchSingleEntry(_ json: String) async throws -> VendorUsageEntry {
         let dir = try makeTempDir()
         mockHTTP200(json: json)
@@ -830,9 +807,79 @@ extension CodexConnectorFetchTests {
         return try #require(entries.first)
     }
 
+    /// Fixtures carry no email (identity fields were stripped), so the
+    /// account comes from the credentials, as for a real auth.json login.
+    private func fetchFixtureEntry(_ name: String) async throws -> VendorUsageEntry {
+        let entries = try await fetchFixtureEntries(name)
+        return try #require(entries.first)
+    }
+
+    private func fetchFixtureEntries(_ name: String) async throws -> [VendorUsageEntry] {
+        let dir = try makeTempDir()
+        let json = try #require(String(data: FixtureLoader.load(name), encoding: .utf8))
+        mockHTTP200(json: json)
+        let connector = makeConnector(dir: dir, credentials: validCredentials(accountEmail: "fixture@example.invalid"))
+        return try await connector.fetchUsages()
+    }
+
+    private func metricNames(_ entry: VendorUsageEntry) -> [String] {
+        entry.metrics.compactMap { metric in
+            switch metric {
+            case .timeWindow(let name, _, _, _): name
+            case .payAsYouGo(let name, _, _): name
+            case .unknown: nil
+            }
+        }
+    }
+
+    @Test("fixture prolite + Spark: weekly primary, per-model 5h and weekly limits, reset count")
+    func fixtureProliteSpark() async throws {
+        let entry = try await fetchFixtureEntry("codex-prolite-spark")
+        #expect(metricNames(entry) == ["Weekly (7d)", "GPT-5.3-Codex-Spark (5h)", "GPT-5.3-Codex-Spark Weekly (7d)"])
+        #expect(entry.accountStatus?.plan?.displayName == "Pro Lite")
+        #expect(entry.accountStatus?.block == nil)
+        #expect(entry.accountStatus?.resetCredits == ResetCredits(available: 1, applicable: 0))
+    }
+
+    @Test("fixture prolite with credits: string balance and message ranges")
+    func fixtureProliteCredits() async throws {
+        let entry = try await fetchFixtureEntry("codex-prolite-credits")
+        #expect(metricNames(entry) == ["Weekly (7d)", "Credits balance"])
+        #expect(entry.accountStatus?.credits?.approxLocalMessages == MessageRange(lower: 65, upper: 339))
+        #expect(entry.accountStatus?.credits?.approxCloudMessages == MessageRange(lower: 10, upper: 65))
+        #expect(entry.accountStatus?.unavailableModels.isEmpty == true)
+    }
+
+    @Test("fixture plus with \"12.50\" balance: balance metric emitted")
+    func fixturePlusStringBalance() async throws {
+        let entry = try await fetchFixtureEntry("codex-plus-string-balance")
+        let balance = entry.metrics.compactMap { metric -> Double? in
+            if case let .payAsYouGo(_, amount, _) = metric { return amount }
+            return nil
+        }
+        #expect(balance == [12.5])
+        #expect(metricNames(entry).prefix(2) == ["Session (5h)", "Weekly (7d)"])
+    }
+
+    @Test("fixture blocked Pro with a malformed extra limit: block kept, bad limit skipped")
+    func fixtureLimitReachedMalformedExtra() async throws {
+        let entry = try await fetchFixtureEntry("codex-pro-limit-reached-malformed-extra")
+        #expect(metricNames(entry) == ["Session (5h)"])
+        #expect(entry.accountStatus?.block == AccountBlock(
+            reason: .rateLimit,
+            resumesAt: ISODate(date: Date(timeIntervalSince1970: 1789000900))
+        ))
+    }
+
+    @Test("fixture API-key account without rate_limit → parse_error, no crash")
+    func fixtureApiKeyNoRateLimit() async throws {
+        let entries = try await fetchFixtureEntries("codex-api-key-no-rate-limit")
+        #expect(entries.first?.lastError?.type == "parse_error")
+    }
+
     @Test("Pro blocked payload: weekly label on primary window, block, unavailable model")
     func proBlocked() async throws {
-        let entry = try await fetchSingleEntry(Self.proBlockedJSON)
+        let entry = try await fetchFixtureEntry("codex-pro-blocked")
 
         guard case let .timeWindow(name, _, duration, percent) = entry.metrics.first else {
             Issue.record("Expected a time window metric"); return
