@@ -54,6 +54,18 @@ struct UpdatesSettingsView: View {
                 }
             }
 
+            Section("What's new") {
+                HStack {
+                    Text("Highlights of what changed in recent releases.")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Show What's New…") {
+                        AppDelegate.sharedShowWhatsNew?()
+                    }
+                    .disabled(AppDelegate.sharedShowWhatsNew == nil)
+                }
+            }
+
             Section("Automatic updates") {
                 Toggle("Check for updates automatically", isOn: Binding(
                     get: { prefs.updatesAutoCheckEnabled },

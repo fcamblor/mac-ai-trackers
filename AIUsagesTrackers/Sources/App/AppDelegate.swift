@@ -69,6 +69,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// been downloaded/extracted (manual) or installed by Homebrew.
     static var sharedTriggerRestart: (() -> Void)?
 
+    /// Lets the Updates settings tab reopen the "What's new" window.
+    static var sharedShowWhatsNew: (() -> Void)?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
 
@@ -227,6 +230,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupStatusItem(store: store, refreshState: refreshState, historyReader: historyReader)
         trackStoreChanges(store: store)
         setupUpdateScheduler()
+        Self.sharedShowWhatsNew = { [weak self] in self?.presentWhatsNew() }
         presentUpgradeChangelogIfPending()
 
         Task {
@@ -491,8 +495,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Upgrade changelog
 
     private func presentUpgradeChangelogIfPending() {
-        guard upgradeChangelogWindow == nil,
-              let version = StorageSchemaMigration.pendingChangelog() else { return }
+        guard let version = StorageSchemaMigration.pendingChangelog() else { return }
+        presentWhatsNew(version: version)
+    }
+
+    /// Opens the "What's new" window on `version` (newest when nil), or brings
+    /// the already-open one to front.
+    func presentWhatsNew(version: String? = nil) {
+        if let existing = upgradeChangelogWindow {
+            NSApp.activate(ignoringOtherApps: true)
+            existing.makeKeyAndOrderFront(nil)
+            return
+        }
         let window = NSWindow(
             contentRect: .zero,
             styleMask: [.titled, .closable],
@@ -502,7 +516,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.title = "What's new"
         window.isReleasedWhenClosed = false
         let hosting = NSHostingController(rootView: UpgradeChangelogView(
-            version: version,
+            initialVersion: version,
             onOpenAssistantsSettings: { [weak self] in
                 self?.upgradeChangelogWindow?.close()
                 self?.openSettings(targetTab: .codingAssistants)
