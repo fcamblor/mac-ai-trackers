@@ -121,6 +121,53 @@ struct UsagesFileManagerTests {
         #expect(merged.usages.count == 2)
     }
 
+    @Test("merge collapses pre-existing duplicate keys, keeping the freshest entry")
+    func mergeCollapsesExistingDuplicates() async {
+        let dir = makeTempDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let mgr = makeManager(dir: dir)
+        let stale = VendorUsageEntry(vendor: "claude-tui", account: "a@b.com",
+                                     lastAcquiredOn: "2026-10-18T12:59:11Z")
+        let fresh = VendorUsageEntry(vendor: "claude-tui", account: "a@b.com",
+                                     lastAcquiredOn: "2026-10-18T18:38:18Z")
+        let other = VendorUsageEntry(vendor: "codex", account: "a@b.com")
+
+        for order in [[fresh, other, stale], [stale, other, fresh]] {
+            let merged = await mgr.merge(existing: UsagesFile(usages: order), incoming: [])
+            #expect(merged.usages.count == 2)
+            #expect(merged.usages.first(where: { $0.vendor == "claude-tui" })?.lastAcquiredOn == fresh.lastAcquiredOn)
+        }
+    }
+
+    @Test("update heals a file holding duplicate entries for the same key")
+    func updateHealsDuplicateEntriesInFile() async throws {
+        let dir = makeTempDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let mgr = makeManager(dir: dir)
+        let duplicated = UsagesFile(usages: [
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", lastAcquiredOn: "2026-10-18T12:59:11Z"),
+            VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", lastAcquiredOn: "2026-10-18T18:38:18Z"),
+        ])
+        try JSONEncoder().encode(duplicated).write(to: URL(fileURLWithPath: mgr.filePath), options: .atomic)
+
+        let incoming = VendorUsageEntry(vendor: "claude-tui", account: "a@b.com", isActive: true,
+                                        lastAcquiredOn: "2026-10-18T18:42:48Z")
+        await mgr.update(with: [incoming])
+
+        let result = await mgr.read()
+        #expect(result.usages.count == 1)
+        #expect(result.usages.first?.lastAcquiredOn == incoming.lastAcquiredOn)
+    }
+
+    @Test("isFresher ranks missing dates oldest and lets ties go to the candidate")
+    func isFresherOrdering() {
+        let dated = VendorUsageEntry(vendor: "codex", account: "a@b.com", lastAcquiredOn: "2026-10-18T12:00:00Z")
+        let undated = VendorUsageEntry(vendor: "codex", account: "a@b.com")
+        #expect(UsagesFileManager.isFresher(dated, than: undated))
+        #expect(!UsagesFileManager.isFresher(undated, than: dated))
+        #expect(UsagesFileManager.isFresher(dated, than: dated))
+    }
+
     // MARK: - lastError cleanup on success
 
     @Test("merge clears lastError when same account fetch succeeds")

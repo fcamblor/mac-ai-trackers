@@ -156,12 +156,25 @@ public actor UsagesFileManager {
                 .filter { !Self.isAccountUnknownPlaceholder($0) }
                 .map(\.vendor)
         )
-        var usages = existing.usages.filter { entry in
+        let kept = existing.usages.filter { entry in
             !(vendorsWithResolvedAccounts.contains(entry.vendor) && Self.isAccountUnknownPlaceholder(entry))
         }
+        // The file may already hold several entries for one vendor|account key: 0.8.0's
+        // `claude` → `claude-tui` decode rename collided with entries a 0.8 build had
+        // already written under `claude-tui`. Without collapsing them, only the last one
+        // is ever updated and the stale twin lingers forever (duplicate source chip).
+        var usages: [VendorUsageEntry] = []
         var indexByKey: [String: Int] = [:]
-        for (i, entry) in usages.enumerated() {
-            indexByKey["\(entry.vendor.rawValue)|\(entry.account.rawValue)"] = i
+        for entry in kept {
+            let key = "\(entry.vendor.rawValue)|\(entry.account.rawValue)"
+            if let idx = indexByKey[key] {
+                if Self.isFresher(entry, than: usages[idx]) {
+                    usages[idx] = entry
+                }
+            } else {
+                indexByKey[key] = usages.count
+                usages.append(entry)
+            }
         }
         for entry in incoming {
             guard !Self.isAccountUnknownPlaceholder(entry) else {
@@ -196,6 +209,14 @@ public actor UsagesFileManager {
         }
 
         return UsagesFile(usages: usages, outages: existing.outages)
+    }
+
+    /// Unparseable or missing acquisition dates rank oldest; ties keep the later
+    /// entry, matching the pre-dedup behaviour where the last duplicate won.
+    static func isFresher(_ candidate: VendorUsageEntry, than current: VendorUsageEntry) -> Bool {
+        let candidateDate = candidate.lastAcquiredOn?.date ?? .distantPast
+        let currentDate = current.lastAcquiredOn?.date ?? .distantPast
+        return candidateDate >= currentDate
     }
 
     private static func isAccountUnknownPlaceholder(_ entry: VendorUsageEntry) -> Bool {
