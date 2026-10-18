@@ -15,10 +15,18 @@ _verified: 2026-05-07_
 | Method | URL | Headers | Timeout | Response Content-Type |
 |--------|-----|---------|---------|-----------------------|
 | GET    | `https://api.anthropic.com/api/oauth/usage` | `Authorization: Bearer <oauth>`, `anthropic-beta: oauth-2025-04-20` | 5s | `application/json` |
+| GET    | `https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1` | same | 5s | `application/json` |
 | GET    | `https://api.anthropic.com/v1/organizations/cost_report` | `x-api-key: <admin_key>`, `anthropic-version: 2023-06-01` | unimplemented | `application/json` |
 
 The `anthropic-beta` value matches the rollout date documented when the
 OAuth-app usage endpoint was made available.
+
+The first request supplies usage windows on every poll. The second reads
+`cedar_ember` grant metadata at most once per hour per account; Claude Code
+and Claude Desktop share that cadence and the last successful result. A
+failed grant lookup keeps the previous result and is not retried until the
+hourly interval elapses. Both requests are GETs using the existing bearer;
+the tracker never refreshes or writes vendor tokens.
 
 The organization cost endpoint is documented by Anthropic's Admin API but
 is not implemented by this tracker. It requires an Admin API key
@@ -193,6 +201,32 @@ _verified: 2026-05-20_
 | `.timeWindow("Weekly Opus")` | `seven_day_opus.*` | weekly | percent | additive — absent → metric omitted |
 | `.payAsYouGo("Extra usage spent")` | `extra_usage.used_credits` / `extra_usage.currency` | n/a | currency amount | emitted only when `extra_usage.is_enabled == true` and `used_credits` is numeric; API reports cents, tracker stores dollars |
 
+### Account status
+
+_verified: 2026-10-18_
+
+Mapped onto the entry's `accountStatus`, shared with Claude Desktop:
+
+| `accountStatus` field | Source | Notes |
+|-----------------------|--------|-------|
+| `resetCredits` | `cedar_ember.grants[]` from the hourly `?cedar_ember=1&skip_spend=1` request | per grant: `type` (`full` / session), `resets_left`, `ends_at` (expiry), `usable_now && !paused`, `label`; no grants → omitted. The key is a codename and may change |
+| `plan` | `claudeAiOauth.subscriptionType` + `claudeAiOauth.rateLimitTier` (Keychain entry already read for the token), falling back to `cedar_ember.event_props.tier` from the hourly request | `max` + `…_20x` / `…_5x` tier → `max_20x` / `max_5x`; `team` + a Max tier (`default_claude_max_5x`, observed on a confirmed Team Premium seat) → `team_premium`, `team` + `default_raven` (observed on a confirmed Team Standard seat) or `default_claude_team` → `team_standard`; any other Team tier stays `team`. `oauth/profile` names the seat explicitly (`organization.seat_tier`: `team_standard`, `team_tier_1` for Premium) but is not called, to avoid an extra request per tick |
+
+**Limit-reset grants are not exposed to OAuth tokens.** With a Claude Code
+OAuth bearer, `cedar_ember` comes back with `"eligible": false,
+"ineligible_reason": "surface"` and an empty `grants` list, even for an
+account that has an active grant on claude.ai. Neither a `surface` query
+parameter nor an `anthropic-client-platform` header changes it: the surface
+is derived from the credential. The grants (with `ends_at`) are only
+returned by `https://claude.ai/api/organizations/{org}/usage?cedar_ember=1`,
+which authenticates with the claude.ai session cookie. Reading that cookie
+(e.g. from a Claude Desktop profile) was deliberately not pursued — a
+session cookie grants full account access, far beyond the usage-scoped
+OAuth token. The connector still sends `cedar_ember=1` so grants appear
+automatically should Anthropic open them to OAuth surfaces. This metadata
+lookup is limited to one request per hour per account; ordinary usage windows
+continue to be polled each tick.
+
 Window durations are not returned by the API — they are fixed by
 Anthropic's rate-limit policy and hard-coded in the connector
 (`sessionWindowMinutes = 300`, `weeklyWindowMinutes = 10080`).
@@ -257,7 +291,11 @@ incident `shortlink` becomes the clickable href in the UI.
   to Pro plus a populated Opus block. Pending tester verification.
 - Free plan shape — assumed Pro-shaped with reduced quotas. Pending
   tester verification.
-- Enterprise / Team plans — completely unverified. Behavior unknown.
+- Enterprise / Team plans — usage shape unverified. A Team Premium seat
+  reports `subscriptionType: team` + `rateLimitTier: default_claude_max_5x`
+  (`organization.seat_tier: team_tier_1` in `oauth/profile`); a Team
+  Standard seat reports `rateLimitTier: default_raven`
+  (`seat_tier: team_standard`).
 - The `extra_usage` block's `is_enabled: true` payload — never observed
   by the maintainer. Pending tester verification.
 
@@ -287,3 +325,8 @@ incident `shortlink` becomes the clickable href in the UI.
   Stale-token failure mode that motivated the change.
 - 2026-05-20 — document standard API-key auth limitation and parse
   `extra_usage` as a pay-as-you-go metric.
+- 2026-10-18 — read limit-reset grants through a separate hourly
+  `?cedar_ember=1&skip_spend=1` request and map them, plus the plan, onto
+  `accountStatus`; ordinary usage polling no longer requests this metadata.
+  Documented that OAuth surfaces are ineligible for the grants
+  (`ineligible_reason: surface`).

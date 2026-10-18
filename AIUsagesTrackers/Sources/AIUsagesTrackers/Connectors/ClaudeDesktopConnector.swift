@@ -23,6 +23,7 @@ public actor ClaudeDesktopConnector: UsageConnector {
     private let isEnabled: @Sendable () -> Bool
     private let clock: @Sendable () -> Date
     private let parser = ClaudeUsageResponseParser()
+    private let resetGrantsClient: ClaudeResetGrantsClient
 
     /// Preserves per-account metrics across auth failures (keyed by resolved
     /// account identity) so an expired token does not wipe still-valid numbers —
@@ -51,6 +52,7 @@ public actor ClaudeDesktopConnector: UsageConnector {
         self.processInspector = processInspector ?? PSClaudeDesktopProcessInspector(logger: logger)
         self.isEnabled = isEnabled
         self.clock = clock
+        self.resetGrantsClient = ClaudeResetGrantsClient(session: session, logger: logger)
     }
 
     // MARK: - UsageConnector
@@ -121,13 +123,10 @@ public actor ClaudeDesktopConnector: UsageConnector {
             return errorEntry(account: account, type: "token_expired", isActive: isActive, preservedMetrics: preserved)
         }
 
-        guard let url = URL(string: "https://api.anthropic.com/api/oauth/usage") else {
-            return errorEntry(account: account, type: "api_error", isActive: isActive, preservedMetrics: preserved)
-        }
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: ClaudeUsageResponseParser.usageURL)
         request.setValue("Bearer \(credential.accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
-        request.timeoutInterval = 5
+        request.timeoutInterval = ClaudeUsageResponseParser.requestTimeoutSeconds
 
         let data: Data
         let response: URLResponse
@@ -153,7 +152,13 @@ public actor ClaudeDesktopConnector: UsageConnector {
         }
 
         do {
-            let metrics = try parser.parseMetrics(data)
+            let snapshot = try parser.parse(data)
+            let resetGrants = await resetGrantsClient.snapshotIfDue(
+                account: account,
+                token: credential.accessToken,
+                now: clock()
+            )
+            let metrics = parser.metrics(from: snapshot)
             lastKnownMetricsByAccount[account.rawValue] = metrics
             return VendorUsageEntry(
                 vendor: vendor,
@@ -161,7 +166,13 @@ public actor ClaudeDesktopConnector: UsageConnector {
                 isActive: isActive,
                 lastAcquiredOn: ISODate(date: clock()),
                 lastError: nil,
-                metrics: metrics
+                metrics: metrics,
+                accountStatus: parser.accountStatus(
+                    from: snapshot,
+                    subscriptionType: credential.subscriptionType,
+                    rateLimitTier: nil,
+                    resetGrants: resetGrants
+                )
             )
         } catch {
             logger.log(.error, "Response parse failed for '\(credential.accountLabel)': \(error)")

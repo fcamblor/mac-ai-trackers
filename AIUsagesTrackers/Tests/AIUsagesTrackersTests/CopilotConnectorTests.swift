@@ -179,7 +179,7 @@ struct CopilotConnectorFetchTests {
         #expect(percent2.rawValue == 5)
     }
 
-    @Test("Pro plan: unlimited:true with percent_remaining still produces a metric (regression — openusage parity)")
+    @Test("Pro soft allowance keeps Premium while unlimited Chat is omitted")
     func proPlanUnlimitedTrueStillProducesMetric() async throws {
         let dir = try makeTempDir()
         let connector = makeConnector(dir: dir)
@@ -200,22 +200,17 @@ struct CopilotConnectorFetchTests {
 
         let entries = try await connector.fetchUsages()
         let entry = try #require(entries.first)
-        #expect(entry.metrics.count == 2)
+        #expect(entry.lastError == nil)
+        #expect(entry.metrics.count == 1)
 
-        guard case let .timeWindow(name1, _, _, percent1) = entry.metrics[0] else {
-            Issue.record("Expected timeWindow metric, got \(entry.metrics[0])")
+        let metric = try #require(entry.metrics.first)
+        guard case let .timeWindow(name1, _, _, percent1) = metric else {
+            Issue.record("Expected timeWindow metric, got \(metric)")
             return
         }
         #expect(name1 == "Premium")
         // 100 - 99.67 = 0.33 → rounds to 0
         #expect(percent1.rawValue == 0)
-
-        guard case let .timeWindow(name2, _, _, percent2) = entry.metrics[1] else {
-            Issue.record("Expected timeWindow metric, got \(entry.metrics[1])")
-            return
-        }
-        #expect(name2 == "Chat")
-        #expect(percent2.rawValue == 0)
     }
 
     @Test("Pro plan: integer percent_remaining (no decimal) still produces a metric")
@@ -533,5 +528,56 @@ struct CopilotConnectorFetchTests {
             return
         }
         #expect(percent.rawValue == 47)
+    }
+
+    @Test("plan comes from access_type_sku, falling back to copilot_plan")
+    func planFromPayload() async throws {
+        let dir = try makeTempDir()
+        let connector = makeConnector(dir: dir)
+        mockHTTP(status: 200, json: """
+        {
+          "copilot_plan": "individual",
+          "access_type_sku": "free_limited_copilot",
+          "quota_reset_date": "2026-06-01",
+          "quota_snapshots": {"chat": {"percent_remaining": 95, "unlimited": false}}
+        }
+        """)
+        let entry = try #require(try await connector.fetchUsages().first)
+        #expect(entry.accountStatus?.plan == "free_limited_copilot")
+        #expect(entry.accountStatus?.plan?.displayName == "Free")
+        #expect(CopilotConnector.plan(from: ["copilot_plan": "business"]) == "business")
+        #expect(CopilotConnector.plan(from: [:]) == nil)
+    }
+}
+
+extension CopilotConnectorFetchTests {
+    @Test("org billing placeholders never become a personal percent", arguments: [0, -1])
+    func orgPlaceholder(entitlement: Int) async throws {
+        mockHTTP(status: 200, json: """
+        {"token_based_billing":true,"quota_snapshots":{"premium_interactions":{
+          "unlimited":true,"entitlement":\(entitlement),"remaining":\(entitlement),
+          "percent_remaining":100,"credits_used":0}}}
+        """)
+        let entries = try await makeConnector(dir: try makeTempDir()).fetchUsages()
+        let entry = try #require(entries.first)
+        #expect(entry.lastError == nil)
+        #expect(entry.metrics == [.payAsYouGo(name: "Credits", currentAmount: 0, currency: "credits")])
+    }
+
+    @Test("remaining counts retain the stable Premium meter and explicit zero overage")
+    func remainingCountsAndOverage() async throws {
+        mockHTTP(status: 200, json: """
+        {"quota_reset_date":"2026-11-01","quota_snapshots":{
+          "premium_interactions":{"entitlement":300,"remaining":240,"unlimited":true,
+            "overage_permitted":true,"overage_count":0},
+          "chat":{"unlimited":true,"entitlement":-1,"remaining":-1}}}
+        """)
+        let entries = try await makeConnector(dir: try makeTempDir()).fetchUsages()
+        let entry = try #require(entries.first)
+        #expect(entry.lastError == nil)
+        #expect(entry.metrics == [
+            .timeWindow(name: "Premium", resetAt: "2026-11-01T00:00:00Z", windowDuration: 43200, usagePercent: 20),
+            .payAsYouGo(name: "Extra Usage", currentAmount: 0, currency: "interactions")
+        ])
     }
 }

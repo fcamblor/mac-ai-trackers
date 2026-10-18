@@ -152,6 +152,7 @@ public enum MenuBarChipResolver {
                 resetAt: resetAt,
                 windowDuration: windowDuration,
                 usagePercent: usagePercent,
+                block: entry.accountStatus?.block,
                 now: now
             )
             return ResolvedChipSegment(config: segmentConfig, rendered: segment, issue: nil)
@@ -180,6 +181,7 @@ public enum MenuBarChipResolver {
         resetAt: ISODate?,
         windowDuration: DurationMinutes,
         usagePercent: UsagePercent,
+        block: AccountBlock?,
         now: Date
     ) -> MenuBarSegment? {
         // Single source of truth shared with TimeWindowMetricRow — see
@@ -195,7 +197,12 @@ public enum MenuBarChipResolver {
         if display.showLetter, !display.letter.isEmpty {
             parts.append(display.letter)
         }
-        if state.isUnknown {
+        if let blockedText = blockedText(block: block, resetAt: resetAt, usagePercent: usagePercent, now: now),
+           display.showPercent || display.showReset {
+            // While blocked, "100% 2h13m" makes the user compute the resume
+            // time; the resume clock is the only figure that matters.
+            parts.append(blockedText)
+        } else if state.isUnknown {
             // Both percent and remaining would otherwise be "???" — collapse
             // them into a single placeholder when at least one is shown, to
             // avoid the awkward "S ??? ???" double placeholder.
@@ -228,6 +235,28 @@ public enum MenuBarChipResolver {
         }
 
         return MenuBarSegment(text: text, tier: tier)
+    }
+
+    /// Pause glyph shown in place of the usage figures while requests are refused.
+    static let blockedGlyph = "⏸"
+    private static let exhaustedPercent = UsagePercent(rawValue: 100)
+
+    /// Non-nil when this segment's window is the reason the account is blocked.
+    /// An admin spending cap blocks every window; a rate limit only blocks the
+    /// windows it exhausted, so the other segments keep their usual figures.
+    private static func blockedText(
+        block: AccountBlock?,
+        resetAt: ISODate?,
+        usagePercent: UsagePercent,
+        now: Date
+    ) -> String? {
+        guard let block else { return nil }
+        if block.reason == .spendControl { return blockedGlyph }
+        guard block.reason == .rateLimit, usagePercent >= exhaustedPercent else { return nil }
+        guard let resume = block.resumesAt ?? resetAt, let resumeDate = resume.date, resumeDate > now else {
+            return blockedGlyph
+        }
+        return "\(blockedGlyph) \(formatResumeTime(resume, now: now))"
     }
 
     private static func formatUsagePercent(_ usagePercent: UsagePercent, mode: UsagePercentDisplayMode) -> String {

@@ -15,6 +15,13 @@ _verified: 2026-05-07_
 | Method | URL | Headers | Timeout | Response Content-Type |
 |--------|-----|---------|---------|-----------------------|
 | GET    | `https://chatgpt.com/backend-api/wham/usage` | `Authorization: Bearer <oauth>`, `ChatGPT-Account-Id: <account_id>`, `User-Agent: OpenUsage` | 5s | `application/json` |
+| GET    | `https://chatgpt.com/backend-api/wham/rate-limit-reset-credits` | same | 5s | `application/json` |
+
+The reset-credits endpoint is called only when `wham/usage` reports
+`rate_limit_reset_credits.available_count > 0`. It lists
+`credits[] { status, expires_at, title, reset_type }`; `available` entries
+become `accountStatus.resetCredits.grants` (with expiry). Any failure keeps
+the counts from `wham/usage` and never fails the tick.
 
 The `User-Agent: OpenUsage` value reproduces the header used by the
 upstream `openusage` reverse-engineering effort and avoids bot filtering.
@@ -117,10 +124,14 @@ _verified: 2026-05-07_
 }
 ```
 
-### Pro plan (assumed, not yet verified by tester)
+### Pro / Pro Lite plans (observed in public fixtures, not yet verified by tester)
 
-Same shape as Plus. Tighter `limit_window_seconds` on `primary_window`
-likely; `code_review_rate_limit` may be populated.
+`primary_window` carries the **weekly** window (`limit_window_seconds:
+604800`) and `secondary_window` is `null`. The connector therefore labels
+each window from its duration, never from its slot. A blocked account
+reports `rate_limit.allowed: false`, `limit_reached: true` and
+`rate_limit_reached_type: {"type": "rate_limit_reached", "details": …}`
+(an object, not a string).
 
 ### Spark / Team / Enterprise plans (assumed, not yet verified by tester)
 
@@ -131,11 +142,12 @@ quotas: `[{"limit_name": "<model>", "rate_limit": {"primary_window": ...,
 
 ### Pay-as-you-go credits (assumed, not yet verified by tester)
 
-`credits.has_credits: true` with `balance` as a numeric remaining
-allowance. Connector subtracts from a hard-coded pool size
-(`creditPoolTotal = 1000`) to emit a `.payAsYouGo("Credits used", ...)`
-metric. Header fallback `x-codex-credits-balance` is consumed when the
-body block is absent.
+`credits.has_credits: true` with `balance` as a **decimal string**
+(`"260.9493799584"`) holding the remaining allowance, plus
+`approx_local_messages` / `approx_cloud_messages` as `[min, max]` message
+estimates. The connector emits the balance as-is in a
+`.payAsYouGo("Credits balance", ...)` metric. Header fallback
+`x-codex-credits-balance` is consumed when the body block is absent.
 
 ## Metric semantics
 
@@ -143,12 +155,26 @@ _verified: 2026-05-07_
 
 | Swift metric | Source field | Reset cadence | Unit | Edge cases |
 |--------------|--------------|---------------|------|------------|
-| `.timeWindow("Session (5h)")` | `rate_limit.primary_window.used_percent` / `reset_at` | rolling, duration from `limit_window_seconds` (fallback 300 minutes) | percent | missing `used_percent` → metric omitted |
-| `.timeWindow("Weekly (7d)")` | `rate_limit.secondary_window.*` | rolling, duration from `limit_window_seconds` (fallback 10080 minutes) | percent | same |
+| `.timeWindow("Session (5h)" / "Weekly (7d)")` | `rate_limit.primary_window.used_percent` / `reset_at` | rolling, duration from `limit_window_seconds` (fallback 300 minutes) | percent | name follows the duration (Pro puts the weekly window here); missing `used_percent` → metric omitted |
+| `.timeWindow("Weekly (7d)" / …)` | `rate_limit.secondary_window.*` | rolling, duration from `limit_window_seconds` (fallback 10080 minutes) | percent | same |
 | `.timeWindow("Code Review (7d)")` | `code_review_rate_limit.primary_window.*` | weekly | percent | absent block → metric omitted |
 | `.timeWindow("<limit_name> (5h)")` | `additional_rate_limits[i].rate_limit.primary_window.*` | rolling | percent | one per `limit_name` |
 | `.timeWindow("<limit_name> Weekly (7d)")` | `additional_rate_limits[i].rate_limit.secondary_window.*` | weekly | percent | one per `limit_name` |
-| `.payAsYouGo("Credits used", ..., currency: "credits")` | `credits.balance` (body) → `x-codex-credits-balance` (header) | n/a | credits | `has_credits: false` → metric omitted; balance clamped to ≥ 0 |
+| `.payAsYouGo("Credits balance", ..., currency: "credits")` | `credits.balance` (body, string or number) → `x-codex-credits-balance` (header) | n/a | credits remaining | `has_credits: false` → metric omitted; negative balance → omitted |
+
+Account-level fields are mapped onto the entry's `accountStatus` rather
+than metrics:
+
+| `accountStatus` field | Source field | Notes |
+|-----------------------|--------------|-------|
+| `plan` | `plan_type` | slug kept raw; display name mapped in the model |
+| `block` (`spend_control`) | `spend_control.reached: true` | no resume date — only an admin lifts it; takes precedence over a rate limit |
+| `block` (`rate_limit`) | `rate_limit.limit_reached: true` or `allowed: false` | resumes at the latest `reset_at` among windows at 100 % |
+| `unavailableModels` | `model_usage.<slug>` with `available: false` | `available_at` is ISO 8601 with fractional seconds; available models are dropped |
+| `resetCredits` | `rate_limit_reset_credits.available_count` / `applicable_available_count` | |
+| `credits` | `credits.unlimited`, `overage_limit_reached`, `approx_*_messages` | omitted when nothing but zeroed ranges is reported |
+
+`promo` and `spend_control.individual_limit` are not mapped.
 
 Window durations are returned in seconds via `limit_window_seconds`; the
 connector divides by 60 and falls back to fixed values when the field is
@@ -275,3 +301,6 @@ stays silent until the parser succeeds.
   off the Next.js RSC payload of `https://status.openai.com/` with a
   24h lazy cadence; the Status preferences tab manages subscriptions
   and exposes a manual "Refresh now" button.
+- 2026-10-18 — account status (plan, block, unavailable models, resets with
+  expiry, credits); window names follow the window duration; credit balance
+  parsed from its string form.

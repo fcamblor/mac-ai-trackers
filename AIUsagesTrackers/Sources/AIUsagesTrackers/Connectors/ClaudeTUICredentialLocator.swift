@@ -4,9 +4,17 @@ import Foundation
 /// token resolved from the macOS Keychain entry written by the `claude` CLI.
 public struct ClaudeCredentials: Sendable, Equatable {
     public let accessToken: String
+    /// `claudeAiOauth.subscriptionType` (`pro`, `max`, `team`, `enterprise`…),
+    /// read from the same entry as the token — no extra Keychain access.
+    public let subscriptionType: String?
+    /// `claudeAiOauth.rateLimitTier` (`default_claude_max_20x`…), which carries
+    /// the Max multiplier the subscription type alone does not.
+    public let rateLimitTier: String?
 
-    public init(accessToken: String) {
+    public init(accessToken: String, subscriptionType: String? = nil, rateLimitTier: String? = nil) {
         self.accessToken = accessToken
+        self.subscriptionType = subscriptionType
+        self.rateLimitTier = rateLimitTier
     }
 }
 
@@ -121,9 +129,9 @@ public actor ClaudeTUICredentialLocator: CredentialLocator {
     private func locate(overrideAccount: String?, allowResetRetry: Bool) async throws -> ClaudeCredentials {
         let effectiveAccount = try await resolveEffectiveAccount(explicit: overrideAccount)
 
-        let token: String
+        let credentials: ClaudeCredentials
         do {
-            token = try await readToken(account: effectiveAccount)
+            credentials = try await readToken(account: effectiveAccount)
         } catch let error as ClaudeAuthError {
             // A pinned account that no longer resolves to a `claudeAiOauth`
             // entry is the recoverable "logout + re-login moved the MCP entry
@@ -137,7 +145,7 @@ public actor ClaudeTUICredentialLocator: CredentialLocator {
             throw error
         }
 
-        return ClaudeCredentials(accessToken: token)
+        return credentials
     }
 
     /// When an `accountOverride` is provided, we use it as-is. Otherwise we
@@ -226,7 +234,7 @@ public actor ClaudeTUICredentialLocator: CredentialLocator {
         return first + masked + last
     }
 
-    private func readToken(account: String?) async throws -> String {
+    private func readToken(account: String?) async throws -> ClaudeCredentials {
         let serviceName = keychainServiceName
         let timeoutSecs = Self.keychainTimeoutSeconds
 
@@ -292,7 +300,11 @@ public actor ClaudeTUICredentialLocator: CredentialLocator {
             }
         }
 
-        return token
+        return ClaudeCredentials(
+            accessToken: token,
+            subscriptionType: oauth["subscriptionType"] as? String,
+            rateLimitTier: oauth["rateLimitTier"] as? String
+        )
     }
 
     /// Errors that indicate the pinned `kSecAttrAccount` now points at an

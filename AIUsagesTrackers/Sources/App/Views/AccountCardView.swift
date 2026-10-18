@@ -30,6 +30,8 @@ struct AccountCardView: View {
 
                 Spacer()
 
+                AccountStatusHeaderAccessories(status: entry.accountStatus)
+
                 if entry.isActive {
                     ActiveCapsule()
                 }
@@ -77,6 +79,8 @@ struct AccountGroupCardView: View {
                 }
 
                 Spacer()
+
+                AccountStatusHeaderAccessories(status: group.accountStatus)
 
                 // Same top-right "active" capsule as every other vendor card, so
                 // the account-level active state reads consistently; the chips
@@ -187,11 +191,43 @@ private extension View {
 struct EntryBodyView: View {
     let entry: VendorUsageEntry
     var onOpenAssistantsSettings: (() -> Void)? = nil
+    /// Injectable for previews/tests; production reads the shared preference
+    /// so toggling a row in Settings updates the open popover live.
+    var visibility: PopoverMetricVisibility? = nil
+
+    private var effectiveVisibility: PopoverMetricVisibility {
+        visibility ?? AppDelegate.sharedPreferences.popoverMetricVisibility
+    }
+
+    private func isHidden(_ rowName: String) -> Bool {
+        effectiveVisibility.isHidden(rowName, vendor: entry.vendor)
+    }
+
+    private var visibleMetrics: [UsageMetric] {
+        entry.metrics.filter { metric in
+            switch metric {
+            case .timeWindow(let name, _, _, _), .payAsYouGo(let name, _, _): !isHidden(name)
+            case .unknown: true
+            }
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(entry.metrics.enumerated()), id: \.offset) { _, metric in
+            // The block outranks everything else on the card: it is the one
+            // state where the gauges below stop answering "can I use it now?".
+            if let block = entry.accountStatus?.block {
+                AccountBlockBanner(block: block, resetCredits: entry.accountStatus?.resetCredits)
+            }
+            ForEach(Array(visibleMetrics.enumerated()), id: \.offset) { _, metric in
                 metricRow(for: metric)
+            }
+            if let credits = entry.accountStatus?.credits, !isHidden(PopoverStatusRow.messagesLeft) {
+                CreditsSummaryRow(credits: credits)
+            }
+            if let models = entry.accountStatus?.unavailableModels, !models.isEmpty,
+               !isHidden(PopoverStatusRow.unavailableModels) {
+                UnavailableModelsRow(models: models)
             }
             if let lastError = entry.lastError {
                 errorRow(for: lastError)

@@ -71,11 +71,29 @@ public func formatResetDate(_ resetAt: ISODate, now: Date) -> String {
     return ResetDateFormatting.dateTimeFormatter.string(from: resetDate)
 }
 
+/// Compact resume time for space-constrained surfaces (menu bar):
+/// - same day → "HH:mm"
+/// - otherwise → "MMM d HH:mm"
+/// Returns "--" when `resumeAt` cannot be parsed.
+public func formatResumeTime(_ resumeAt: ISODate, now: Date) -> String {
+    guard let date = resumeAt.date else { return "--" }
+    if Calendar.current.isDate(date, inSameDayAs: now) {
+        return ResetDateFormatting.timeFormatter.string(from: date)
+    }
+    return ResetDateFormatting.compactDateTimeFormatter.string(from: date)
+}
+
 // Singletons are safe: only called from @MainActor SwiftUI views
 private enum ResetDateFormatting {
     static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
+        return f
+    }()
+
+    static let compactDateTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d HH:mm"
         return f
     }()
 
@@ -213,6 +231,21 @@ public struct AccountDisplayGroup: Identifiable, Equatable, Sendable {
     /// state breaking ties so stale credentials cannot hide live data.
     public var representativeMember: VendorUsageEntry? {
         members.representativeEntry()
+    }
+
+    /// The representative member's status, with the plan taken from the
+    /// canonical (TUI) source when it has one: Claude Desktop's token cache
+    /// lacks the rate-limit tier, so it can only say "team" where the TUI
+    /// knows "team_premium".
+    public var accountStatus: AccountStatus? {
+        let representative = representativeMember?.accountStatus
+        guard let canonical = members.first?.vendor.familyCanonicalVendor,
+              let canonicalPlan = members.first(where: { $0.vendor == canonical })?.accountStatus?.plan else {
+            return representative
+        }
+        var status = representative ?? AccountStatus()
+        status.plan = canonicalPlan
+        return status
     }
 }
 
