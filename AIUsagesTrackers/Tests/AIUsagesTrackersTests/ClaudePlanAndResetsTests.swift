@@ -83,9 +83,9 @@ struct ClaudePlanAndResetsTests {
         #expect(parser.accountStatus(from: snapshot, subscriptionType: "pro", rateLimitTier: nil)?.plan == "pro")
     }
 
-    @Test("usage URL carries the resets flag")
+    @Test("usage URL requests the regular usage payload")
     func usageURL() {
-        #expect(ClaudeUsageResponseParser.usageURL.absoluteString == "https://api.anthropic.com/api/oauth/usage?cedar_ember=1")
+        #expect(ClaudeUsageResponseParser.usageURL.absoluteString == "https://api.anthropic.com/api/oauth/usage")
     }
 }
 

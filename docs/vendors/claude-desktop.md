@@ -21,11 +21,15 @@ _verified: 2026-10-17_
 | Method | URL | Headers | Timeout | Response Content-Type |
 |--------|-----|---------|---------|-----------------------|
 | GET    | `https://api.anthropic.com/api/oauth/usage` | `Authorization: Bearer <oauth>`, `anthropic-beta: oauth-2025-04-20` | 5s | `application/json` |
+| GET    | `https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1` | same | 5s | `application/json` |
 | GET    | `https://api.anthropic.com/api/oauth/profile` | `Authorization: Bearer <oauth>`, `anthropic-beta: oauth-2025-04-20` | 5s | `application/json` |
 
 The usage endpoint is identical to the `claude-tui` vendor; its response
 additionally carries a `seven_day_breakdown` block (per-product shares)
 that both connectors now consume — see Metric semantics.
+Reset-grant metadata is fetched separately at most once per hour per account,
+shared with Claude Code; regular usage windows remain on every poll. The
+side request also uses `skip_spend=1` and does not refresh or modify tokens.
 
 The profile endpoint resolves the account behind a bearer. Its response is
 `{ account: { uuid, email, full_name, … }, organization: { uuid, name }, … }`
@@ -261,3 +265,5 @@ under a second vendor.
   each chip coloured by that source's own active state. Grouping is keyed on
   account *family* + email, so a Codex/Copilot login sharing an email is never
   merged with Claude. Same orange mark/tint as the `claude-tui` vendor.
+- 2026-10-18 — fetch `cedar_ember` grant metadata through the shared hourly
+  side request, rather than on each usage poll.

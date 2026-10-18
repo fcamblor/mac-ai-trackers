@@ -15,14 +15,21 @@ public struct ClaudeUsageResponseParser: Sendable {
     /// not returned by the API.
     public static let sessionWindowMinutes = DurationMinutes(rawValue: 300)
     public static let weeklyWindowMinutes = DurationMinutes(rawValue: 10080)
+    static let requestTimeoutSeconds: TimeInterval = 5
 
-    /// The usage endpoint only includes the (codenamed) limit-resets block
-    /// when asked for it — the claude.ai Usage page sends the same flag.
-    public static let resetsQueryItem = URLQueryItem(name: "cedar_ember", value: "1")
+    /// Keep ordinary usage polling on the stable response shape. Grant inventory is fetched
+    /// separately because it changes much less often than the usage windows.
     public static let usageURL: URL = {
         // Known-valid literal — force-unwrap is safe here
+        URL(string: "https://api.anthropic.com/api/oauth/usage")! // known-valid literal
+    }()
+
+    static let resetGrantsURL: URL = {
         var components = URLComponents(string: "https://api.anthropic.com/api/oauth/usage")! // known-valid literal
-        components.queryItems = [resetsQueryItem]
+        components.queryItems = [
+            URLQueryItem(name: "cedar_ember", value: "1"),
+            URLQueryItem(name: "skip_spend", value: "1")
+        ]
         return components.url! // known-valid literal
     }()
 
@@ -121,13 +128,49 @@ public struct ClaudeUsageResponseParser: Sendable {
         subscriptionType: String?,
         rateLimitTier: String?
     ) -> AccountStatus? {
+        accountStatus(
+            from: snapshot,
+            subscriptionType: subscriptionType,
+            rateLimitTier: rateLimitTier,
+            resetGrants: nil
+        )
+    }
+
+    func accountStatus(
+        from snapshot: Snapshot,
+        subscriptionType: String?,
+        rateLimitTier: String?,
+        resetGrants: ClaudeResetGrantSnapshot?
+    ) -> AccountStatus? {
         let plan = Self.plan(
             subscriptionType: subscriptionType,
             rateLimitTier: rateLimitTier,
-            responseTier: snapshot.responseTier
+            responseTier: resetGrants?.responseTier ?? snapshot.responseTier
         )
-        guard plan != nil || snapshot.resetCredits != nil else { return nil }
-        return AccountStatus(plan: plan, resetCredits: snapshot.resetCredits)
+        let grants: ResetCredits?
+        if let resetGrants {
+            grants = resetGrants.resetCredits
+        } else {
+            grants = snapshot.resetCredits
+        }
+        guard plan != nil || grants != nil else { return nil }
+        return AccountStatus(plan: plan, resetCredits: grants)
+    }
+
+    func parseResetGrantResponse(_ data: Data) throws -> ClaudeResetGrantSnapshot {
+        let jsonObject = try JSONSerialization.jsonObject(with: data)
+        guard let json = jsonObject as? [String: Any] else {
+            throw ParseError.notAnObject
+        }
+        guard json["cedar_ember"] is [String: Any] else {
+            throw ParseError.noKnownWindow(receivedKeys: Array(json.keys))
+        }
+        let cedarEmber = json["cedar_ember"] as? [String: Any]
+        let eventProps = cedarEmber?["event_props"] as? [String: Any]
+        return ClaudeResetGrantSnapshot(
+            resetCredits: Self.extractResetCredits(from: json),
+            responseTier: eventProps?["tier"] as? String
+        )
     }
 
     /// Maps Claude's plan hints onto a `PlanType` slug.

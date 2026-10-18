@@ -9,6 +9,7 @@ public actor ClaudeTUIConnector: UsageConnector {
     private let credentialLocator: any CredentialLocator<ClaudeCredentials>
     private let tokenProvider: (@Sendable () async throws -> String)?
     private let accountProvider: (@Sendable () -> AccountEmail?)?
+    private let resetGrantsClient: ClaudeResetGrantsClient
 
     private var lastKnownMetrics: [UsageMetric] = []
     /// Sticky flag set when the locator's local pre-check or HTTP 401 has
@@ -37,6 +38,7 @@ public actor ClaudeTUIConnector: UsageConnector {
         self.credentialLocator = credentialLocator
         self.tokenProvider = tokenProvider
         self.accountProvider = accountProvider
+        self.resetGrantsClient = ClaudeResetGrantsClient(session: session, logger: logger)
     }
 
     /// Legacy initializer preserved for tests that pre-date the credential
@@ -126,7 +128,7 @@ public actor ClaudeTUIConnector: UsageConnector {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         // Required by the OAuth usage endpoint — beta flag must match the rollout date
         request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
-        request.timeoutInterval = 5
+        request.timeoutInterval = ClaudeUsageResponseParser.requestTimeoutSeconds
 
         let data: Data
         let response: URLResponse
@@ -174,6 +176,11 @@ public actor ClaudeTUIConnector: UsageConnector {
 
         do {
             let usage = try parser.parse(data)
+            let resetGrants = await resetGrantsClient.snapshotIfDue(
+                account: account,
+                token: token,
+                now: Date()
+            )
             logger.log(.info, "Fetched successfully: session=\(usage.sessionPercent.map { "\($0)%" } ?? "nil") weekly=\(usage.weeklyPercent.map { "\($0)%" } ?? "nil") sonnet=\(usage.sonnetWeekly.map { "\($0.percent)%" } ?? "nil") opus=\(usage.opusWeekly.map { "\($0.percent)%" } ?? "nil") breakdown=\(usage.breakdownRows.count) extraUsage=\(usage.extraUsage.map { "\($0.amount) \($0.currency)" } ?? "nil")")
             // A window is emitted whenever utilization is known, even if resets_at is null
             // (fresh account, between cycles). A null reset date surfaces in the UI as "???"
@@ -194,7 +201,8 @@ public actor ClaudeTUIConnector: UsageConnector {
                 accountStatus: parser.accountStatus(
                     from: usage,
                     subscriptionType: planHints.subscriptionType,
-                    rateLimitTier: planHints.rateLimitTier
+                    rateLimitTier: planHints.rateLimitTier,
+                    resetGrants: resetGrants
                 )
             )]
         } catch {

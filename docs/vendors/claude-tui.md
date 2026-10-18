@@ -14,11 +14,19 @@ _verified: 2026-05-07_
 
 | Method | URL | Headers | Timeout | Response Content-Type |
 |--------|-----|---------|---------|-----------------------|
-| GET    | `https://api.anthropic.com/api/oauth/usage?cedar_ember=1` | `Authorization: Bearer <oauth>`, `anthropic-beta: oauth-2025-04-20` | 5s | `application/json` |
+| GET    | `https://api.anthropic.com/api/oauth/usage` | `Authorization: Bearer <oauth>`, `anthropic-beta: oauth-2025-04-20` | 5s | `application/json` |
+| GET    | `https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1` | same | 5s | `application/json` |
 | GET    | `https://api.anthropic.com/v1/organizations/cost_report` | `x-api-key: <admin_key>`, `anthropic-version: 2023-06-01` | unimplemented | `application/json` |
 
 The `anthropic-beta` value matches the rollout date documented when the
 OAuth-app usage endpoint was made available.
+
+The first request supplies usage windows on every poll. The second reads
+`cedar_ember` grant metadata at most once per hour per account; Claude Code
+and Claude Desktop share that cadence and the last successful result. A
+failed grant lookup keeps the previous result and is not retried until the
+hourly interval elapses. Both requests are GETs using the existing bearer;
+the tracker never refreshes or writes vendor tokens.
 
 The organization cost endpoint is documented by Anthropic's Admin API but
 is not implemented by this tracker. It requires an Admin API key
@@ -201,8 +209,8 @@ Mapped onto the entry's `accountStatus`, shared with Claude Desktop:
 
 | `accountStatus` field | Source | Notes |
 |-----------------------|--------|-------|
-| `resetCredits` | `cedar_ember.grants[]` — only present when the request carries `?cedar_ember=1` (the claude.ai Usage page sends the same flag) | per grant: `type` (`full` / session), `resets_left`, `ends_at` (expiry), `usable_now && !paused`, `label`; no grants → omitted. The key is a codename and may change |
-| `plan` | `claudeAiOauth.subscriptionType` + `claudeAiOauth.rateLimitTier` (Keychain entry already read for the token), falling back to `cedar_ember.event_props.tier` | `max` + `…_20x` / `…_5x` tier → `max_20x` / `max_5x`; `team` + a Max tier (`default_claude_max_5x`, observed on a confirmed Team Premium seat) → `team_premium`, `team` + `default_raven` (observed on a confirmed Team Standard seat) or `default_claude_team` → `team_standard`; any other Team tier stays `team`. `oauth/profile` names the seat explicitly (`organization.seat_tier`: `team_standard`, `team_tier_1` for Premium) but is not called, to avoid an extra request per tick |
+| `resetCredits` | `cedar_ember.grants[]` from the hourly `?cedar_ember=1&skip_spend=1` request | per grant: `type` (`full` / session), `resets_left`, `ends_at` (expiry), `usable_now && !paused`, `label`; no grants → omitted. The key is a codename and may change |
+| `plan` | `claudeAiOauth.subscriptionType` + `claudeAiOauth.rateLimitTier` (Keychain entry already read for the token), falling back to `cedar_ember.event_props.tier` from the hourly request | `max` + `…_20x` / `…_5x` tier → `max_20x` / `max_5x`; `team` + a Max tier (`default_claude_max_5x`, observed on a confirmed Team Premium seat) → `team_premium`, `team` + `default_raven` (observed on a confirmed Team Standard seat) or `default_claude_team` → `team_standard`; any other Team tier stays `team`. `oauth/profile` names the seat explicitly (`organization.seat_tier`: `team_standard`, `team_tier_1` for Premium) but is not called, to avoid an extra request per tick |
 
 **Limit-reset grants are not exposed to OAuth tokens.** With a Claude Code
 OAuth bearer, `cedar_ember` comes back with `"eligible": false,
@@ -215,7 +223,9 @@ which authenticates with the claude.ai session cookie. Reading that cookie
 (e.g. from a Claude Desktop profile) was deliberately not pursued — a
 session cookie grants full account access, far beyond the usage-scoped
 OAuth token. The connector still sends `cedar_ember=1` so grants appear
-automatically should Anthropic open them to OAuth surfaces.
+automatically should Anthropic open them to OAuth surfaces. This metadata
+lookup is limited to one request per hour per account; ordinary usage windows
+continue to be polled each tick.
 
 Window durations are not returned by the API — they are fixed by
 Anthropic's rate-limit policy and hard-coded in the connector
@@ -315,7 +325,8 @@ incident `shortlink` becomes the clickable href in the UI.
   Stale-token failure mode that motivated the change.
 - 2026-05-20 — document standard API-key auth limitation and parse
   `extra_usage` as a pay-as-you-go metric.
-- 2026-10-18 — request `?cedar_ember=1` to receive limit-reset grants
-  (with expiry) and map them, plus the plan, onto `accountStatus`.
+- 2026-10-18 — read limit-reset grants through a separate hourly
+  `?cedar_ember=1&skip_spend=1` request and map them, plus the plan, onto
+  `accountStatus`; ordinary usage polling no longer requests this metadata.
   Documented that OAuth surfaces are ineligible for the grants
   (`ineligible_reason: surface`).

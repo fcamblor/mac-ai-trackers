@@ -7,6 +7,7 @@ public actor CopilotConnector: UsageConnector {
     private let auth: any CopilotCredentialLocating
     private let logger: FileLogger
     private let session: URLSession
+    private let orgBillingClient: CopilotOrgBillingClient
 
     // Thread-safe login cache readable from nonisolated resolveActiveAccount()
     // without blocking the cooperative thread pool.
@@ -29,6 +30,7 @@ public actor CopilotConnector: UsageConnector {
         self.auth = auth
         self.logger = logger
         self.session = session
+        self.orgBillingClient = CopilotOrgBillingClient(session: session, logger: logger)
     }
 
     // MARK: - UsageConnector
@@ -189,15 +191,19 @@ public actor CopilotConnector: UsageConnector {
                 )
             }
             let isActive = account == activeLogin
-            storeMetrics(parsed.metrics, for: account, alias: credentials.login)
-            logger.log(.info, "Copilot fetched \(parsed.metrics.count) metric(s) for login=\(account)")
+            var metrics = parsed.metrics
+            if parsed.isOrgManagedSeat {
+                metrics += await orgBillingClient.metrics(for: account, token: credentials.accessToken)
+            }
+            storeMetrics(metrics, for: account, alias: credentials.login)
+            logger.log(.info, "Copilot fetched \(metrics.count) metric(s) for login=\(account)")
             return VendorUsageEntry(
                 vendor: vendor,
                 account: account,
                 isActive: isActive,
                 lastAcquiredOn: ISODate(date: Date()),
                 lastError: nil,
-                metrics: parsed.metrics,
+                metrics: metrics,
                 accountStatus: parsed.plan.map { AccountStatus(plan: $0) }
             )
         } catch {
@@ -228,6 +234,7 @@ public actor CopilotConnector: UsageConnector {
         let metrics: [UsageMetric]
         let login: String?
         let plan: PlanType?
+        let isOrgManagedSeat: Bool
     }
 
     /// `access_type_sku` names the actual product (`free_limited_copilot`,
@@ -251,22 +258,27 @@ public actor CopilotConnector: UsageConnector {
         let login = json["login"] as? String
         var metrics: [UsageMetric] = []
 
-        // Paid tier: `quota_snapshots` carries percent-remaining for each pool,
-        // sharing a single `quota_reset_date`. `unlimited:true` means the user
-        // is on a plan with no cap on that pool — surface no metric (the bar
-        // would be misleading).
+        // Current plans meter premium interactions as included AI credits.
         if let snapshots = json["quota_snapshots"] as? [String: Any] {
             let resetAt = isoDate(from: json["quota_reset_date"])
-            if let line = makeSnapshotMetric(name: "Premium", snapshot: snapshots["premium_interactions"], resetAt: resetAt) {
+            let premium = snapshots["premium_interactions"]
+            if let line = makeSnapshotMetric(name: "Credits", snapshot: premium, resetAt: resetAt) {
                 metrics.append(line)
+                if let extraUsage = makeExtraUsageMetric(snapshot: premium) {
+                    metrics.append(extraUsage)
+                }
             }
             if let line = makeSnapshotMetric(name: "Chat", snapshot: snapshots["chat"], resetAt: resetAt) {
                 metrics.append(line)
             }
+            if let line = makeSnapshotMetric(name: "Completions", snapshot: snapshots["completions"], resetAt: resetAt) {
+                metrics.append(line)
+            }
         }
 
-        // Free tier: absolute counters with a separate reset date.
-        if let limited = json["limited_user_quotas"] as? [String: Any],
+        // Older free responses carry remaining counts against monthly limits.
+        if metrics.isEmpty,
+           let limited = json["limited_user_quotas"] as? [String: Any],
            let monthly = json["monthly_quotas"] as? [String: Any] {
             let resetAt = isoDate(from: json["limited_user_reset_date"])
             if let line = makeLimitedMetric(name: "Chat", remaining: limited["chat"], total: monthly["chat"], resetAt: resetAt) {
@@ -277,24 +289,66 @@ public actor CopilotConnector: UsageConnector {
             }
         }
 
+        let isOrgManagedSeat = json["token_based_billing"] as? Bool == true && metrics.isEmpty
+        if isOrgManagedSeat,
+           let premium = (json["quota_snapshots"] as? [String: Any])?["premium_interactions"] as? [String: Any],
+           let creditsUsed = numericValue(premium["credits_used"]),
+           creditsUsed >= 0 {
+            metrics.append(.payAsYouGo(name: "Credits", currentAmount: creditsUsed, currency: "credits"))
+        }
+
         if metrics.isEmpty {
+            if isOrgManagedSeat {
+                return ParsedAPIResponse(
+                    metrics: [],
+                    login: login,
+                    plan: Self.plan(from: json),
+                    isOrgManagedSeat: true
+                )
+            }
             logger.log(.warning, "No known usage block in Copilot payload — top-level keys: \(Array(json.keys))")
             throw CopilotConnectorError.unexpectedAPIFormat(receivedKeys: Array(json.keys))
         }
 
-        return ParsedAPIResponse(metrics: metrics, login: login, plan: Self.plan(from: json))
+        return ParsedAPIResponse(
+            metrics: metrics,
+            login: login,
+            plan: Self.plan(from: json),
+            isOrgManagedSeat: isOrgManagedSeat
+        )
     }
 
     private func makeSnapshotMetric(name: String, snapshot: Any?, resetAt: ISODate?) -> UsageMetric? {
         guard let dict = snapshot as? [String: Any] else { return nil }
-        guard let percentRemaining = numericValue(dict["percent_remaining"]) else { return nil }
-        let used = max(0.0, min(100.0, 100.0 - percentRemaining))
+        let entitlement = numericValue(dict["entitlement"])
+        let remaining = numericValue(dict["remaining"])
+        guard dict["unlimited"] as? Bool != true,
+              entitlement != -1,
+              remaining != -1,
+              entitlement != 0 else { return nil }
+
+        let used: Double
+        if let percentRemaining = numericValue(dict["percent_remaining"]) {
+            used = 100.0 - percentRemaining
+        } else if let entitlement, entitlement > 0, let remaining {
+            used = 100.0 - (remaining / entitlement * 100.0)
+        } else {
+            return nil
+        }
+        let bounded = max(0.0, min(100.0, used))
         return .timeWindow(
             name: name,
             resetAt: resetAt,
             windowDuration: Self.monthlyWindowMinutes,
-            usagePercent: UsagePercent(rawValue: Int(used.rounded()))
+            usagePercent: UsagePercent(rawValue: Int(bounded.rounded()))
         )
+    }
+
+    private func makeExtraUsageMetric(snapshot: Any?) -> UsageMetric? {
+        guard let dict = snapshot as? [String: Any],
+              dict["overage_permitted"] as? Bool == true else { return nil }
+        let overageCount = max(0, numericValue(dict["overage_count"]) ?? 0)
+        return .payAsYouGo(name: "Extra Usage", currentAmount: overageCount, currency: "interactions")
     }
 
     private func makeLimitedMetric(name: String, remaining: Any?, total: Any?, resetAt: ISODate?) -> UsageMetric? {

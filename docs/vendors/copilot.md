@@ -15,11 +15,18 @@ _verified: 2026-05-07_
 | Method | URL | Headers | Timeout | Response Content-Type |
 |--------|-----|---------|---------|-----------------------|
 | GET    | `https://api.github.com/copilot_internal/user` | `Authorization: token <oauth>`, `Accept: application/json`, `Editor-Version: <vendor const>`, `Editor-Plugin-Version: <vendor const>`, `User-Agent: <vendor const>`, `X-Github-Api-Version: <vendor const>` | 5s | `application/json` |
+| GET    | `https://api.github.com/user/orgs?per_page=100` | `Authorization: token <oauth>`, `Accept: application/vnd.github+json`, `User-Agent: mac-ai-trackers`, `X-GitHub-Api-Version: 2022-11-28` | 15s | `application/json` |
+| GET    | `https://api.github.com/orgs/{org}/settings/billing/usage/summary` | same | 15s | `application/json` |
 
 The four "vendor const" headers are constants in
 `Connectors/CopilotConstants.swift`; they impersonate the official VS
 Code Copilot Chat extension closely enough to satisfy the
 `copilot_internal/user` endpoint.
+
+The organization endpoints are best-effort and only called for an
+org-managed, token-based-billing seat with no individual quota meter. They
+are standard read-only GitHub REST requests; billing summaries require an
+organization owner or billing-manager role.
 
 ## Credential sources
 
@@ -106,7 +113,7 @@ _verified: 2026-05-07_
 `monthly_quotas` carries the **total**. Connector computes
 `used = total - remaining` and emits a percent.
 
-### Pro / paid (assumed, not yet verified by tester)
+### Metered paid plans (shape seen in OpenUsage fixtures; not yet captured locally)
 
 The Pro plan exposes a `quota_snapshots` block with `percent_remaining`
 fields, plus a single `quota_reset_date`. Expected shape:
@@ -118,33 +125,47 @@ fields, plus a single `quota_reset_date`. Expected shape:
   "copilot_plan": "individual_pro",
   "quota_reset_date": "2026-06-06",
   "quota_snapshots": {
-    "premium_interactions": { "percent_remaining": 73, "unlimited": false },
-    "chat":                 { "percent_remaining": 100, "unlimited": true }
+    "premium_interactions": {
+      "entitlement": 300,
+      "remaining": 219,
+      "percent_remaining": 73,
+      "overage_permitted": true,
+      "overage_count": 0
+    },
+    "chat": { "entitlement": -1, "remaining": -1, "unlimited": true }
   }
 }
 ```
 
-`unlimited: true` for a pool does NOT cause the metric to be skipped —
-paid plans expose `premium_interactions` with `unlimited: true` (soft
-monthly allowance, overage billed separately) where `percent_remaining`
-remains the meaningful signal.
+The premium pool maps to **Credits**. Chat and completions with `unlimited`,
+the `-1` sentinel, or no real entitlement are omitted. The connector uses
+`percent_remaining` when present and otherwise computes a percent from
+`remaining` and `entitlement`.
 
-### Business / Enterprise plans (assumed, not yet verified by tester)
+### Org-managed seats (shape seen in OpenUsage fixtures; not yet captured locally)
 
-Likely populate `organization_list` and `organization_login_list` with
-per-org entitlement records. `endpoints.api` may point at an enterprise
-proxy. Quota fields shape unknown.
+An organization-managed seat may return zero-entitlement placeholder buckets
+with a `token_based_billing` marker. No individual percentage is derivable.
+When `premium_interactions.credits_used` is present, it is shown as the
+person's unbounded Credits count, including an explicit zero. The local
+vendor contract retains real zero values; OpenUsage currently omits a zero
+personal count.
 
 ## Metric semantics
 
-_verified: 2026-05-07_
+_updated: 2026-10-18 from connector rules and OpenUsage fixtures; locally captured response coverage is still limited_
 
 | Swift metric | Source field | Reset cadence | Unit | Edge cases |
 |--------------|--------------|---------------|------|------------|
-| `.timeWindow("Premium")` | `quota_snapshots.premium_interactions.percent_remaining` / `quota_reset_date` | calendar monthly | percent | `unlimited: true` is NOT skipped; missing block → metric omitted |
-| `.timeWindow("Chat")`    | `quota_snapshots.chat.percent_remaining` / `quota_reset_date` | calendar monthly | percent | same |
+| `.timeWindow("Credits")` | `quota_snapshots.premium_interactions.percent_remaining` or `remaining / entitlement` / `quota_reset_date` | monthly | percent | suppressed for `unlimited`, `-1`, or zero entitlement; `percent_remaining` is used if present |
+| `.payAsYouGo("Extra Usage")` | `premium_interactions.overage_count` when `overage_permitted == true` and a Credits meter exists | n/a | premium interactions | explicit zero retained; no included Credits meter means no overage row |
+| `.payAsYouGo("Credits", currency: "credits")` | `premium_interactions.credits_used` | n/a | personal credits | org-managed no-meter seat only; explicit zero retained |
+| `.timeWindow("Chat")`    | `quota_snapshots.chat.percent_remaining` or `remaining / entitlement` / `quota_reset_date` | monthly | percent | unlimited / `-1` / zero-entitlement snapshots omitted |
+| `.timeWindow("Completions")` | `quota_snapshots.completions.percent_remaining` or `remaining / entitlement` / `quota_reset_date` | monthly | percent | unlimited / `-1` / zero-entitlement snapshots omitted |
 | `.timeWindow("Chat")`    | `(monthly_quotas.chat - limited_user_quotas.chat) / monthly_quotas.chat × 100` / `limited_user_reset_date` | calendar monthly | percent | free tier — emitted only when both blocks present |
 | `.timeWindow("Completions")` | `(monthly_quotas.completions - limited_user_quotas.completions) / ...` / `limited_user_reset_date` | calendar monthly | percent | free tier |
+| `.payAsYouGo("Org Credits", currency: "credits")` | matching `usageItems[]` with `product == Copilot` and `unitType` `ai-units` / `ai-credits`, summed `grossQuantity` | month-to-date | org-wide credits | only when billing summary is readable |
+| `.payAsYouGo("Org Spend", currency: "USD")` | same credit items, summed `netAmount` | month-to-date | org-wide dollars | only when billing summary is readable |
 
 `accountStatus.plan` comes from `access_type_sku` (`free_limited_copilot`,
 `copilot_pro`…), falling back to `copilot_plan` (`individual`, `business`).
@@ -154,15 +175,20 @@ the UI keys on vendor + name, and a single user is on exactly one tier
 at a time, so there's no collision.
 
 The synthetic 30-day window duration (`monthlyWindowMinutes = 30 * 24 *
-60`) matches openusage's default — the API exposes only an absolute
-reset date, not a window length.
+60`) matches OpenUsage's default — the API exposes only an absolute reset
+date, not a window length. Org Credits and Org Spend are organization-wide,
+not a per-seat allocation. A non-admin's expected 403 leaves the normal
+Copilot card usable without those optional rows. A discovered organization
+slug is cached in memory per GitHub login; stale or non-Copilot summaries
+are rediscovered, while transient failures keep the cached slug.
 
 ## Time semantics
 
 _verified: 2026-05-07_
 
-- Reset values arrive as `yyyy-MM-dd` calendar dates:
-  `"limited_user_reset_date": "2026-06-06"`.
+- Free-tier reset values arrive as `yyyy-MM-dd` calendar dates:
+  `"limited_user_reset_date": "2026-06-06"`. Paid `quota_reset_date` may be
+  a date or ISO 8601 datetime.
 - Connector promotes calendar dates to UTC midnight via
   `ISODate.parsingFlexibleDate(_:)`. This matters because the rest of the
   app expects a parseable ISO 8601 datetime — without normalization,
@@ -203,14 +229,10 @@ the UI.
 
 ## Known unknowns
 
-- Copilot Pro response shape with active `quota_snapshots`.
-- Behavior of `unlimited: true` pools beyond `premium_interactions` —
-  whether `percent_remaining` is always meaningful or sometimes a fixed
-  100.
-- Business / Enterprise plan shapes (org-scoped seats).
-- `analytics_tracking_id` rotation cadence — may need re-sanitization
-  across snapshots if it stays stable enough to identify the session
-  uniquely.
+- Current Copilot Pro, Business, and Enterprise payloads have not yet been
+  captured locally; the richer cases above are based on OpenUsage fixtures.
+- GitHub's `usageItems` billing schema and AI-credit unit names can change;
+  the mapper ignores non-credit Copilot items.
 
 ## Source references
 
@@ -227,3 +249,6 @@ the UI.
   calendar-date reset semantics, three-source token cascade
   (env / keychain / hosts.yml), `go-keyring-base64:` decoding tolerance.
 - 2026-10-18 — plan label mapped from `access_type_sku` / `copilot_plan`.
+- 2026-10-18 — add AI Credits / extra-usage meters, unlimited and
+  token-based-billing handling, and optional org-level billing totals using
+  read-only GitHub REST endpoints.
