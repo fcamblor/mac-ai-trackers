@@ -229,15 +229,21 @@ struct GroupedForDisplayTests {
         #expect(group.representativeMember?.vendor == .claudeDesktop)
     }
 
-    @Test("group is active when any member is active")
-    func groupActiveIfAnyMemberActive() {
-        let entries = [
+    @Test("group active is driven by the TUI source, not desktop")
+    func groupActiveDrivenByTui() {
+        // Only desktop active → the account is NOT active.
+        let desktopOnlyActive = [
             entry(vendor: "claude", account: "me@x.com", isActive: false),
             entry(vendor: "claude-desktop", account: "me@x.com", isActive: true),
-        ]
-        let groups = entries.groupedForDisplay()
-        #expect(groups.count == 1)
-        #expect(groups[0].isActive == true)
+        ].groupedForDisplay()
+        #expect(desktopOnlyActive[0].isActive == false)
+
+        // TUI active → the account is active regardless of desktop.
+        let tuiActive = [
+            entry(vendor: "claude", account: "me@x.com", isActive: true),
+            entry(vendor: "claude-desktop", account: "me@x.com", isActive: false),
+        ].groupedForDisplay()
+        #expect(tuiActive[0].isActive == true)
     }
 
     @Test("distinct emails stay in separate single-member groups")

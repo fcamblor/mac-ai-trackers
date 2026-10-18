@@ -196,10 +196,16 @@ public struct AccountDisplayGroup: Identifiable, Equatable, Sendable {
         "\(members.first?.vendor.accountFamily ?? ""):\(account.rawValue)"
     }
 
-    /// The group is active when any of its vendor members is active. Per-vendor
-    /// active semantics differ (Claude Code: single active; Claude Desktop:
-    /// several profiles can run at once), so the group-level flag is an OR.
-    public var isActive: Bool { members.contains { $0.isActive } }
+    /// Whether the account-level "active" state (card background + capsule) is
+    /// on. Driven ONLY by the primary (canonical / TUI) source: several Desktop
+    /// profiles can be active at once, so they must not flip the account to
+    /// active. For single-source families (Codex, Copilot) the canonical vendor
+    /// IS the only member, so this matches the plain active flag. Per-source
+    /// chips still reflect each member's own `isActive`.
+    public var isActive: Bool {
+        guard let canonical = members.first?.vendor.familyCanonicalVendor else { return false }
+        return members.contains { $0.vendor == canonical && $0.isActive }
+    }
 
     /// The member whose usage numbers represent the group. Members of one group
     /// authenticate the same account and report identical usage, so any works;
