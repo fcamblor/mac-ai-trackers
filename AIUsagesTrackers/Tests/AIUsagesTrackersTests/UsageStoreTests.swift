@@ -1252,6 +1252,51 @@ struct UsageStoreOutagesTests {
     }
 
     @MainActor
+    @Test("hidden chip is kept in preferences but not rendered in the menu bar")
+    func hiddenChipIsSkipped() async throws {
+        let watcher = MockFileWatcher()
+        let clock = FixedClock(ISO8601DateFormatter().date(from: "2026-04-17T12:47:00Z")!)
+        func chip(letter: String, metric: String, hidden: Bool) -> MenuBarChipConfig {
+            MenuBarChipConfig(
+                vendor: .claudeTUI,
+                segments: [
+                    MenuBarChipSegmentConfig(
+                        account: .currentlyActive,
+                        metricName: metric,
+                        display: .timeWindow(TimeWindowDisplay(letter: letter))
+                    )
+                ],
+                isHidden: hidden
+            )
+        }
+        let prefs = InMemoryAppPreferences(
+            menuBarChips: [
+                chip(letter: "S", metric: "5h sessions (all models)", hidden: true),
+                chip(letter: "W", metric: "Weekly (all models)", hidden: false),
+            ],
+            menuBarChipsInitialized: true
+        )
+        let store = UsageStore(fileWatcher: watcher, clock: clock, preferences: prefs, countdownRefreshSeconds: 999)
+        store.start()
+
+        watcher.send(try makeUsagesJSON(metrics: [
+            // Hidden chip at 95% must not drive the label tier either.
+            timeWindowMetric(name: "5h sessions (all models)", usagePercent: 95),
+            timeWindowMetric(name: "Weekly (all models)", resetAt: "2026-04-23T21:00:00Z", usagePercent: 7),
+        ]))
+        try await eventually { !store.menuBarChips.isEmpty }
+        #expect(store.menuBarChips.count == 1)
+        #expect(store.menuBarText == "W 7% 6d 8h")
+        #expect(prefs.menuBarChips.count == 2)
+
+        // Un-hiding re-renders without new file data.
+        prefs.menuBarChips[0].isHidden = false
+        try await eventually { store.menuBarChips.count == 2 }
+
+        store.stop()
+    }
+
+    @MainActor
     @Test("chip without showOutageWarning never surfaces warning even during an outage")
     func chipWithoutOptInIgnoresOutage() async throws {
         let watcher = MockFileWatcher()

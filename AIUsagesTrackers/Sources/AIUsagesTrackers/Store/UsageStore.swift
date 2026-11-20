@@ -234,7 +234,9 @@ public final class UsageStore {
         var renderedChips: [RenderedChip] = []
         var allSegmentTexts: [String] = []
         var maxTier: ConsumptionTier?
-        for chipConfig in chipConfigs {
+        // Hidden chips stay configured but are kept out of the menu bar and
+        // out of the aggregate tier, so they don't tint the label either.
+        for chipConfig in chipConfigs where !chipConfig.isHidden {
             let resolution = MenuBarChipResolver.resolve(
                 chip: chipConfig,
                 entries: entries,

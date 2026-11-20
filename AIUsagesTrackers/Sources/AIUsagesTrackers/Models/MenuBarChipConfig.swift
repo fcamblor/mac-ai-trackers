@@ -233,6 +233,9 @@ public struct MenuBarChipConfig: Codable, Equatable, Hashable, Sendable, Identif
     /// Non-empty by construction. The UI must prevent deletion of the last
     /// segment; the decoder rejects an empty array.
     public var segments: [MenuBarChipSegmentConfig]
+    /// When true the chip keeps its configuration but is not rendered in the
+    /// menu bar — lets the user park a chip without losing its setup.
+    public var isHidden: Bool
 
     public static let defaultOutageWarningText: String = "⚠️"
 
@@ -242,7 +245,8 @@ public struct MenuBarChipConfig: Codable, Equatable, Hashable, Sendable, Identif
         showVendorIcon: Bool = false,
         showOutageWarning: Bool = false,
         outageWarningText: String = MenuBarChipConfig.defaultOutageWarningText,
-        segments: [MenuBarChipSegmentConfig]
+        segments: [MenuBarChipSegmentConfig],
+        isHidden: Bool = false
     ) {
         self.id = id
         self.vendor = vendor
@@ -250,10 +254,11 @@ public struct MenuBarChipConfig: Codable, Equatable, Hashable, Sendable, Identif
         self.showOutageWarning = showOutageWarning
         self.outageWarningText = outageWarningText
         self.segments = segments
+        self.isHidden = isHidden
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, vendor, showVendorIcon, showOutageWarning, outageWarningText, segments
+        case id, vendor, showVendorIcon, showOutageWarning, outageWarningText, segments, isHidden
     }
 
     public init(from decoder: Decoder) throws {
@@ -265,6 +270,8 @@ public struct MenuBarChipConfig: Codable, Equatable, Hashable, Sendable, Identif
         outageWarningText = try c.decodeIfPresent(String.self, forKey: .outageWarningText)
             ?? MenuBarChipConfig.defaultOutageWarningText
         segments = try c.decode([MenuBarChipSegmentConfig].self, forKey: .segments)
+        // Absent in payloads written before the flag existed: those chips were visible.
+        isHidden = try c.decodeIfPresent(Bool.self, forKey: .isHidden) ?? false
         if segments.isEmpty {
             throw DecodingError.dataCorruptedError(
                 forKey: .segments,

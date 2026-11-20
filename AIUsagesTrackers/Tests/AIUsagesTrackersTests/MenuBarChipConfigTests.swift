@@ -209,6 +209,32 @@ struct MenuBarChipConfigTests {
         }
     }
 
+    @Test("isHidden defaults to false when absent and round-trips when set")
+    func isHiddenDecoding() throws {
+        let legacy = """
+        {
+            "id": "\(UUID().uuidString)",
+            "vendor": "claude-tui",
+            "segments": [{
+                "id": "\(UUID().uuidString)",
+                "account": {"kind": "currently-active"},
+                "metricName": "Weekly (all models)",
+                "display": {"kind": "pay-as-you-go"}
+            }]
+        }
+        """
+        let decodedLegacy = try JSONDecoder().decode(MenuBarChipConfig.self, from: Data(legacy.utf8))
+        #expect(decodedLegacy.isHidden == false)
+
+        var hidden = decodedLegacy
+        hidden.isHidden = true
+        let roundTripped = try JSONDecoder().decode(
+            MenuBarChipConfig.self,
+            from: JSONEncoder().encode(hidden)
+        )
+        #expect(roundTripped.isHidden == true)
+    }
+
     @Test("array of mixed chips round-trips")
     func arrayRoundTrip() throws {
         let chips: [MenuBarChipConfig] = [

@@ -79,6 +79,11 @@ struct ChipCardView: View {
             )
             .onHover { isHovering = $0 }
             .contextMenu {
+                Button(
+                    chip.isHidden ? "Show in menu bar" : "Hide from menu bar",
+                    systemImage: chip.isHidden ? "eye" : "eye.slash",
+                    action: toggleHidden
+                )
                 Button("Duplicate", systemImage: "plus.square.on.square", action: onDuplicate)
                 Divider()
                 Button("Move up", systemImage: "arrow.up", action: onMoveUp)
@@ -168,12 +173,17 @@ struct ChipCardView: View {
                     outageWarningText: resolution.outageWarningText,
                     segments: renderedSegments
                 )
-                Image(nsImage: MenuBarLabelRenderer.render(
+                let rendered = MenuBarLabelRenderer.render(
                     chips: [preview],
                     background: preferences.menuBarChipBackground,
                     fallbackText: "",
                     isDarkMenuBar: isDark
-                ))
+                )
+                // Desaturated + faded so a hidden chip reads as parked at a
+                // glance. Greyed at the bitmap level because SwiftUI colour
+                // filters don't reliably apply to AppKit-drawn NSImages.
+                Image(nsImage: chip.isHidden ? Self.desaturated(rendered) : rendered)
+                    .opacity(chip.isHidden ? 0.45 : 1)
             } else {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
@@ -188,6 +198,21 @@ struct ChipCardView: View {
         }
     }
 
+    /// Falls back to the original image if Core Image can't process it — a
+    /// coloured preview is a cosmetic downgrade, not a correctness issue.
+    private static func desaturated(_ image: NSImage) -> NSImage {
+        guard let tiff = image.tiffRepresentation,
+              let input = CIImage(data: tiff),
+              let filter = CIFilter(name: "CIColorControls") else { return image }
+        filter.setValue(input, forKey: kCIInputImageKey)
+        filter.setValue(0, forKey: kCIInputSaturationKey)
+        guard let output = filter.outputImage else { return image }
+        let rep = NSCIImageRep(ciImage: output)
+        let result = NSImage(size: image.size)
+        result.addRepresentation(rep)
+        return result
+    }
+
     private func secondaryLine(for chip: MenuBarChipConfig) -> some View {
         let segmentSummary = chip.segments.count == 1 ? "1 segment" : "\(chip.segments.count) segments"
         return HStack(spacing: 6) {
@@ -195,6 +220,11 @@ struct ChipCardView: View {
                 .fontWeight(.medium)
             Text("·").foregroundStyle(.tertiary)
             Text(segmentSummary)
+            if chip.isHidden {
+                Text("·").foregroundStyle(.tertiary)
+                Label("Hidden from menu bar", systemImage: "eye.slash")
+                    .labelStyle(.titleAndIcon)
+            }
         }
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -202,6 +232,16 @@ struct ChipCardView: View {
 
     private var actions: some View {
         HStack(spacing: 2) {
+            Button(action: toggleHidden) {
+                Image(systemName: chip.isHidden ? "eye.slash" : "eye")
+                    .foregroundStyle(chip.isHidden ? Color.secondary : Color.primary)
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: 18)
+            }
+            .buttonStyle(.borderless)
+            .help(chip.isHidden ? "Hidden from menu bar — click to show" : "Hide from menu bar (keeps configuration)")
+            .accessibilityLabel(chip.isHidden ? "Show chip in menu bar" : "Hide chip from menu bar")
+
             Button(action: onDuplicate) {
                 Image(systemName: "plus.square.on.square")
             }
@@ -216,6 +256,13 @@ struct ChipCardView: View {
             .help("Delete chip")
         }
         .opacity(isHovering || isExpanded ? 1.0 : 0.45)
+    }
+
+    private func toggleHidden() {
+        guard let chipBinding else { return }
+        withAnimation(.easeOut(duration: 0.14)) {
+            chipBinding.wrappedValue.isHidden.toggle()
+        }
     }
 
     // MARK: Chip body (chip-level chrome + sub-segments list)
